@@ -1,7 +1,7 @@
 // Equipe da loja. "marcaPresenca": quem pode marcar presença e apresentação dos outros.
 export const EQUIPE = [
   { nome: "Daiane", setor: "Gestão", marcaPresenca: true, painel: true },
-  { nome: "Fábio", setor: "Gestão", marcaPresenca: true, painel: true },
+  { nome: "Fábio", setor: "Gestão", painel: true },
   { nome: "Dara", setor: "Caixa", marcaPresenca: true },
   { nome: "Fabrícia", setor: "Caixa" },
   { nome: "Jéssica", setor: "Balcão", marcaPresenca: true },
