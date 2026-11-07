@@ -32,15 +32,16 @@ async function mostrar() {
   const obs = (r) => (r.obs ? ` <span class="suave">(${r.obs})</span>` : "");
   const faltas = registros.filter((r) => r.situacao === "faltou" || r.situacao === "atestado")
     .map((r) => `${r.pessoa}: ${r.situacao}${obs(r)}`);
-  const apresentacao = registros.filter((r) => r.situacao === "veio" && (r.uniforme === "nao" || r.sapato !== "fechado"))
-    .map((r) => `${r.pessoa}: ${[r.uniforme === "nao" && "sem uniforme completo", r.sapato !== "fechado" && `sapato ${r.sapato}`].filter(Boolean).join(", ")}${obs(r)}`);
+  const ROTULO = { chinelo: "veio de chinelo", sem_uniforme: "sem uniforme completo", sem_touca: "sem touca/rede", atrasou: "chegou atrasada(o)" };
+  const apresentacao = registros.filter((r) => r.situacao === "veio" && r.problemas?.length)
+    .map((r) => `${r.pessoa}: ${r.problemas.map((x) => ROTULO[x] || x).join(", ")}${obs(r)}`);
   const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome]).map((p) => p.nome);
   const vieram = registros.filter((r) => r.situacao === "veio")
-    .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
+    .map((r) => `${r.pessoa} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
   const folgas = registros.filter((r) => r.situacao === "folga").map((r) => r.pessoa);
   document.getElementById("resumo").innerHTML =
     bloco("Faltas", faltas, "alerta") +
-    bloco("Uniforme ou sapato fora do padrão", apresentacao, "alerta") +
+    bloco("Apresentação fora do padrão", apresentacao, "alerta") +
     bloco("Presença não marcada", semMarcar, "pendente") +
     bloco("Vieram", vieram, "ok") +
     bloco("De folga", folgas, "ok");
