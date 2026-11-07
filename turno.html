@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
-<header><h1>Meu turno</h1><button id="sair">Trocar pessoa</button></header>
+<header><h1>Meu turno</h1><button id="sair">Sair</button></header>
 <main>
   <div class="cartao"><h2 id="ola"></h2><p class="suave" id="data"></p></div>
   <div id="teste"></div>
@@ -14,25 +14,24 @@
 </main>
 <script type="module">
 import { exigirUsuario, sair, hoje, dataBR } from "./js/sessao.js";
-import { pessoa } from "./js/equipe.js";
+import { pode } from "./js/equipe.js";
 import { modoTeste } from "./js/db.js";
 
-const nome = exigirUsuario();
-const eu = pessoa(nome) || {};
-document.getElementById("ola").textContent = `Olá, ${nome}`;
+const eu = await exigirUsuario();
+document.getElementById("ola").textContent = `Olá, ${eu.nome}`;
 document.getElementById("data").textContent = `Hoje: ${dataBR(hoje())}`;
-document.getElementById("sair").onclick = () => { sair(); location.href = "index.html"; };
+document.getElementById("sair").onclick = sair;
 if (modoTeste) document.getElementById("teste").innerHTML =
   `<div class="aviso">Modo teste: os dados ficam só neste aparelho até o Firebase ser ligado.</div>`;
 
 // Cada seção é uma tela separada. As que ainda não existem aparecem como "em breve".
 const secoes = [
-  { titulo: "Presença e apresentação", desc: "Quem veio, faltou, folga, uniforme e sapato", link: "presenca.html", mostrar: eu.marcaPresenca },
+  { titulo: "Presença e apresentação", desc: "Quem veio, faltou, folga, uniforme e sapato", link: "presenca.html", mostrar: pode.marcarPresenca(eu) },
   { titulo: "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização", emBreve: true },
   { titulo: "Checklists do setor", desc: "Abertura e fechamento", emBreve: true },
   { titulo: "Notas das empresas", desc: "Pedidos a prazo do dia", emBreve: true },
   { titulo: "Encomendas do dia", desc: "", emBreve: true },
-  { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: eu.painel },
+  { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: pode.verPainel(eu) },
 ];
 const lista = document.getElementById("secoes");
 for (const s of secoes) {

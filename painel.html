@@ -13,10 +13,10 @@
 </main>
 <script type="module">
 import { exigirUsuario, hoje } from "./js/sessao.js";
-import { EQUIPE_DO_TURNO, pessoa } from "./js/equipe.js";
+import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { listar } from "./js/db.js";
 
-if (!pessoa(exigirUsuario())?.painel) location.href = "turno.html";
+if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
 campoDia.value = hoje();
 
@@ -37,7 +37,7 @@ async function mostrar() {
     .map((r) => `${r.pessoa}: ${r.problemas.map((x) => ROTULO[x] || x).join(", ")}${obs(r)}`);
   const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome]).map((p) => p.nome);
   const vieram = registros.filter((r) => r.situacao === "veio")
-    .map((r) => `${r.pessoa} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
+    .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
   const folgas = registros.filter((r) => r.situacao === "folga").map((r) => r.pessoa);
   document.getElementById("resumo").innerHTML =
     bloco("Faltas", faltas, "alerta") +

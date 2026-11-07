@@ -37,11 +37,11 @@
 
 <script type="module">
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
-import { EQUIPE_DO_TURNO, pessoa } from "./js/equipe.js";
-import { salvar, listar } from "./js/db.js";
+import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
+import { salvarComHistorico, listar } from "./js/db.js";
 
-const quem = exigirUsuario();
-if (!pessoa(quem)?.marcaPresenca) location.href = "turno.html";
+const eu = await exigirUsuario();
+if (!pode.marcarPresenca(eu)) location.href = "turno.html";
 const data = hoje();
 document.getElementById("data").textContent = `Dia ${dataBR(data)}`;
 
@@ -62,15 +62,25 @@ const folha = document.getElementById("folha");
 function resumo(r) {
   if (!r) return ["Marcar", "pendente"];
   if (r.situacao === "veio") {
-    if (!r.problemas?.length) return ["Veio, tudo certo", "ok"];
-    return [r.problemas.map((p) => rotuloProblema[p]).join(", "), "alerta"];
+    const hora = r.chegada ? `${r.chegada} · ` : "";
+    if (!r.problemas?.length) return [`${hora}Veio, tudo certo`, "ok"];
+    return [hora + r.problemas.map((p) => rotuloProblema[p]).join(", "), "alerta"];
   }
   return ({ faltou: ["Faltou", "alerta"], atestado: ["Atestado", "neutro"], folga: ["Folga", "neutro"] })[r.situacao];
 }
 
 function desenhar() {
   lista.innerHTML = "";
+  let setorAtual = "";
   for (const p of EQUIPE_DO_TURNO) {
+    if (p.setor !== setorAtual) {
+      setorAtual = p.setor;
+      const t = document.createElement("p");
+      t.className = "suave";
+      t.style.cssText = "margin:8px 0 0;font-weight:600;text-transform:uppercase;letter-spacing:.05em";
+      t.textContent = setorAtual;
+      lista.append(t);
+    }
     const [texto, tipo] = resumo(registros[p.nome]);
     const b = document.createElement("button");
     b.className = "linha";
@@ -90,10 +100,13 @@ function desenhar() {
 function fechar() { fundo.hidden = true; }
 fundo.onclick = (e) => { if (e.target === fundo) fechar(); };
 
+let chegada = null; // hora de chegada escolhida na folha
+
 async function gravar(p, situacao, problemas = [], obs = "") {
-  const registro = { data, pessoa: p.nome, setor: p.setor, situacao, problemas, obs, marcadoPor: quem, marcadoEm: new Date().toISOString() };
+  const registro = { data, pessoa: p.nome, setor: p.setor, situacao, problemas, obs,
+    chegada: situacao === "veio" ? chegada : null, marcadoPor: eu.nome, marcadoPorUid: eu.uid, marcadoEm: new Date().toISOString() };
   try {
-    await salvar("presenca", `${data}_${p.nome}`, registro);
+    await salvarComHistorico("presenca", `${data}_${p.nome}`, registro);
     registros[p.nome] = registro;
     fechar();
     desenhar();
@@ -103,15 +116,23 @@ async function gravar(p, situacao, problemas = [], obs = "") {
 }
 
 // Primeira tela da folha: as opções principais.
+function agora() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 function abrir(p) {
+  chegada = registros[p.nome]?.chegada || agora();
   folha.innerHTML = `
     <h2>${p.nome}</h2>
+    <label class="campo" style="margin:0 0 4px">Chegou às <input type="time" id="chegada" value="${chegada}"></label>
     <button class="botao verde" data-acao="ok">Veio, tudo certo</button>
     <button class="botao" data-acao="problema">Veio, com problema…</button>
     <button class="botao vermelho" data-acao="faltou">Faltou</button>
     <button class="botao" data-acao="atestado">Atestado</button>
     <button class="botao" data-acao="folga">Folga</button>
     <button class="botao" data-acao="fechar" style="border:none">Cancelar</button>`;
+  folha.querySelector("#chegada").onchange = (e) => { chegada = e.target.value || null; };
   folha.onclick = (e) => {
     const acao = e.target.closest("[data-acao]")?.dataset.acao;
     if (acao === "ok") gravar(p, "veio");

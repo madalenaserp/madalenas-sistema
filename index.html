@@ -8,19 +8,50 @@
 <body>
 <header><h1>Madalena's</h1></header>
 <main>
-  <div class="cartao"><h2>Quem é você?</h2><p class="suave">Toque no seu nome.</p></div>
-  <div class="grade" id="nomes"></div>
+  <form class="cartao" id="login" hidden style="display:flex;flex-direction:column;gap:10px">
+    <h2>Entrar</h2>
+    <input type="text" id="usuario" placeholder="Usuário" autocomplete="username" autocapitalize="none" required>
+    <input type="password" id="senha" placeholder="Senha" autocomplete="current-password" required style="font-size:16px;padding:6px 8px;border:1px solid var(--linha);border-radius:8px">
+    <p class="suave" id="erro" style="color:var(--alerta);margin:0"></p>
+    <button class="botao principal" type="submit">Entrar</button>
+  </form>
+  <div id="teste" hidden>
+    <div class="aviso">Modo teste: escolha um nome. Os dados ficam só neste aparelho.</div>
+    <div class="grade" id="nomes" style="margin-top:12px"></div>
+  </div>
 </main>
 <script type="module">
 import { EQUIPE } from "./js/equipe.js";
-import { entrar } from "./js/sessao.js";
-const caixa = document.getElementById("nomes");
-for (const p of EQUIPE) {
-  const b = document.createElement("button");
-  b.className = "botao";
-  b.innerHTML = `<b>${p.nome}</b><br><span class="suave">${p.setor}</span>`;
-  b.onclick = () => { entrar(p.nome); location.href = "turno.html"; };
-  caixa.append(b);
+import { entrar, usuarioAtual } from "./js/sessao.js";
+import { modoTeste } from "./js/firebase.js";
+
+if (await usuarioAtual()) location.href = "turno.html";
+
+if (modoTeste) {
+  document.getElementById("teste").hidden = false;
+  const caixa = document.getElementById("nomes");
+  for (const p of EQUIPE) {
+    const b = document.createElement("button");
+    b.className = "botao";
+    b.innerHTML = `<b>${p.nome}</b><br><span class="suave">${p.setor}</span>`;
+    b.onclick = async () => { await entrar(p.nome); location.href = "turno.html"; };
+    caixa.append(b);
+  }
+} else {
+  const form = document.getElementById("login");
+  form.hidden = false;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const erro = document.getElementById("erro");
+    erro.textContent = "";
+    try {
+      await entrar(document.getElementById("usuario").value, document.getElementById("senha").value);
+      if (await usuarioAtual()) location.href = "turno.html";
+      else erro.textContent = "Usuário sem cadastro ativo. Fale com a Daiane.";
+    } catch {
+      erro.textContent = "Usuário ou senha errados.";
+    }
+  };
 }
 </script>
 </body>
