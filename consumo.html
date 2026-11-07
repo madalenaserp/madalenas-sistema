@@ -68,7 +68,8 @@ import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { acrescentar, listar } from "./js/db.js";
 
 const eu = await exigirUsuario();
-if (!pode.registrarConsumo(eu)) location.href = "turno.html";
+if (!pode.verConsumo(eu)) location.href = "turno.html";
+const lanca = pode.registrarConsumo(eu); // o Fábio só vê
 const veMes = pode.verPainel(eu);
 
 const PAGAMENTO = {
@@ -112,7 +113,7 @@ async function mostrarDia() {
   document.getElementById("totais").innerHTML =
     `${dataBR(d)} · ${validos.length} registro(s) · total ${reais(total)}` +
     (semAut ? ` · <span class="selo alerta">${semAut} sem pagamento/autorização</span>` : "");
-  document.getElementById("novo").hidden = d !== hoje();
+  document.getElementById("novo").hidden = d !== hoje() || !lanca;
 
   const lista = document.getElementById("lista");
   lista.innerHTML = itens.length ? "" : `<p class="suave">Nenhum consumo registrado neste dia.</p>`;
@@ -128,7 +129,7 @@ async function mostrarDia() {
         : `<span class="selo ${tipo}" style="margin-left:0">${esc(texto)}</span>`}</div>
       ${r.obs ? `<div class="suave">${esc(r.obs)}</div>` : ""}
       <div class="suave" style="font-size:13px">Registrado por ${esc(r.registradoPor)}</div>`;
-    if (!r.cancelamento && d === hoje()) {
+    if (!r.cancelamento && d === hoje() && lanca) {
       const b = document.createElement("button");
       b.textContent = "Cancelar (lançado errado)";
       b.onclick = () => cancelar(r);

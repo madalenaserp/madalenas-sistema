@@ -162,6 +162,7 @@ function abrir(id) {
       mostrarFotos(tela);
       return;
     }
+    if (pode.somenteLeitura(eu)) { tela.innerHTML = html + `<div class="cartao"><p class="suave" style="margin:0">Ainda não foi feito${turno ? ` (${turno})` : ""}.</p></div>`; ligarTurnos(); return; }
     let secao = "";
     // Em ordem: o próximo item só libera quando o atual está completo.
     const completo = (it) => { const v = avaliar(it, respostas[it.n]); return v === true || (v === false && respostas[it.n]?.obs?.trim()); };

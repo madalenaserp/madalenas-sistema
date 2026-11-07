@@ -79,7 +79,8 @@ import { acrescentar, listar, ler } from "./js/db.js";
 
 const eu = await exigirUsuario();
 if (!pode.notasEmpresas(eu)) location.href = "turno.html";
-const podeConferir = pode.registrarNoLivro(eu); // Dara, Jéssica, Fábio, Daiane
+const podeConferir = pode.registrarNoLivro(eu); // Dara, Jéssica e Daiane (o Fábio só vê)
+const podeFoto = pode.editarNotas(eu);
 const veMes = pode.verPainel(eu);
 
 // TECMAR, Tecsea e Redsea são contas diferentes no Guappo.
@@ -145,7 +146,7 @@ async function mostrar() {
     const div = document.createElement("div");
     div.className = "empresa";
     div.innerHTML = `<div class="cab"><b>${esc(nome)}</b>${minhas.length ? "" : `<span class="suave">sem nota</span>`}</div>`;
-    if (d === hoje()) {
+    if (d === hoje() && podeFoto) {
       const rot = document.createElement("label");
       rot.className = "foto-btn" + (minhas.length ? " secundario" : "");
       rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" capture="environment">`;

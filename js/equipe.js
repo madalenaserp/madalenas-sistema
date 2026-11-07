@@ -1,5 +1,5 @@
 // Equipe e funções.
-// papel: "dona" (tudo), "gestor" (vê o painel), "lider" (marca presença), "equipe".
+// papel: "dona" (tudo), "gestor" (só vê: painel e telas, sem lançar nada), "lider" (marca presença), "equipe".
 // No sistema ligado ao Firebase, o papel que vale é o da coleção "usuarios" (as regras do servidor
 // leem de lá). Esta lista serve para a tela de presença e para o modo teste.
 export const EQUIPE = [
@@ -30,8 +30,11 @@ export const pode = {
   marcarPresenca: (u) => ["dona", "lider"].includes(u?.papel),
   verPainel: (u) => ["dona", "gestor"].includes(u?.papel),
   gerirEquipe: (u) => u?.papel === "dona",
-  darOrdens: (u) => ["dona", "gestor"].includes(u?.papel),
-  registrarNoLivro: (u) => ["dona", "gestor", "lider"].includes(u?.papel),
+  // O gestor (Fábio) só vê: não lança nem altera nada.
+  somenteLeitura: (u) => u?.papel === "gestor",
+  darOrdens: (u) => u?.papel === "dona",
+  registrarNoLivro: (u) => ["dona", "lider"].includes(u?.papel),
+  verLivroCompleto: (u) => ["dona", "gestor", "lider"].includes(u?.papel),
   darVisto: (u) => u?.papel === "dona",
   // RH: só a Daiane (escala, logins e, depois, cadastro, uniformes, férias e vales).
   rh: (u) => u?.papel === "dona",
@@ -39,5 +42,7 @@ export const pode = {
   // Consumo da equipe: quem está no caixa registra; líderes e gestão também.
   // Notas das empresas: caixa lança; líderes conferem; gestão acompanha.
   notasEmpresas: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
-  registrarConsumo: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
+  editarNotas: (u) => ["dona", "lider"].includes(u?.papel) || u?.setor === "Caixa",
+  verConsumo: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
+  registrarConsumo: (u) => ["dona", "lider"].includes(u?.papel) || u?.setor === "Caixa",
 };

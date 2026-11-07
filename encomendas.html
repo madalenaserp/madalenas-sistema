@@ -80,7 +80,8 @@ import { pode } from "./js/equipe.js";
 import { acrescentar, listarEntre } from "./js/db.js";
 
 const eu = await exigirUsuario();
-const podeCancelar = pode.registrarNoLivro(eu); // dona, gestor e líderes
+const podeCancelar = pode.registrarNoLivro(eu); // dona e líderes
+const leitura = pode.somenteLeitura(eu); // o Fábio só vê
 
 const ETAPAS = ["anotada", "producao", "pronta", "entregue"];
 const ROTULO = { anotada: "Anotada", producao: "Em produção", pronta: "Pronta", entregue: "Entregue", cancelada: "Cancelada" };
@@ -176,7 +177,7 @@ function cartao(e) {
     <div class="suave" style="font-size:13px">Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}${conf ? ` · Conferida: ${conf}` : ""}</div>
     <div class="acoes"></div>`;
   const acoes = div.querySelector(".acoes");
-  if (e.status !== "entregue" && e.status !== "cancelada") {
+  if (e.status !== "entregue" && e.status !== "cancelada" && !leitura) {
     const m = momentoConferencia(e);
     if (m && !jaConferida(e, m)) acoes.append(botao(`Conferi (${m === "vespera" ? "véspera" : "abertura"})`, "conferir", () => registrar(e, { tipo: "conferida", momento: m })));
     acoes.append(botao(PROXIMA[e.status], "avancar", () => registrar(e, { tipo: "status", para: ETAPAS[ETAPAS.indexOf(e.status) + 1] })));
@@ -304,6 +305,7 @@ const abas = document.getElementById("abas");
 const marcarAba = () => abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
 abas.onclick = (ev) => { const v = ev.target.closest("button")?.dataset.aba; if (!v) return; aba = v; marcarAba(); mostrar(); };
 document.getElementById("nova").onclick = abrirFolha;
+if (leitura) document.getElementById("nova").hidden = true;
 document.getElementById("imprimir-lista").onclick = () => imprimir(ultimaLista);
 mostrar();
 </script>

@@ -81,7 +81,7 @@ function botaoCorrigir(id) {
   return pode.registrarNoLivro(eu) || pode.darOrdens(eu) ? `<button data-corrigir="${id}">Corrigir</button>` : "";
 }
 
-const ordensVisiveis = () => deTipo("ordem").filter((o) => pode.darOrdens(eu) || pode.registrarNoLivro(eu) || o.para === "Todos" || o.para === eu.nome);
+const ordensVisiveis = () => deTipo("ordem").filter((o) => pode.verLivroCompleto(eu) || o.para === "Todos" || o.para === eu.nome);
 
 const telas = {
   ordens() {
@@ -99,7 +99,7 @@ const telas = {
       </form>`;
     html += ordens.length ? ordens.map((o) => {
       const cientes = ligados("ciente", o.id), feitos = ligados("feito", o.id);
-      const souAlvo = o.para === "Todos" || o.para === eu.nome;
+      const souAlvo = !pode.somenteLeitura(eu) && (o.para === "Todos" || o.para === eu.nome);
       const jaCiente = cientes.some((c) => c.autorUid === eu.uid), jaFeito = feitos.length > 0;
       return `<div class="cartao registro ordem">
         <div><b>${esc(o.texto)}</b></div>
@@ -188,7 +188,7 @@ const telas = {
   },
 };
 
-const NOMES = pode.registrarNoLivro(eu) || pode.darOrdens(eu)
+const NOMES = pode.verLivroCompleto(eu)
   ? { ordens: "Ordens", ocorrencias: "Ocorrências", passagem: "Passagem", fechamento: "Fechamento" }
   : { ordens: "Minhas ordens" };
 
@@ -205,7 +205,7 @@ function desenhar() {
 
 async function carregar() {
   // A equipe só vê as ordens; ocorrências e passagens ficam para líderes e gestão.
-  registros = pode.registrarNoLivro(eu) || pode.darOrdens(eu)
+  registros = pode.verLivroCompleto(eu)
     ? await listar("livro", "data", campoDia.value)
     : await listar("livro", "data", campoDia.value, "tipo", ["ordem", "ciente", "feito"]);
   desenhar();

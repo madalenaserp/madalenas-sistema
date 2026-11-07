@@ -7,6 +7,8 @@ service cloud.firestore {
     function perfil() { return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data; }
     function ativo() { return logado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && perfil().ativo != false; }
     function papel(lista) { return ativo() && perfil().papel in lista; }
+    // O gestor (Fábio) só lê: nenhuma regra de gravação aceita o papel "gestor".
+    function edita() { return ativo() && perfil().papel != "gestor"; }
 
     // Perfis: cada um lê o seu; só a dona cria e altera (tela Equipe).
     // Exceção única: a conta daiane@madalenas.app cria o próprio perfil de dona no primeiro acesso.
@@ -40,19 +42,20 @@ service cloud.firestore {
     match /livro/{id} {
       allow read: if papel(["dona", "gestor", "lider"])
         || (ativo() && resource.data.tipo in ["ordem", "ciente", "feito"]);
-      allow create: if ativo() && request.resource.data.autorUid == request.auth.uid && (
+      allow create: if edita() && request.resource.data.autorUid == request.auth.uid && (
            request.resource.data.tipo in ["ciente", "feito"]
-        || (request.resource.data.tipo == "ordem" && papel(["dona", "gestor"]))
-        || (request.resource.data.tipo in ["ocorrencia", "passagem", "fechamento", "correcao"] && papel(["dona", "gestor", "lider"]))
+        || (request.resource.data.tipo == "ordem" && papel(["dona"]))
+        || (request.resource.data.tipo in ["ocorrencia", "passagem", "fechamento", "correcao"] && papel(["dona", "lider"]))
         || (request.resource.data.tipo == "visto" && papel(["dona"])));
       allow update, delete: if false;
     }
 
     // Consumo da equipe: caixa, líderes e gestão registram. Só se acrescenta; cancelamento é um registro novo.
     function caixaOuLider() { return papel(["dona", "gestor", "lider"]) || (ativo() && perfil().setor == "Caixa"); }
+    function caixaOuLiderEdita() { return papel(["dona", "lider"]) || (edita() && perfil().setor == "Caixa"); }
     match /consumo/{id} {
       allow read: if caixaOuLider();
-      allow create: if caixaOuLider()
+      allow create: if caixaOuLiderEdita()
         && request.resource.data.registradoPorUid == request.auth.uid
         && request.resource.data.tipo in ["consumo", "cancelamento"];
       allow update, delete: if false;
@@ -61,15 +64,15 @@ service cloud.firestore {
     // Notas das empresas: caixa e líderes mandam a foto da nota assinada; conferir e anular só líderes e gestão.
     match /notas/{id} {
       allow read: if caixaOuLider();
-      allow create: if caixaOuLider() && request.resource.data.registradoPorUid == request.auth.uid && (
+      allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid && (
            request.resource.data.tipo == "nota"
-        || (request.resource.data.tipo in ["conferido", "cancelado"] && papel(["dona", "gestor", "lider"])));
+        || (request.resource.data.tipo in ["conferido", "cancelado"] && papel(["dona", "lider"])));
       allow update, delete: if false;
     }
     // Fotos das notas assinadas (reduzidas no celular, até ~1 MB cada).
     match /notas_fotos/{id} {
       allow read: if caixaOuLider();
-      allow create: if caixaOuLider() && request.resource.data.registradoPorUid == request.auth.uid
+      allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid
         && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
       allow update, delete: if false;
     }
@@ -77,15 +80,15 @@ service cloud.firestore {
     // Checklists: cada preenchimento é um registro novo. Os do caixa só caixa, líderes e gestão.
     match /checklists/{id} {
       allow read: if ativo();
-      allow create: if ativo() && request.resource.data.registradoPorUid == request.auth.uid
-        && (!(request.resource.data.lista in ["caixa_abertura", "caixa_fechamento"]) || caixaOuLider());
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && (!(request.resource.data.lista in ["caixa_abertura", "caixa_fechamento"]) || caixaOuLiderEdita());
       allow update, delete: if false;
     }
 
     // Fotos dos itens de checklist (prova do que foi feito).
     match /checklists_fotos/{id} {
       allow read: if ativo();
-      allow create: if ativo() && request.resource.data.registradoPorUid == request.auth.uid
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
         && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
       allow update, delete: if false;
     }
@@ -103,13 +106,13 @@ service cloud.firestore {
     }
 
     // Encomendas de clientes: toda a equipe anota, confere e avança a etapa. Só se acrescenta.
-    // Cancelar só dona, gestor e líderes.
+    // Cancelar só dona e líderes.
     match /encomendas/{id} {
       allow read: if ativo();
-      allow create: if ativo() && request.resource.data.registradoPorUid == request.auth.uid && (
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
            request.resource.data.tipo in ["encomenda", "conferida"]
         || (request.resource.data.tipo == "status" && request.resource.data.para in ["producao", "pronta", "entregue"])
-        || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelada" && papel(["dona", "gestor", "lider"])));
+        || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelada" && papel(["dona", "lider"])));
       allow update, delete: if false;
     }
 
