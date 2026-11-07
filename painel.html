@@ -32,7 +32,7 @@ async function mostrar() {
   const obs = (r) => (r.obs ? ` <span class="suave">(${r.obs})</span>` : "");
   const faltas = registros.filter((r) => r.situacao === "faltou" || r.situacao === "atestado")
     .map((r) => `${r.pessoa}: ${r.situacao}${obs(r)}`);
-  const ROTULO = { chinelo: "veio de chinelo", sem_uniforme: "sem uniforme completo", sem_touca: "sem touca/rede", atrasou: "chegou atrasada(o)" };
+  const ROTULO = { chinelo: "calçado inadequado", sem_uniforme: "uniforme incompleto", sem_touca: "sem touca" };
   const apresentacao = registros.filter((r) => r.situacao === "veio" && r.problemas?.length)
     .map((r) => `${r.pessoa}: ${r.problemas.map((x) => ROTULO[x] || x).join(", ")}${obs(r)}`);
   const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome]).map((p) => p.nome);
