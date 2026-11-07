@@ -3,7 +3,7 @@
   "short_name": "Madalena's",
   "start_url": "./turno.html",
   "display": "standalone",
-  "background_color": "#4a2c1e",
-  "theme_color": "#4a2c1e",
+  "background_color": "#2c180e",
+  "theme_color": "#2c180e",
   "icons": [{ "src": "icone.png", "sizes": "512x512", "type": "image/png" }]
 }
