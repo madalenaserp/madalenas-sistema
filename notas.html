@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Notas das empresas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .empresa { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+  .empresa .cab { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .empresa .cab b { font-size:18px; }
+  .empresa .cab button { font-size:14px; padding:6px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; cursor:pointer; }
+  .pedido { border-top:1px dashed var(--linha); padding-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .pedido.cancelado { opacity:.55; }
+  .pedido.cancelado .resumo { text-decoration:line-through; }
+  .pedido .resumo { font-size:16px; }
+  .passos { display:flex; flex-direction:column; gap:3px; font-size:14px; }
+  .passos .ok { color:var(--ok); }
+  .passos .falta { color:var(--suave); }
+  .passos .erro { color:var(--alerta); font-weight:600; }
+  .acoes { display:flex; gap:6px; flex-wrap:wrap; }
+  .acoes button { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--linha); background:#fff; cursor:pointer; }
+  .acoes button.avancar { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .acoes button.conferir { background:var(--ok); color:#fff; border-color:var(--ok); font-weight:600; }
+  .acoes button.problema { color:var(--alerta); border-color:var(--alerta); }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha input[type=text], .folha input[inputmode], .folha textarea { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; font-family:inherit; }
+  .folha label.marca { display:flex; gap:10px; align-items:center; border:1px solid var(--linha); border-radius:10px; padding:12px; }
+  .folha label.marca input { width:20px; height:20px; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes button { padding:12px 8px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--alerta); color:#fff; border-color:var(--alerta); font-weight:600; }
+  .msg-erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  table.mes { width:100%; border-collapse:collapse; font-size:14px; }
+  table.mes th, table.mes td { text-align:left; padding:8px 4px; border-bottom:1px solid var(--linha); }
+  table.mes .n { text-align:right; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Notas das empresas</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="abas" id="abas" hidden>
+    <button aria-pressed="true" data-aba="dia">Dia</button>
+    <button aria-pressed="false" data-aba="mes">Mês por empresa</button>
+  </div>
+  <section id="aba-dia" style="display:flex;flex-direction:column;gap:10px">
+    <div class="cartao">
+      <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
+      <p class="suave" id="resumo" style="margin:8px 0 0"></p>
+      <p class="suave" style="margin:6px 0 0;font-size:13px">O Guappo é a verdade. Sem lançamento, não sai. Sem assinatura de quem retira, não sai.</p>
+    </div>
+    <div id="empresas" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+  <section id="aba-mes" hidden>
+    <div class="cartao">
+      <div class="campo" style="margin:0">Mês <input type="month" id="mes"></div>
+      <div id="tabela" style="margin-top:8px"></div>
+    </div>
+  </section>
+</main>
+
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listar } from "./js/db.js";
+
+const eu = await exigirUsuario();
+if (!pode.notasEmpresas(eu)) location.href = "turno.html";
+const podeConferir = pode.registrarNoLivro(eu); // Dara, Jéssica, Fábio, Daiane
+const veMes = pode.verPainel(eu);
+
+// TECMAR, Tecsea e Redsea são contas diferentes no Guappo.
+const EMPRESAS = ["ABG", "TWAS", "TECMAR", "Tecsea", "Redsea", "LANDSEAAIR", "Artemis", "Cliente Bruno"];
+const PROBLEMAS = {
+  sem_via: "Faltou a via na pasta",
+  sem_assinatura: "Via sem assinatura",
+  fora_guappo: "Não está no Guappo",
+  outro: "Outro problema",
+};
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+
+// Cada passo é um registro novo; nada se altera nem se apaga.
+function montar(registros) {
+  const passos = registros.filter((r) => r.tipo !== "pedido");
+  const ultimo = (id, tipo) => passos.filter((r) => r.refId === id && r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
+  return registros.filter((r) => r.tipo === "pedido").sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).map((p) => ({
+    ...p,
+    lancado: ultimo(p.id, "lancado"),
+    assinada: ultimo(p.id, "assinada"),
+    conferido: ultimo(p.id, "conferido"),
+    cancelado: ultimo(p.id, "cancelado"),
+  }));
+}
+const temProblema = (p) => p.conferido && !p.conferido.ok;
+
+async function mostrar() {
+  const d = campoDia.value;
+  const pedidos = montar(await listar("notas", "data", d));
+  const ativos = pedidos.filter((p) => !p.cancelado);
+  const semLancar = ativos.filter((p) => !p.lancado).length;
+  const semConferir = ativos.filter((p) => !p.conferido).length;
+  const problemas = ativos.filter(temProblema).length;
+  document.getElementById("resumo").innerHTML = `${dataBR(d)} · ${ativos.length} pedido(s)` +
+    (semLancar ? ` · <span class="selo pendente">${semLancar} sem lançar</span>` : "") +
+    (semConferir ? ` · <span class="selo pendente">${semConferir} sem conferir</span>` : "") +
+    (problemas ? ` · <span class="selo alerta">${problemas} com problema</span>` : "") +
+    (ativos.length && !semConferir && !problemas ? ` · <span class="selo ok">tudo conferido</span>` : "");
+
+  const box = document.getElementById("empresas");
+  box.innerHTML = "";
+  const empresas = [...EMPRESAS, ...new Set(pedidos.map((p) => p.empresa).filter((e) => !EMPRESAS.includes(e)))];
+  for (const nome of empresas) {
+    const meus = pedidos.filter((p) => p.empresa === nome);
+    const div = document.createElement("div");
+    div.className = "empresa";
+    div.innerHTML = `<div class="cab"><b>${esc(nome)}</b>${!meus.length ? `<span class="suave">sem pedido</span>` : ""}</div>`;
+    if (d === hoje() || d > hoje()) {
+      const b = document.createElement("button");
+      b.textContent = meus.length ? "+ Outro pedido" : "+ Pedido";
+      b.onclick = () => folhaPedido(nome);
+      div.querySelector(".cab").append(b);
+    }
+    for (const p of meus) div.append(linhaPedido(p));
+    box.append(div);
+  }
+}
+
+function linhaPedido(p) {
+  const div = document.createElement("div");
+  div.className = "pedido" + (p.cancelado ? " cancelado" : "");
+  const passo = (feito, texto, faltando) => `<span class="${feito ? "ok" : "falta"}">${feito ? "✓" : "○"} ${feito ? texto : faltando}</span>`;
+  const conf = p.conferido
+    ? (p.conferido.ok ? `<span class="ok">✓ Conferido por ${esc(p.conferido.registradoPor)} às ${esc(p.conferido.hora)}: na pasta</span>`
+                      : `<span class="erro">✗ ${esc(PROBLEMAS[p.conferido.problema])}${p.conferido.detalhe ? `: ${esc(p.conferido.detalhe)}` : ""} (${esc(p.conferido.registradoPor)}, ${esc(p.conferido.hora)}, foi para o Livro)</span>`)
+    : `<span class="falta">○ Falta conferir (7h)</span>`;
+  div.innerHTML = `
+    <div class="resumo">${esc(p.resumo)}</div>
+    <div class="passos">
+      <span class="ok">✓ Pedido anotado por ${esc(p.registradoPor)} às ${esc(p.hora)}</span>
+      ${passo(p.lancado, `Lançado no Guappo · pedido nº ${esc(p.lancado?.numero)} (${esc(p.lancado?.registradoPor)})`, "Falta lançar no Guappo a prazo")}
+      ${passo(p.assinada, `Retirado e assinado por ${esc(p.assinada?.quem)}${p.assinada?.foto ? " · foto enviada no grupo" : " · <b style=\"color:var(--alerta)\">foto não enviada</b>"}`, "Falta retirar e assinar")}
+      ${conf}
+      ${p.cancelado ? `<span class="falta">Cancelado por ${esc(p.cancelado.registradoPor)}: ${esc(p.cancelado.motivo)}</span>` : ""}
+    </div>
+    <div class="acoes"></div>`;
+  const acoes = div.querySelector(".acoes");
+  if (p.cancelado || campoDia.value < hoje()) return div;
+  const botao = (texto, classe, acao) => { const b = document.createElement("button"); b.textContent = texto; b.className = classe; b.onclick = acao; acoes.append(b); };
+  if (!p.lancado) botao("Lancei no Guappo", "avancar", () => folhaLancado(p));
+  else if (!p.assinada) botao("Retirou e assinou", "avancar", () => folhaAssinada(p));
+  if (podeConferir && !p.conferido) {
+    if (p.lancado && p.assinada) botao("Na pasta, tudo certo", "conferir", () => gravar(p, { tipo: "conferido", ok: true }));
+    botao("Problema", "problema", () => folhaProblema(p));
+  }
+  if (podeConferir && !p.conferido) botao("Cancelar", "", () => {
+    const motivo = prompt(`Por que cancelar o pedido da ${p.empresa}?`);
+    if (motivo?.trim()) gravar(p, { tipo: "cancelado", motivo: motivo.trim() });
+  });
+  return div;
+}
+
+async function gravar(p, dados) {
+  try {
+    await acrescentar("notas", { ...dados, refId: p.id, empresa: p.empresa, data: p.data, mes: p.mes, hora: agora(),
+      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+  } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+  fundo.hidden = true;
+  mostrar();
+}
+
+/* ---------- Folhas (janelas de baixo) ---------- */
+const fundo = document.getElementById("fundo");
+const folha = document.getElementById("folha");
+fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+function abrir(html, salvar) {
+  folha.innerHTML = `${html}<p class="msg-erro" id="f-erro"></p>
+    <button class="botao principal" id="f-ok">Salvar</button>
+    <button class="botao" id="f-x" style="text-align:center;border:none">Cancelar</button>`;
+  folha.querySelector("#f-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#f-ok").onclick = async (e) => {
+    const erro = salvar((t) => (folha.querySelector("#f-erro").textContent = t));
+    if (erro === false) return;
+    e.target.disabled = true;
+  };
+  fundo.hidden = false;
+  folha.querySelector("input, textarea")?.focus();
+}
+
+function folhaPedido(empresa) {
+  abrir(`<h2>Pedido · ${esc(empresa)}</h2>
+    <label class="rot" for="f-resumo">O que foi pedido (resumo)</label>
+    <textarea id="f-resumo" rows="3" placeholder="Ex.: 20 pães, 10 salgados, 2 L de café"></textarea>`,
+  (erro) => {
+    const resumo = folha.querySelector("#f-resumo").value.trim();
+    if (!resumo) return erro("Escreva o que foi pedido."), false;
+    const d = campoDia.value;
+    acrescentar("notas", { tipo: "pedido", empresa, resumo, data: d, mes: d.slice(0, 7), hora: agora(),
+      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() })
+      .then(() => { fundo.hidden = true; mostrar(); })
+      .catch(() => { erro("Não consegui salvar. Verifique a internet e tente de novo."); folha.querySelector("#f-ok").disabled = false; });
+  });
+}
+
+function folhaLancado(p) {
+  abrir(`<h2>Lançado no Guappo · ${esc(p.empresa)}</h2>
+    <p class="suave" style="margin:0">Lance a prazo na conta certa${["TECMAR", "Tecsea", "Redsea"].includes(p.empresa) ? " (TECMAR, Tecsea e Redsea são contas diferentes)" : ""} e imprima 2 vias.</p>
+    <label class="rot" for="f-num">Nº do pedido no Guappo</label>
+    <input id="f-num" inputmode="numeric" autocomplete="off">`,
+  (erro) => {
+    const numero = folha.querySelector("#f-num").value.trim();
+    if (!numero) return erro("Coloque o nº do pedido do Guappo."), false;
+    gravar(p, { tipo: "lancado", numero });
+  });
+}
+
+function folhaAssinada(p) {
+  abrir(`<h2>Retirada · ${esc(p.empresa)}</h2>
+    <p class="suave" style="margin:0">Quem retira confere e assina as 2 vias com nome legível. Uma via vai, a outra fica na pasta.</p>
+    <label class="rot" for="f-quem">Nome de quem retirou e assinou</label>
+    <input type="text" id="f-quem" autocomplete="off">
+    <label class="marca"><input type="checkbox" id="f-foto"> Mandei a foto da via assinada no grupo da empresa</label>`,
+  (erro) => {
+    const quem = folha.querySelector("#f-quem").value.trim();
+    if (!quem) return erro("Escreva quem retirou."), false;
+    gravar(p, { tipo: "assinada", quem, foto: folha.querySelector("#f-foto").checked });
+  });
+}
+
+function folhaProblema(p) {
+  let problema = null;
+  abrir(`<h2>Problema · ${esc(p.empresa)}</h2>
+    <div class="opcoes" id="f-prob">${Object.entries(PROBLEMAS).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
+    <label class="rot" for="f-det">Detalhe</label>
+    <input type="text" id="f-det" placeholder="O que você viu" autocomplete="off">
+    <p class="suave" style="margin:0;font-size:13px">Vai também para o Livro de Ordens e Ocorrências. Avise a Daiane.</p>`,
+  (erro) => {
+    if (!problema) return erro("Escolha qual foi o problema."), false;
+    const detalhe = folha.querySelector("#f-det").value.trim();
+    if (problema === "outro" && !detalhe) return erro("Explique o problema no detalhe."), false;
+    // Registro no Livro (mesmo formato da tela do Livro).
+    acrescentar("livro", { data: p.data, tipo: "ocorrencia", turno: new Date().getHours() < 13 ? "Manhã" : "Tarde", hora: agora(), codigo: "D",
+      fato: `Nota da empresa ${p.empresa}: ${PROBLEMAS[problema]}${detalhe ? ` (${detalhe})` : ""}.${p.lancado ? ` Pedido Guappo nº ${p.lancado.numero}.` : ""}`,
+      providencia: "", comunicado: "", urgente: false, autor: eu.nome, autorUid: eu.uid, em: new Date().toISOString() }).catch(() => {});
+    gravar(p, { tipo: "conferido", ok: false, problema, detalhe });
+  });
+  folha.querySelector("#f-prob").onclick = (e) => {
+    const v = e.target.closest("button")?.dataset.v; if (!v) return;
+    problema = v; e.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
+  };
+}
+
+/* ---------- Mês por empresa (Daiane e Fábio) ---------- */
+const campoMes = document.getElementById("mes");
+campoMes.value = hoje().slice(0, 7);
+async function mostrarMes() {
+  const pedidos = montar(await listar("notas", "mes", campoMes.value)).filter((p) => !p.cancelado);
+  const por = {};
+  for (const p of pedidos) {
+    const t = (por[p.empresa] ||= { pedidos: 0, numeros: [], problemas: 0, semConferir: 0 });
+    t.pedidos++;
+    if (p.lancado) t.numeros.push(p.lancado.numero);
+    if (temProblema(p)) t.problemas++;
+    if (!p.conferido) t.semConferir++;
+  }
+  const linhas = Object.entries(por).sort((a, b) => a[0].localeCompare(b[0]));
+  document.getElementById("tabela").innerHTML = linhas.length ? `
+    <table class="mes"><tr><th>Empresa</th><th class="n">Pedidos</th><th class="n">Problemas</th><th class="n">Sem conferir</th></tr>
+    ${linhas.map(([n, t]) => `<tr><td><b>${esc(n)}</b><br><span class="suave" style="font-size:12px">Nºs Guappo: ${esc(t.numeros.join(", ") || "—")}</span></td>
+      <td class="n">${t.pedidos}</td><td class="n" style="${t.problemas ? "color:var(--alerta);font-weight:700" : ""}">${t.problemas}</td><td class="n">${t.semConferir}</td></tr>`).join("")}
+    </table>
+    <p class="suave" style="font-size:13px">Compare com o relatório a prazo de cada empresa no Guappo. Bateu, cobra. Não bateu, olhe o Livro.</p>`
+    : `<p class="suave">Nenhum pedido neste mês.</p>`;
+}
+campoMes.onchange = mostrarMes;
+campoDia.onchange = mostrar;
+
+if (veMes) {
+  const abas = document.getElementById("abas");
+  abas.hidden = false;
+  abas.onclick = (e) => {
+    const aba = e.target.closest("button")?.dataset.aba; if (!aba) return;
+    abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
+    document.getElementById("aba-dia").hidden = aba !== "dia";
+    document.getElementById("aba-mes").hidden = aba !== "mes";
+    if (aba === "mes") mostrarMes();
+  };
+}
+mostrar();
+</script>
+</body>
+</html>

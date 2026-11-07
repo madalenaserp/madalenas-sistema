@@ -58,6 +58,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Notas das empresas: caixa e líderes lançam e registram a retirada; conferir e cancelar só líderes e gestão.
+    match /notas/{id} {
+      allow read: if caixaOuLider();
+      allow create: if caixaOuLider() && request.resource.data.registradoPorUid == request.auth.uid && (
+           request.resource.data.tipo in ["pedido", "lancado", "assinada"]
+        || (request.resource.data.tipo in ["conferido", "cancelado"] && papel(["dona", "gestor", "lider"])));
+      allow update, delete: if false;
+    }
+
     // Encomendas de clientes: toda a equipe anota, confere e avança a etapa. Só se acrescenta.
     // Cancelar só dona, gestor e líderes.
     match /encomendas/{id} {
