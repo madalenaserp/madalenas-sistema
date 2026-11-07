@@ -88,6 +88,14 @@ const num = (t) => Number(String(t ?? "").replace(",", "."));
 const br = (v) => String(Math.round(v * 1000) / 1000).replace(".", ",");
 const agora = () => new Date().toTimeString().slice(0, 5);
 const UN_ING = ["g", "kg", "ml", "L", "unidade"];
+const MAQUINAS = ["Masseira", "Batedeira", "Cilindro", "Divisora modeladora", "Fritadeira"];
+// Texto das máquinas e seus detalhes (para a ficha e a impressão).
+const processo = (f) => !f.maquinas ? "" : f.maquinas.includes("mao") ? "Tudo à mão" + (f.mistura ? ` (sova ${f.mistura} min)` : "") : f.maquinas.map((m) =>
+  m === "Masseira" ? `Masseira: ${br(Number(String(f.masseiraLenta).replace(",", ".")))} min na lenta${Number(String(f.masseiraRapida).replace(",", ".")) ? ` + ${br(Number(String(f.masseiraRapida).replace(",", ".")))} min na rápida` : ""}`
+  : m === "Batedeira" ? `Batedeira: ${f.batedeiraTempo} min (${f.batedeiraVel})`
+  : m === "Cilindro" ? `Cilindro: ${f.cilindroPassadas} passada(s), até ${f.cilindroPonto}`
+  : m === "Fritadeira" ? `Fritadeira: óleo a ${f.fritaTemp} °C por ${f.fritaTempo} min`
+  : `Divisora modeladora: pesada de ${br(Number(String(f.pesada).replace(",", ".")))} kg em ${f.partes} partes`).join("<br>");
 document.getElementById("ingredientes").innerHTML = ["Farinha de trigo", "Água", "Sal", "Açúcar", "Fermento biológico seco", "Fermento biológico fresco",
   "Melhorador", "Manteiga", "Margarina", "Gordura vegetal", "Óleo", "Ovos", "Leite", "Leite em pó", "Leite condensado", "Creme de leite",
   "Coco ralado", "Fubá", "Goiabada", "Doce de leite", "Nutella", "Queijo muçarela", "Presunto", "Calabresa", "Catupiry", "Cebola", "Alho",
@@ -165,8 +173,9 @@ async function ver(p, s) {
       <h3>Divisão e rendimento</h3>
       <dl>${f.divide === "divisora" ? `<dt>Pesada</dt><dd>${br(f.pesada)} kg em ${f.partes} partes (≈ ${Math.round((f.pesada * 1000) / f.partes)} g cada)</dd>` : `<dt>Peso de cada</dt><dd>${br(f.pesoUnidade)} g</dd>`}
         <dt>A receita rende</dt><dd>${f.rendimento} unidades</dd></dl>
-      <h3>Tempos e forno</h3>
-      <dl><dt>Mistura (sova)</dt><dd>${f.mistura} min</dd><dt>Fermentação</dt><dd>${f.fermentacao} min</dd>
+      ${f.maquinas ? `<h3>Máquinas</h3><p class="preparo">${processo(f)}</p>` : ""}
+      <h3>Fermentação e forno</h3>
+      <dl>${!f.maquinas && f.mistura ? `<dt>Mistura (sova)</dt><dd>${f.mistura} min</dd>` : ""}<dt>Fermentação</dt><dd>${f.fermentacao} min</dd>
         <dt>Forno</dt><dd>${f.fornoTemp} °C por ${f.fornoTempo} min</dd></dl>
       <h3>Modo de preparo</h3>${f.passos ? `<div class="passos-ficha">${f.passos.map((x, k) => `<div class="p"><img data-foto="${esc(x.fotoId)}" alt="Passo ${k + 1}"><p class="preparo"><b>${k + 1}.</b> ${esc(x.texto)}</p></div>`).join("")}</div>` : `<p class="preparo">${esc(f.preparo)}</p>`}
       <p class="suave" style="margin:12px 0 0;font-size:13px">Preenchida por ${esc(f.registradoPor)} em ${dataBR(f.data)} às ${esc(f.hora)}${s.versao > 1 ? ` · versão ${s.versao}` : ""}</p>
@@ -226,6 +235,7 @@ function perguntar(produto, anterior) {
     tela.querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { if (f[campo].length > 1) { f[campo].splice(b.dataset.tira, 1); guarda(); redesenha(); } }));
     tela.querySelector("#mais").onclick = () => { f[campo].push({ nome: "", qtd: "", un: "g" }); guarda(); redesenha(); tela.querySelector(".ing:last-child input").focus(); };
   };
+  const usa = (m) => (f.maquinas || []).includes(m);
   const campoNum = (id, rot, unid, ajuda) => `<label class="ajuda" for="${id}">${rot}</label><div style="display:flex;gap:8px;align-items:center"><input id="${id}" inputmode="decimal" value="${esc(f[id])}"><b>${unid}</b></div>${ajuda ? `<p class="ajuda">${ajuda}</p>` : ""}`;
   const ligaNum = (...ids) => ids.forEach((id) => (tela.querySelector(`#${id}`).oninput = (e) => { f[id] = e.target.value; guarda(); }));
   const escolha = (campo, ops) => `<div class="opcoes">${ops.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${String(f[campo]) === v}">${t}</button>`).join("")}</div>`;
@@ -240,9 +250,36 @@ function perguntar(produto, anterior) {
     { titulo: "Quais ingredientes vão no recheio ou cobertura?", ajuda: "Quantidade para a receita inteira (todas as unidades).", pula: () => !f.temRecheio,
       corpo: () => tabelaIng("recheio"), liga: (r) => ligaIng("recheio", r),
       valida: () => !linhasOk(f.recheio) ? "Tem linha sem ingrediente ou sem quantidade. Preencha ou toque no × para tirar." : "" },
-    { titulo: "Como a massa é dividida?", corpo: () => escolha("divide", [["divisora", "Na divisora (uma pesada vira várias partes)"], ["unidade", "Pesando um por um"]]),
-      liga: (r) => ligaEscolha("divide", (v) => v, r), valida: () => (!f.divide ? "Escolha uma das opções." : "") },
-    { titulo: "Quanto pesa cada pesada e em quantas partes a divisora corta?", pula: () => f.divide !== "divisora",
+    { titulo: "Por quais máquinas a massa passa?", ajuda: "Marque todas que usa, na ordem que quiser.",
+      corpo: () => `<div class="opcoes">${MAQUINAS.map((m) => `<button type="button" data-v="${m}" aria-pressed="${(f.maquinas || []).includes(m)}">${m}</button>`).join("")}
+        <button type="button" data-v="mao" aria-pressed="${(f.maquinas || []).includes("mao")}">Nenhuma, é tudo à mão</button></div>`,
+      liga: (r) => tela.querySelectorAll(".opcoes button").forEach((b) => (b.onclick = () => {
+        const v = b.dataset.v, l = (f.maquinas || []).filter((x) => x !== "mao");
+        f.maquinas = v === "mao" ? ["mao"] : l.includes(v) ? l.filter((x) => x !== v) : [...l, v];
+        f.divide = f.maquinas.includes("Divisora modeladora") ? "divisora" : "unidade";
+        guarda(); r();
+      })),
+      valida: () => (!(f.maquinas || []).length ? "Marque pelo menos uma opção." : "") },
+    { titulo: "Na masseira: quanto tempo em cada velocidade?", pula: () => !usa("Masseira"),
+      corpo: () => campoNum("masseiraLenta", "Velocidade lenta", "min") + campoNum("masseiraRapida", "Velocidade rápida", "min", "Se não usa a rápida, coloque 0."),
+      liga: () => ligaNum("masseiraLenta", "masseiraRapida"),
+      valida: () => !(num(f.masseiraLenta) > 0) ? "Coloque o tempo na lenta." : f.masseiraRapida === "" || !(num(f.masseiraRapida) >= 0) ? "Coloque o tempo na rápida (0 se não usa)." : "" },
+    { titulo: "Na batedeira: quanto tempo e em que velocidade?", pula: () => !usa("Batedeira"),
+      corpo: () => campoNum("batedeiraTempo", "Tempo", "min") + `<label class="ajuda" for="batedeiraVel">Velocidade</label><input id="batedeiraVel" placeholder="Ex.: média, depois alta" value="${esc(f.batedeiraVel || "")}">`,
+      liga: () => { ligaNum("batedeiraTempo"); tela.querySelector("#batedeiraVel").oninput = (e) => { f.batedeiraVel = e.target.value; guarda(); }; },
+      valida: () => !(num(f.batedeiraTempo) > 0) ? "Coloque o tempo na batedeira." : !(f.batedeiraVel || "").trim() ? "Escreva a velocidade." : "" },
+    { titulo: "Quanto tempo de sova à mão?", pula: () => usa("Masseira") || usa("Batedeira"),
+      corpo: () => campoNum("mistura", "Mistura / sova", "min"), liga: () => ligaNum("mistura"),
+      valida: () => (!(num(f.mistura) > 0) ? "Coloque o tempo de sova." : "") },
+    { titulo: "No cilindro: quantas vezes a massa passa?", pula: () => !usa("Cilindro"),
+      corpo: () => campoNum("cilindroPassadas", "Passadas", "vezes") + `<label class="ajuda" for="cilindroPonto">Como saber que está no ponto</label><input id="cilindroPonto" placeholder="Ex.: até ficar lisa e fazer véu" value="${esc(f.cilindroPonto || "")}">`,
+      liga: () => { ligaNum("cilindroPassadas"); tela.querySelector("#cilindroPonto").oninput = (e) => { f.cilindroPonto = e.target.value; guarda(); }; },
+      valida: () => !(num(f.cilindroPassadas) >= 1) ? "Coloque quantas vezes passa no cilindro." : !(f.cilindroPonto || "").trim() ? "Explique como saber o ponto." : "" },
+    { titulo: "Na fritadeira: temperatura do óleo e tempo?", pula: () => !usa("Fritadeira"),
+      corpo: () => campoNum("fritaTemp", "Temperatura do óleo", "°C") + campoNum("fritaTempo", "Tempo", "min"),
+      liga: () => ligaNum("fritaTemp", "fritaTempo"),
+      valida: () => !(num(f.fritaTemp) >= 100) ? "Coloque a temperatura do óleo." : !(num(f.fritaTempo) > 0) ? "Coloque o tempo de fritura." : "" },
+    { titulo: "Na divisora modeladora: quanto pesa a pesada e em quantas partes corta?", pula: () => f.divide !== "divisora",
       corpo: () => campoNum("pesada", "Peso da pesada", "kg", PESADAS[produto] > 0.5 ? `Na lista do Daniel está ${br(PESADAS[produto])} kg. Confira.` : "") + campoNum("partes", "Quantas partes", "partes"),
       liga: () => ligaNum("pesada", "partes"), valida: () => !(num(f.pesada) > 0) ? "Coloque o peso da pesada." : !(num(f.partes) >= 1) ? "Coloque em quantas partes divide." : "" },
     { titulo: "Quanto pesa cada pão antes de ir ao forno?", pula: () => f.divide !== "unidade",
@@ -250,8 +287,8 @@ function perguntar(produto, anterior) {
       liga: () => ligaNum("pesoUnidade"), valida: () => (!(num(f.pesoUnidade) > 0) ? "Coloque o peso em gramas." : "") },
     { titulo: "Quantas unidades a receita inteira rende?", ajuda: "Contando o produto pronto, do jeito que vai para a vitrine.",
       corpo: () => campoNum("rendimento", "Rendimento", "unidades"), liga: () => ligaNum("rendimento"), valida: () => (!(num(f.rendimento) >= 1) ? "Coloque quantas unidades rende." : "") },
-    { titulo: "Quanto tempo de mistura e de fermentação?", corpo: () => campoNum("mistura", "Mistura / sova", "min") + campoNum("fermentacao", "Fermentação (descanso)", "min", "Se não fermenta, coloque 0."),
-      liga: () => ligaNum("mistura", "fermentacao"), valida: () => !(num(f.mistura) > 0) ? "Coloque o tempo de mistura." : !(num(f.fermentacao) >= 0) || f.fermentacao === "" ? "Coloque o tempo de fermentação (0 se não tiver)." : "" },
+    { titulo: "Quanto tempo de fermentação?", corpo: () => campoNum("fermentacao", "Fermentação (descanso)", "min", "Se não fermenta, coloque 0."),
+      liga: () => ligaNum("fermentacao"), valida: () => (f.fermentacao === "" || !(num(f.fermentacao) >= 0) ? "Coloque o tempo de fermentação (0 se não tiver)." : "") },
     { titulo: "Qual a temperatura e o tempo de forno?", corpo: () => campoNum("fornoTemp", "Temperatura", "°C") + campoNum("fornoTempo", "Tempo", "min"),
       liga: () => ligaNum("fornoTemp", "fornoTempo"), valida: () => !(num(f.fornoTemp) >= 50) ? "Coloque a temperatura do forno." : !(num(f.fornoTempo) > 0) ? "Coloque o tempo de forno." : "" },
     { titulo: "Como faz, passo a passo?", ajuda: "Um passo de cada vez, como se fosse ensinar alguém que nunca fez. Cada passo tem a sua foto, tirada na hora de fazer.",
@@ -325,7 +362,8 @@ function perguntar(produto, anterior) {
           ${f.temRecheio ? `<dt>Recheio</dt><dd>${ing(f.recheio)}</dd>` : ""}
           <dt>Divisão</dt><dd>${f.divide === "divisora" ? `${br(num(f.pesada))} kg em ${num(f.partes)} partes` : `${br(num(f.pesoUnidade))} g cada`}</dd>
           <dt>Rende</dt><dd>${num(f.rendimento)} unidades</dd>
-          <dt>Tempos</dt><dd>mistura ${num(f.mistura)} min · fermentação ${num(f.fermentacao)} min</dd>
+          <dt>Máquinas</dt><dd>${processo(f)}</dd>
+          <dt>Fermentação</dt><dd>${num(f.fermentacao)} min</dd>
           <dt>Forno</dt><dd>${num(f.fornoTemp)} °C por ${num(f.fornoTempo)} min</dd></dl>
         <div class="passos-ficha">${f.passos.map((x, k) => `<div class="p">${x.foto ? `<img src="${x.foto}" alt="">` : `<img data-foto="${esc(x.fotoId)}" alt="">`}<p class="preparo"><b>${k + 1}.</b> ${esc(x.texto)}</p></div>`).join("")}</div>
         ${f.foto ? `<img src="${f.foto}" class="pronto" alt="Foto">` : `<img data-foto="${esc(f.fotoId)}" class="pronto" alt="Foto">`}
@@ -345,7 +383,12 @@ function perguntar(produto, anterior) {
         const limpa = (l) => l.map((x) => ({ nome: x.nome.trim(), qtd: num(x.qtd), un: x.un }));
         await acrescentar("fichas", { ...base, tipo: "ficha", ingredientes: limpa(f.ingredientes), temRecheio: f.temRecheio, recheio: f.temRecheio ? limpa(f.recheio) : [],
           divide: f.divide, pesada: f.divide === "divisora" ? num(f.pesada) : null, partes: f.divide === "divisora" ? num(f.partes) : null,
-          pesoUnidade: f.divide === "unidade" ? num(f.pesoUnidade) : null, rendimento: num(f.rendimento), mistura: num(f.mistura), fermentacao: num(f.fermentacao),
+          pesoUnidade: f.divide === "unidade" ? num(f.pesoUnidade) : null, rendimento: num(f.rendimento), fermentacao: num(f.fermentacao), maquinas: f.maquinas,
+          mistura: usa("Masseira") || usa("Batedeira") ? null : num(f.mistura),
+          masseiraLenta: usa("Masseira") ? num(f.masseiraLenta) : null, masseiraRapida: usa("Masseira") ? num(f.masseiraRapida) : null,
+          batedeiraTempo: usa("Batedeira") ? num(f.batedeiraTempo) : null, batedeiraVel: usa("Batedeira") ? f.batedeiraVel.trim() : null,
+          cilindroPassadas: usa("Cilindro") ? num(f.cilindroPassadas) : null, cilindroPonto: usa("Cilindro") ? f.cilindroPonto.trim() : null,
+          fritaTemp: usa("Fritadeira") ? num(f.fritaTemp) : null, fritaTempo: usa("Fritadeira") ? num(f.fritaTempo) : null,
           fornoTemp: num(f.fornoTemp), fornoTempo: num(f.fornoTempo), passos, fotoId });
         try { localStorage.removeItem(chave); } catch {}
         alert("Ficha enviada! A Daiane vai conferir.");
