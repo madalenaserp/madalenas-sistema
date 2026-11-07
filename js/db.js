@@ -43,3 +43,16 @@ export async function acrescentar(colecao, dados) {
   if (f) return f.fs.addDoc(f.fs.collection(f.db, colecao), { ...dados, gravadoEm: f.fs.serverTimestamp() });
   const tudo = lerLocal(colecao); tudo[`${Date.now()}_${Math.random().toString(36).slice(2, 7)}`] = dados; gravarLocal(colecao, tudo);
 }
+
+// Lista os documentos em que campo está entre "de" e "ate" (inclusive). Ex.: datas de entrega da semana.
+export async function listarEntre(colecao, campo, de, ate) {
+  const f = await firebase();
+  if (f) {
+    const q = f.fs.query(f.fs.collection(f.db, colecao), f.fs.where(campo, ">=", de), f.fs.where(campo, "<=", ate));
+    const snap = await f.fs.getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+  return Object.entries(lerLocal(colecao))
+    .filter(([, d]) => d[campo] >= de && d[campo] <= ate)
+    .map(([id, d]) => ({ id, ...d }));
+}

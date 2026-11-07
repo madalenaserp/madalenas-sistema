@@ -19,7 +19,7 @@
 <script type="module">
 import { exigirUsuario, hoje } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
-import { listar } from "./js/db.js";
+import { listar, listarEntre } from "./js/db.js";
 
 if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
@@ -34,6 +34,20 @@ function bloco(titulo, itens, tipo) {
 async function mostrar() {
   const registros = await listar("presenca", "data", campoDia.value);
   const livro = await listar("livro", "data", campoDia.value);
+  // Encomendas do dia escolhido e do dia seguinte.
+  const [a0, m0, d0] = campoDia.value.split("-").map(Number);
+  const dx = new Date(a0, m0 - 1, d0 + 1);
+  const diaSeguinte = `${dx.getFullYear()}-${String(dx.getMonth() + 1).padStart(2, "0")}-${String(dx.getDate()).padStart(2, "0")}`;
+  const encBruto = await listarEntre("encomendas", "dataEntrega", campoDia.value, diaSeguinte);
+  const encs = encBruto.filter((r) => r.tipo === "encomenda").map((e) => {
+    const ev = encBruto.filter((r) => r.refId === e.id).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || ""));
+    return { ...e, status: ev.filter((r) => r.tipo === "status").at(-1)?.para || "anotada", conf: ev.filter((r) => r.tipo === "conferida").map((r) => r.momento) };
+  }).filter((e) => e.status !== "cancelada");
+  const ETAPA = { anotada: "anotada", producao: "em produção", pronta: "pronta", entregue: "entregue" };
+  const encDia = encs.filter((e) => e.dataEntrega === campoDia.value).sort((x, y) => (x.horaEntrega || "").localeCompare(y.horaEntrega || ""))
+    .map((e) => `${e.horaEntrega} · ${e.cliente}: ${e.pedido} <span class="suave">(${ETAPA[e.status]}${e.status !== "entregue" && !e.conf.includes("abertura") ? ", <b>sem conferir na abertura</b>" : ""})</span>`);
+  const encAmanha = encs.filter((e) => e.dataEntrega === diaSeguinte)
+    .map((e) => `${e.horaEntrega} · ${e.cliente}: ${e.pedido}${e.conf.includes("vespera") ? "" : ' <span class="suave">(<b>sem conferir na véspera</b>)</span>'}`);
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -64,6 +78,8 @@ async function mostrar() {
     bloco("Ocorrências urgentes", urgentes, "alerta") +
     bloco("Ordens ainda não feitas", ordensAbertas, "pendente") +
     `<div class="cartao"><h2>Livro do dia</h2><p class="suave">${fechou ? "Dia fechado" : "Dia ainda não fechado"} · ${visto ? "com seu visto" : "sem seu visto"} · ${ocorr.length} outra(s) ocorrência(s). <a href="livro.html">Abrir o livro</a></p></div>` +
+    bloco("Encomendas do dia", encDia, "pendente") +
+    bloco("Encomendas do dia seguinte", encAmanha, "pendente") +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +
     `<div class="cartao"><h2>Consumo da equipe</h2><p class="suave">${consumo.length} registro(s) · total ${reais(consumoTotal)}${cancelados.size ? ` · ${cancelados.size} cancelado(s)` : ""}. <a href="consumo.html">Ver tudo</a></p></div>` +
     bloco("Faltas", faltas, "alerta") +

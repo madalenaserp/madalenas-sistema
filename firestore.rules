@@ -58,6 +58,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Encomendas de clientes: toda a equipe anota, confere e avança a etapa. Só se acrescenta.
+    // Cancelar só dona, gestor e líderes.
+    match /encomendas/{id} {
+      allow read: if ativo();
+      allow create: if ativo() && request.resource.data.registradoPorUid == request.auth.uid && (
+           request.resource.data.tipo in ["encomenda", "conferida"]
+        || (request.resource.data.tipo == "status" && request.resource.data.para in ["producao", "pronta", "entregue"])
+        || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelada" && papel(["dona", "gestor", "lider"])));
+      allow update, delete: if false;
+    }
+
     // Qualquer outra coisa: bloqueada.
     match /{caminho=**} { allow read, write: if false; }
   }

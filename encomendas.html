@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Encomendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px 4px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .enc { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--laranja); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+  .enc.entregue, .enc.cancelada { opacity:.6; border-left-color:var(--linha); }
+  .enc .topo { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .enc .hora { font-weight:700; font-size:18px; white-space:nowrap; }
+  .enc .pedido { font-size:17px; white-space:pre-wrap; }
+  .enc .acoes { display:flex; gap:6px; flex-wrap:wrap; }
+  .enc .acoes button { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--linha); background:#fff; cursor:pointer; }
+  .enc .acoes button.avancar { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .enc .acoes button.conferir { background:var(--ok); color:#fff; border-color:var(--ok); font-weight:600; }
+  .selo.producao { background:#fff1e3; color:#a3500f; }
+  .selo.pronta { background:#e8eef7; color:#2c4a7a; }
+  .dia-titulo { margin:8px 0 0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--suave); font-size:14px; }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha input, .folha textarea, .folha select { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; font-family:inherit; }
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .duas > div { display:flex; flex-direction:column; gap:6px; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes button { padding:12px 8px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Encomendas</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="abas" id="abas">
+    <button aria-pressed="true" data-aba="hoje">Hoje</button>
+    <button aria-pressed="false" data-aba="amanha">Amanhã</button>
+    <button aria-pressed="false" data-aba="proximas">Próximos dias</button>
+  </div>
+  <div class="cartao" id="resumo"></div>
+  <button class="botao principal" id="nova">+ Anotar encomenda</button>
+  <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+</main>
+
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listarEntre } from "./js/db.js";
+
+const eu = await exigirUsuario();
+const podeCancelar = pode.registrarNoLivro(eu); // dona, gestor e líderes
+
+const ETAPAS = ["anotada", "producao", "pronta", "entregue"];
+const ROTULO = { anotada: "Anotada", producao: "Em produção", pronta: "Pronta", entregue: "Entregue", cancelada: "Cancelada" };
+const PROXIMA = { anotada: "Começar produção", producao: "Marcar pronta", pronta: "Marcar entregue" };
+const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+function somarDias(iso, n) {
+  const [a, m, d] = iso.split("-").map(Number);
+  const x = new Date(a, m - 1, d + n);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+const SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const diaSemana = (iso) => { const [a, m, d] = iso.split("-").map(Number); return SEMANA[new Date(a, m - 1, d).getDay()]; };
+
+let aba = "hoje";
+
+// Junta cada encomenda com o que aconteceu depois (registros novos; nada se altera nem se apaga).
+function montar(registros) {
+  const eventos = registros.filter((r) => r.tipo !== "encomenda").sort((a, b) => (a.criadoEm || "").localeCompare(b.criadoEm || ""));
+  return registros.filter((r) => r.tipo === "encomenda").map((e) => {
+    const meus = eventos.filter((r) => r.refId === e.id);
+    const ultimoStatus = meus.filter((r) => r.tipo === "status").at(-1);
+    return {
+      ...e,
+      status: ultimoStatus?.para || "anotada",
+      motivo: ultimoStatus?.motivo,
+      statusPor: ultimoStatus?.registradoPor,
+      conferencias: meus.filter((r) => r.tipo === "conferida"),
+    };
+  }).sort((a, b) => (a.dataEntrega + (a.horaEntrega || "")).localeCompare(b.dataEntrega + (b.horaEntrega || "")));
+}
+
+function periodo() {
+  const h = hoje();
+  if (aba === "hoje") return [h, h];
+  if (aba === "amanha") return [somarDias(h, 1), somarDias(h, 1)];
+  return [h, somarDias(h, 15)];
+}
+
+// Conferência: na véspera (para a produção se organizar) e na abertura do dia da entrega.
+function momentoConferencia(e) {
+  const h = hoje();
+  if (e.dataEntrega === h) return "abertura";
+  if (e.dataEntrega === somarDias(h, 1)) return "vespera";
+  return null;
+}
+const jaConferida = (e, momento) => e.conferencias.some((c) => c.momento === momento);
+
+async function mostrar() {
+  const [de, ate] = periodo();
+  const itens = montar(await listarEntre("encomendas", "dataEntrega", de, ate));
+  const ativas = itens.filter((e) => e.status !== "cancelada");
+  const abertas = ativas.filter((e) => e.status !== "entregue");
+  const semConferir = ativas.filter((e) => { const m = momentoConferencia(e); return m && e.status !== "entregue" && !jaConferida(e, m); });
+  const titulo = aba === "hoje" ? `Hoje, ${dataBR(de)}` : aba === "amanha" ? `Amanhã, ${dataBR(de)}` : `De ${dataBR(de)} a ${dataBR(ate)}`;
+  document.getElementById("resumo").innerHTML =
+    `<h2 style="margin:0">${titulo}</h2><p class="suave" style="margin:6px 0 0">${ativas.length} encomenda(s) · ${abertas.length} ainda não entregue(s)` +
+    (semConferir.length ? ` · <span class="selo alerta">${semConferir.length} sem conferir</span>` : "") + `</p>`;
+
+  const lista = document.getElementById("lista");
+  lista.innerHTML = itens.length ? "" : `<p class="suave">Nenhuma encomenda ${aba === "hoje" ? "para hoje" : aba === "amanha" ? "para amanhã" : "nos próximos 15 dias"}.</p>`;
+  let diaAtual = "";
+  for (const e of itens) {
+    if (aba === "proximas" && e.dataEntrega !== diaAtual) {
+      diaAtual = e.dataEntrega;
+      const t = document.createElement("p");
+      t.className = "dia-titulo";
+      t.textContent = `${diaSemana(diaAtual)}, ${dataBR(diaAtual)}`;
+      lista.append(t);
+    }
+    lista.append(cartao(e));
+  }
+}
+
+function cartao(e) {
+  const div = document.createElement("div");
+  div.className = `enc ${e.status}`;
+  const falta = (Number(e.valor) || 0) - (Number(e.sinal) || 0);
+  const pagamento = e.valor ? (falta > 0 ? `Total ${reais(e.valor)} · sinal ${reais(e.sinal)} · <b>falta ${reais(falta)}</b>` : `Total ${reais(e.valor)} · <b>pago</b>`) : "";
+  const conf = e.conferencias.map((c) => `${c.momento === "vespera" ? "véspera" : "abertura"} por ${esc(c.registradoPor)} às ${esc(c.hora)}`).join(" · ");
+  div.innerHTML = `
+    <div class="topo"><span><b>${esc(e.cliente)}</b>${e.telefone ? ` <a class="suave" href="tel:${esc(e.telefone)}">${esc(e.telefone)}</a>` : ""}</span>
+      <span class="hora">${esc(e.horaEntrega || "")}</span></div>
+    <div class="pedido">${esc(e.pedido)}</div>
+    <div><span class="selo ${e.status === "entregue" ? "ok" : e.status === "cancelada" ? "pendente" : e.status === "anotada" ? "pendente" : e.status}" style="margin-left:0">${ROTULO[e.status]}${e.statusPor ? ` · ${esc(e.statusPor)}` : ""}</span>
+      ${e.unidade ? `<span class="selo pendente">${esc(e.unidade)}</span>` : ""}
+      ${e.retirada === "entrega" ? `<span class="selo pendente">Entregar no endereço</span>` : ""}</div>
+    ${pagamento ? `<div style="font-size:15px">${pagamento}</div>` : ""}
+    ${e.obs ? `<div class="suave">${esc(e.obs)}</div>` : ""}
+    ${e.motivo ? `<div class="suave">Cancelada: ${esc(e.motivo)}</div>` : ""}
+    <div class="suave" style="font-size:13px">Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}${conf ? ` · Conferida: ${conf}` : ""}</div>
+    <div class="acoes"></div>`;
+  const acoes = div.querySelector(".acoes");
+  if (e.status !== "entregue" && e.status !== "cancelada") {
+    const m = momentoConferencia(e);
+    if (m && !jaConferida(e, m)) acoes.append(botao(`Conferi (${m === "vespera" ? "véspera" : "abertura"})`, "conferir", () => registrar(e, { tipo: "conferida", momento: m })));
+    acoes.append(botao(PROXIMA[e.status], "avancar", () => registrar(e, { tipo: "status", para: ETAPAS[ETAPAS.indexOf(e.status) + 1] })));
+    if (podeCancelar) acoes.append(botao("Cancelar", "", () => {
+      const motivo = prompt(`Por que cancelar a encomenda de ${e.cliente}?`);
+      if (motivo?.trim()) registrar(e, { tipo: "status", para: "cancelada", motivo: motivo.trim() });
+    }));
+  }
+  return div;
+}
+
+function botao(texto, classe, acao) {
+  const b = document.createElement("button");
+  b.textContent = texto; b.className = classe;
+  b.onclick = async () => { b.disabled = true; await acao(); };
+  return b;
+}
+
+async function registrar(e, dados) {
+  try {
+    await acrescentar("encomendas", { ...dados, refId: e.id, dataEntrega: e.dataEntrega, hora: agora(),
+      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+  } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+  mostrar();
+}
+
+/* ---------- Anotar encomenda ---------- */
+const fundo = document.getElementById("fundo");
+const folha = document.getElementById("folha");
+fundo.onclick = (ev) => { if (ev.target === fundo) fundo.hidden = true; };
+
+function abrirFolha() {
+  let unidade = null, retirada = "balcao";
+  const dataPadrao = aba === "amanha" ? somarDias(hoje(), 1) : hoje();
+  folha.innerHTML = `
+    <h2>Anotar encomenda</h2>
+    <label class="rot" for="f-cliente">Cliente</label>
+    <input id="f-cliente" placeholder="Nome do cliente" autocomplete="off">
+    <label class="rot" for="f-tel">Telefone / WhatsApp</label>
+    <input id="f-tel" inputmode="tel" placeholder="(21) 9…" autocomplete="off">
+    <label class="rot" for="f-pedido">O que foi encomendado</label>
+    <textarea id="f-pedido" rows="3" placeholder="Ex.: bolo de chocolate 2 kg, escrito 'Parabéns Ana'; 50 salgados fritos"></textarea>
+    <div class="duas">
+      <div><label class="rot" for="f-data">Dia da entrega</label><input type="date" id="f-data" min="${hoje()}" value="${dataPadrao}"></div>
+      <div><label class="rot" for="f-hora">Horário</label><input type="time" id="f-hora"></div>
+    </div>
+    <label class="rot">Quem faz</label>
+    <div class="opcoes" id="f-unidade"><button type="button" data-v="Panificadora" aria-pressed="false">Panificadora</button><button type="button" data-v="Confeitaria" aria-pressed="false">Confeitaria</button></div>
+    <label class="rot">Como o cliente recebe</label>
+    <div class="opcoes" id="f-retirada"><button type="button" data-v="balcao" aria-pressed="true">Retira na loja</button><button type="button" data-v="entrega" aria-pressed="false">Entregar no endereço</button></div>
+    <div class="duas">
+      <div><label class="rot" for="f-valor">Valor total (R$)</label><input id="f-valor" inputmode="decimal" placeholder="0,00"></div>
+      <div><label class="rot" for="f-sinal">Sinal pago (R$)</label><input id="f-sinal" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <input id="f-obs" placeholder="Observação (endereço, alergia, decoração…)">
+    <p class="erro" id="f-erro"></p>
+    <button class="botao principal" id="f-salvar">Salvar encomenda</button>
+    <button class="botao" id="f-cancelar" style="text-align:center;border:none">Cancelar</button>`;
+  const escolher = (id, set) => folha.querySelector(id).onclick = (ev) => {
+    const v = ev.target.closest("button")?.dataset.v; if (!v) return;
+    set(v); ev.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
+  };
+  escolher("#f-unidade", (v) => (unidade = v));
+  escolher("#f-retirada", (v) => (retirada = v));
+  folha.querySelector("#f-cancelar").onclick = () => { fundo.hidden = true; };
+  const numero = (id) => Number(folha.querySelector(id).value.replace(/\./g, "").replace(",", ".")) || 0;
+  folha.querySelector("#f-salvar").onclick = async (ev) => {
+    const erro = folha.querySelector("#f-erro");
+    const cliente = folha.querySelector("#f-cliente").value.trim();
+    const pedido = folha.querySelector("#f-pedido").value.trim();
+    const dataEntrega = folha.querySelector("#f-data").value;
+    const horaEntrega = folha.querySelector("#f-hora").value;
+    if (!cliente) return (erro.textContent = "Escreva o nome do cliente.");
+    if (!pedido) return (erro.textContent = "Escreva o que foi encomendado.");
+    if (!dataEntrega || dataEntrega < hoje()) return (erro.textContent = "Escolha o dia da entrega (hoje ou depois).");
+    if (!horaEntrega) return (erro.textContent = "Coloque o horário da entrega.");
+    if (!unidade) return (erro.textContent = "Escolha quem faz: Panificadora ou Confeitaria.");
+    const valor = numero("#f-valor"), sinal = numero("#f-sinal");
+    if (sinal > valor && valor > 0) return (erro.textContent = "O sinal não pode ser maior que o total.");
+    ev.target.disabled = true;
+    try {
+      await acrescentar("encomendas", {
+        tipo: "encomenda", cliente, telefone: folha.querySelector("#f-tel").value.trim(), pedido,
+        dataEntrega, horaEntrega, unidade, retirada, valor, sinal, obs: folha.querySelector("#f-obs").value.trim(),
+        anotadoPor: eu.nome, registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(),
+      });
+      fundo.hidden = true;
+      const h = hoje();
+      aba = dataEntrega === h ? "hoje" : dataEntrega === somarDias(h, 1) ? "amanha" : "proximas";
+      marcarAba();
+      mostrar();
+    } catch {
+      erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo.";
+      ev.target.disabled = false;
+    }
+  };
+  fundo.hidden = false;
+  folha.querySelector("#f-cliente").focus();
+}
+
+const abas = document.getElementById("abas");
+const marcarAba = () => abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
+abas.onclick = (ev) => { const v = ev.target.closest("button")?.dataset.aba; if (!v) return; aba = v; marcarAba(); mostrar(); };
+document.getElementById("nova").onclick = abrirFolha;
+mostrar();
+</script>
+</body>
+</html>
