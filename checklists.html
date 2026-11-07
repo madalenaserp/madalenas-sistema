@@ -36,17 +36,27 @@
   .turnos button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
   ul.respostas { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; font-size:15px; }
   ul.respostas .ruim { color:var(--alerta); font-weight:600; }
+  .item.travado { opacity:.4; pointer-events:none; }
+  .item.atual { border-color:var(--laranja); box-shadow:0 0 0 2px #e2732b33; }
+  .item label.camera { width:48px; height:44px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .item label.camera.feita { background:var(--ok); border-color:var(--ok); }
+  .item label.camera input { display:none; }
+  .item .prova { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--suave); }
+  .item .prova img, ul.respostas img { width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
 </style>
 </head>
 <body>
 <header><div data-logo="pequeno"></div><h1 id="titulo">Checklists</h1><a href="turno.html" id="voltar">Voltar</a></header>
 <main id="tela"></main>
+<div class="zoom" id="zoom" hidden><img alt="Foto"></div>
 
 <script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
-import { acrescentar, listar } from "./js/db.js";
+import { acrescentar, listar, ler } from "./js/db.js";
 import { CHECKLISTS, itensDe } from "./js/checklists.js";
 
 const eu = await exigirUsuario();
@@ -60,6 +70,37 @@ const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency
 const numero = (t) => (String(t).trim() === "" ? null : Number(String(t).replace(/\./g, "").replace(",", ".")));
 
 let feitos = [];
+
+// Fotos: reduzidas no aparelho (~60 KB) e guardadas à parte, em checklists_fotos.
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1200, qualidade = 0.65, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 500000 && lado > 400);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+const fotos = {};
+const foto = (id) => (fotos[id] ??= ler("checklists_fotos", id).then((d) => d?.foto || ""));
+function mostrarFotos(raiz) {
+  raiz.querySelectorAll("img[data-foto]").forEach(async (img) => {
+    img.src = await foto(img.dataset.foto);
+    img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+  });
+}
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
 
 /* ---------- Lista dos checklists do dia ---------- */
 async function inicio() {
@@ -97,6 +138,11 @@ function abrir(id) {
 
   // Um item de valor vira "problema" quando foge do esperado (fundo de troco) ou a diferença passa de R$ 10.
   function avaliar(it, r) {
+    const base = avaliarValor(it, r);
+    if (it.foto && base === true && !r?.fotoId) return undefined; // sem foto, não conta como feito
+    return base;
+  }
+  function avaliarValor(it, r) {
     if (it.tipo === "check") return r?.ok;
     if (r?.valor == null || Number.isNaN(r.valor)) return undefined;
     if (it.esperado != null) return Math.abs(r.valor - it.esperado) < 0.01;
@@ -111,21 +157,31 @@ function abrir(id) {
     if (ja) {
       tela.innerHTML = html + `<div class="cartao"><h2 style="margin:0">Já feito${turno ? ` (${turno})` : ""}</h2>
         <p class="suave">Por ${esc(ja.registradoPor)} às ${esc(ja.hora)}${ja.problemas ? ` · <b style="color:var(--alerta)">${ja.problemas} problema(s)</b>` : ""}</p>
-        <ul class="respostas">${ja.respostas.map((r) => `<li class="${r.ok ? "" : "ruim"}">${r.ok ? "✓" : "✗"} ${esc(r.texto)}${r.valor != null ? `: <b>${r.dinheiro ? reais(r.valor) : esc(r.valor)}</b>` : ""}${r.obs ? ` <span class="suave">(${esc(r.obs)})</span>` : ""}</li>`).join("")}</ul></div>`;
+        <ul class="respostas">${ja.respostas.map((r) => `<li class="${r.ok ? "" : "ruim"}">${r.ok ? "✓" : "✗"} ${esc(r.texto)}${r.valor != null ? `: <b>${r.dinheiro ? reais(r.valor) : esc(r.valor)}</b>` : ""}${r.obs ? ` <span class="suave">(${esc(r.obs)})</span>` : ""}${r.fotoId ? `<br><img data-foto="${esc(r.fotoId)}" alt="Foto">` : ""}</li>`).join("")}</ul></div>`;
       ligarTurnos();
+      mostrarFotos(tela);
       return;
     }
     let secao = "";
+    // Em ordem: o próximo item só libera quando o atual está completo.
+    const completo = (it) => { const v = avaliar(it, respostas[it.n]); return v === true || (v === false && respostas[it.n]?.obs?.trim()); };
+    const atual = itens.findIndex((it) => !completo(it));
     for (const it of itens) {
       if (it.secao !== secao && l.secoes.length > 1) { secao = it.secao; html += `<p class="secao-titulo">${esc(secao)}</p>`; }
       const r = respostas[it.n] || {};
       const ok = avaliar(it, r);
       const precisaObs = ok === false;
-      html += `<div class="item ${ok === true ? "feito" : ok === false ? "ruim" : ""}" data-n="${it.n}">
+      const estado = atual !== -1 && it.n > atual ? "travado" : it.n === atual ? "atual" : "";
+      html += `<div class="item ${ok === true ? "feito" : ok === false ? "ruim" : ""} ${estado}" data-n="${it.n}">
         <div class="linha1"><span class="texto">${esc(it.texto)}${it.esperado != null ? ` <span class="suave">(deve ser ${reais(it.esperado)})</span>` : ""}</span>
         ${it.tipo === "check"
-          ? `<span class="sim-nao"><button class="sim" aria-label="Feito" aria-pressed="${r.ok === true}">✓</button><button class="nao" aria-label="Não está certo" aria-pressed="${r.ok === false}">✗</button></span>`
-          : `<input class="valor" inputmode="decimal" placeholder="${it.tipo === "dinheiro" ? "R$" : "valor"}" value="${r.valor ?? ""}">`}</div>
+          ? `<span class="sim-nao">${it.foto
+              ? `<label class="camera ${r.ok === true && r.fotoId ? "feita" : ""}" aria-label="Tirar foto e marcar feito">${r.ok === true && r.fotoId ? "✓" : "📷"}<input type="file" accept="image/*" capture="environment"></label>`
+              : `<button class="sim" aria-label="Feito" aria-pressed="${r.ok === true}">✓</button>`}<button class="nao" aria-label="Não está certo" aria-pressed="${r.ok === false}">✗</button></span>`
+          : `<span class="sim-nao"><input class="valor" inputmode="decimal" placeholder="${it.tipo === "dinheiro" ? "R$" : "valor"}" value="${r.valor ?? ""}">${it.foto
+              ? `<label class="camera ${r.fotoId ? "feita" : ""}" aria-label="Tirar foto">📷<input type="file" accept="image/*" capture="environment"></label>` : ""}</span>`}</div>
+        ${it.foto ? (r.fotoId ? `<div class="prova"><img data-foto="${esc(r.fotoId)}" alt="Foto">Foto tirada. Toque no 📷 para trocar.</div>`
+                              : `<div class="prova">📷 Este item precisa de foto do que foi feito.</div>`) : ""}
         ${precisaObs ? `<input class="obs" placeholder="${it.diferenca ? "Motivo da diferença" : "O que está errado e o que foi feito?"}" value="${esc(r.obs || "")}">` : ""}
       </div>`;
     }
@@ -142,10 +198,34 @@ function abrir(id) {
       div.querySelector(".nao")?.addEventListener("click", () => { respostas[n] = { ...respostas[n], ok: false }; guardar(); desenhar(); div.isConnected || tela.querySelector(`.item[data-n="${n}"] .obs`)?.focus(); });
       const v = div.querySelector(".valor");
       if (v) v.addEventListener("change", () => { respostas[n] = { ...respostas[n], valor: numero(v.value) }; guardar(); desenhar(); });
+      const cam = div.querySelector("label.camera input");
+      if (cam) cam.addEventListener("change", async () => {
+        const arq = cam.files[0]; if (!arq) return;
+        div.querySelector("label.camera").firstChild.textContent = "…";
+        try {
+          const url = await reduzir(arq);
+          const fotoId = await acrescentar("checklists_fotos", { lista: l.id, item: it.texto, data: hoje(), foto: url,
+            registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+          fotos[fotoId] = Promise.resolve(url);
+          respostas[n] = it.tipo === "check" ? { ok: true, obs: "", fotoId } : { ...respostas[n], fotoId };
+          guardar();
+        } catch { alert("Não consegui enviar a foto. Verifique a internet e tente de novo."); }
+        desenhar();
+      });
       const o = div.querySelector(".obs");
-      if (o) o.addEventListener("input", () => { respostas[n] = { ...respostas[n], obs: o.value }; guardar(); });
+      if (o) {
+        o.addEventListener("input", () => {
+          respostas[n] = { ...respostas[n], obs: o.value }; guardar();
+          // Escreveu a explicação: libera o próximo item sem perder o foco do campo.
+          const prox = tela.querySelector(`.item[data-n="${n + 1}"]`);
+          if (prox && o.value.trim()) { prox.classList.remove("travado"); prox.classList.add("atual"); div.classList.remove("atual"); }
+        });
+        o.addEventListener("change", desenhar);
+      }
     });
     document.getElementById("concluir").onclick = concluir;
+    mostrarFotos(tela);
+    if (atual > 0) tela.querySelector(".item.atual")?.scrollIntoView({ block: "center" });
   }
 
   function ligarTurnos() {
@@ -155,12 +235,13 @@ function abrir(id) {
   async function concluir(e) {
     const erro = document.getElementById("erro");
     const faltando = itens.filter((it) => avaliar(it, respostas[it.n]) === undefined);
-    if (faltando.length) return (erro.textContent = `Faltam ${faltando.length} item(ns). O primeiro: "${faltando[0].texto}".`);
+    if (faltando.length) return (erro.textContent = `Faltam ${faltando.length} item(ns). O primeiro: "${faltando[0].texto}"${faltando[0].foto ? " (precisa de foto)" : ""}.`);
     const semObs = itens.find((it) => avaliar(it, respostas[it.n]) === false && !respostas[it.n]?.obs?.trim());
     if (semObs) return (erro.textContent = `Explique o problema em: "${semObs.texto}".`);
     const lista = itens.map((it) => {
       const r = respostas[it.n] || {};
-      return { n: it.n, texto: it.texto, ok: avaliar(it, r), ...(it.tipo !== "check" ? { valor: r.valor, dinheiro: it.tipo === "dinheiro" } : {}), obs: (r.obs || "").trim() };
+      return { n: it.n, texto: it.texto, ok: avaliar(it, r), ...(it.tipo !== "check" ? { valor: r.valor, dinheiro: it.tipo === "dinheiro" } : {}),
+        ...(r.fotoId ? { fotoId: r.fotoId } : {}), obs: (r.obs || "").trim() };
     });
     e.target.disabled = true;
     try {

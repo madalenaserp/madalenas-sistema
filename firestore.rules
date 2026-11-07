@@ -82,6 +82,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Fotos dos itens de checklist (prova do que foi feito).
+    match /checklists_fotos/{id} {
+      allow read: if ativo();
+      allow create: if ativo() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+
     // Encomendas de clientes: toda a equipe anota, confere e avança a etapa. Só se acrescenta.
     // Cancelar só dona, gestor e líderes.
     match /encomendas/{id} {
