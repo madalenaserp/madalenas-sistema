@@ -125,6 +125,22 @@ document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true
 let INSUMOS = INSUMOS_PADRAO;
 async function carregarInsumos() { const c = await ler("estoque_cadastro", "insumos").catch(() => null); if (c?.lista?.length) INSUMOS = c.lista; }
 const ins = (id) => INSUMOS.find((i) => i.id === id) || { id, nome: id, unidade: "", minimo: 0 };
+// Código de barras: o sistema aprende. Na primeira vez a pessoa escolhe o insumo; depois o código já acha sozinho.
+let CODIGOS = {};
+async function carregarCodigos() {
+  CODIGOS = {};
+  for (const m of await movimentos()) if (m.codigo && !m.cancelamento) CODIGOS[m.codigo] = m.insumoId;
+}
+const campoCodigo = (id) => `<label class="rot" for="${id}">Código de barras <span class="suave">(passe o leitor ou digite)</span></label>
+  <input id="${id}" inputmode="numeric" autocomplete="off" placeholder="▮▯▮▮▯ toque aqui e passe o leitor" style="font-size:17px;padding:10px;border:2px dashed var(--linha);border-radius:10px;width:100%;box-sizing:border-box">
+  <p class="suave" id="${id}-msg" style="margin:0;font-size:13px"></p>`;
+// Leitores de código funcionam como teclado: digitam o número e apertam Enter.
+function ligaCodigo(id, achou) {
+  const c = folha.querySelector("#" + id);
+  const ler = () => { const v = c.value.trim(); if (!v) return; const i = CODIGOS[v]; achou(v, i); };
+  c.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); ler(); } };
+  c.onchange = ler;
+}
 async function movimentos() {
   const regs = (await listarEntre("estoque", "data", "2000-01-01", "9999-12-31")).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
   const canc = Object.fromEntries(regs.filter((r) => r.tipo === "cancelamento").map((r) => [r.refId, r]));
@@ -194,6 +210,7 @@ function formulario(acao) {
   const sel = { local: localPadrao, de: localPadrao, para: LOCAIS.find((l) => l !== localPadrao) };
   let urlFoto = null;
   folha.innerHTML = `<h2>${a.nome}</h2>
+    ${campoCodigo("m-cod")}
     <label class="rot">Insumo</label>${selInsumo()}
     <label class="rot" for="m-q">Quantidade <span id="m-un"></span></label><input id="m-q" inputmode="decimal" placeholder="0">
     ${acao === "transferencia" ? `<label class="rot">De</label>${grupo("m-de", LOCAIS, sel.de)}<label class="rot">Para</label>${grupo("m-para", LOCAIS, sel.para)}` : `<label class="rot">Onde</label>${grupo("m-local", LOCAIS, sel.local)}`}
@@ -207,6 +224,13 @@ function formulario(acao) {
     <button class="botao" id="m-x" style="text-align:center;border:none">Cancelar</button>`;
   const insSel = folha.querySelector("#m-ins");
   insSel.onchange = () => { const u = insSel.value ? ins(insSel.value).unidade : ""; folha.querySelector("#m-un").textContent = u ? `(${u})` : ""; folha.querySelectorAll(".m-un2").forEach((e) => (e.textContent = u)); };
+  let codigo = null;
+  ligaCodigo("m-cod", (v, id) => {
+    codigo = v;
+    const msg = folha.querySelector("#m-cod-msg");
+    if (id) { insSel.value = id; insSel.onchange(); msg.innerHTML = `<span class="ok">✓ ${esc(ins(id).nome)}</span>`; folha.querySelector("#m-q").focus(); }
+    else { msg.innerHTML = `<b>Código novo.</b> Escolha o insumo na lista abaixo: da próxima vez ele já aparece sozinho.`; insSel.focus(); }
+  });
   if (acao === "transferencia") { ligaGrupo("#m-de", (v) => (sel.de = v)); ligaGrupo("#m-para", (v) => (sel.para = v)); } else ligaGrupo("#m-local", (v) => (sel.local = v));
   if (acao === "entrada") {
     const tot = () => { const q = numero(folha.querySelector("#m-q").value), p = numero(folha.querySelector("#m-p").value); folha.querySelector("#m-tot").textContent = q > 0 && p > 0 ? `Total: ${reais(q * p)}` : ""; };
@@ -241,7 +265,8 @@ function formulario(acao) {
       const fotoId = urlFoto ? await acrescentar("estoque_fotos", { ...base, foto: urlFoto }) : null;
       await acrescentar("estoque", { ...base, tipo: "mov", acao, insumoId, nome: ins(insumoId).nome, unidade: ins(insumoId).unidade, qtd,
         local: acao === "transferencia" ? null : sel.local, de: acao === "transferencia" ? sel.de : null, para: acao === "transferencia" ? sel.para : null,
-        preco: preco ? Math.round(preco * 100) / 100 : null, fornecedor, obs, fotoId });
+        preco: preco ? Math.round(preco * 100) / 100 : null, fornecedor, obs, fotoId, codigo: codigo || null });
+      if (codigo) CODIGOS[codigo] = insumoId;
       fundo.hidden = true; ir("hist");
     } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; e.target.disabled = false; }
   };
@@ -254,11 +279,19 @@ async function contagem() {
   const desenhar = () => {
     folha.innerHTML = `<h2>Contagem</h2><p class="suave" style="margin:0">Conte o que tem de verdade na prateleira. Deixe em branco o que não contou.</p>
       ${grupo("c-l", LOCAIS, local)}
+      ${campoCodigo("c-cod")}
       <div>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<div class="cont"><span>${esc(i.nome)} <span class="suave" style="font-size:12px">(${esc(i.unidade)})</span></span><input inputmode="decimal" data-c="${esc(i.id)}"></div>`).join("")}</div>
       <p class="msg-erro" id="c-e"></p>
       <button class="botao principal" id="c-ok">Salvar contagem</button>
       <button class="botao" id="c-x" style="text-align:center;border:none">Cancelar</button>`;
     ligaGrupo("#c-l", (v) => { local = v; });
+    ligaCodigo("c-cod", (v, id) => {
+      const msg = folha.querySelector("#c-cod-msg"), c = folha.querySelector("#c-cod");
+      if (!id) { msg.innerHTML = "<b>Código novo.</b> Conte pela lista; registre uma compra ou uso com esse código para ele ser reconhecido."; c.select(); return; }
+      const campo = folha.querySelector(`[data-c="${id}"]`);
+      msg.innerHTML = `<span class="ok">✓ ${esc(ins(id).nome)}</span>`; c.value = "";
+      campo.scrollIntoView({ block: "center" }); campo.focus();
+    });
     folha.querySelector("#c-x").onclick = () => { fundo.hidden = true; };
     folha.querySelector("#c-ok").onclick = async (e) => {
       const itens = [...folha.querySelectorAll("[data-c]")].filter((i) => i.value.trim() !== "");
@@ -367,6 +400,7 @@ const ABAS = { saldo: abaSaldo, mov: abaMov, hist: abaHist, custo: abaCusto, cad
 function ir(aba) { document.querySelectorAll("#abas button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba)); ABAS[aba](); }
 document.getElementById("abas").onclick = (e) => { const a = e.target.closest("button")?.dataset.aba; if (a) ir(a); };
 await carregarInsumos();
+await carregarCodigos();
 ir(location.hash === "#registrar" && lanca ? "mov" : "saldo");
 </script>
 </body>
