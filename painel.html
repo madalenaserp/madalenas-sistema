@@ -58,7 +58,7 @@ async function mostrar() {
     .map((n) => `${n.empresa}: ${n.conf ? `<b>problema</b> (${n.conf.detalhe || ({ sem_via: "faltou a via na pasta", sem_assinatura: "via sem assinatura", fora_guappo: "não está no Guappo" })[n.conf.problema] || n.conf.problema})` : "foto enviada, falta conferir"}`);
   const plano = await distribuir(campoDia.value);
   const tarefasRegs = await listar("tarefas", "data", campoDia.value);
-  const tFeita = (t) => t.fotos ? ["antes", "depois"].every((k) => tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === k)) : tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === "feito");
+  const tFeita = (t) => t.fotos === "uma" ? tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === "depois") : t.fotos ? ["antes", "depois"].every((k) => tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === k)) : tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === "feito");
   const tarefasAbertas = plano.filter((p) => !tFeita(p.tarefa)).map((p) => `${p.pessoa || "ninguém"}: ${p.tarefa.texto}`);
   const tarefasFeitas = plano.filter((p) => tFeita(p.tarefa)).map((p) => `${p.pessoa}: ${p.tarefa.texto}`);
   const cks = await listar("checklists", "data", campoDia.value);

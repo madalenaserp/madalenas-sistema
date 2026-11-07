@@ -1,6 +1,6 @@
 // Rodízio de tarefas do balcão. Cada dia as tarefas são distribuídas entre quem trabalha no balcão
 // (pula quem está de folga na escala) e no dia seguinte a distribuição gira uma posição.
-// Para mudar a lista, mude só aqui. fotos: "antes_depois" pede foto antes e depois; null não pede foto.
+// Para mudar a lista, mude só aqui. fotos: "antes_depois" pede foto antes e depois; "uma" pede uma foto; null não pede foto.
 import { EQUIPE } from "./equipe.js";
 import { folgasNoDia } from "./escala.js";
 
@@ -12,6 +12,9 @@ export const TAREFAS_BALCAO = [
   { id: "geladeira", texto: "Limpar a geladeira de bebidas", fotos: "antes_depois" },
   { id: "descartaveis", texto: "Repor descartáveis e embalagens", fotos: null },
   { id: "estoque_bebidas", texto: "Organizar o estoque de bebidas e revenda", fotos: null },
+  { id: "contar_estoque", texto: "Contar o estoque", fotos: null },
+  { id: "mercadorias_expostas", texto: "Verificar mercadorias expostas (qualidade, identificação e preço)", fotos: null },
+  { id: "maquininhas", texto: "Verificar se as maquininhas estão carregadas", fotos: "uma" },
 ];
 
 export const PESSOAS_BALCAO = EQUIPE.filter((p) => p.setor === "Balcão").map((p) => p.nome);

@@ -86,7 +86,7 @@ async function mostrar() {
   const regs = await listar("tarefas", "data", d);
   const de = (id, tipo) => regs.filter((r) => r.tarefa === id && r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
   const itens = plano.map((p) => ({ ...p, antes: de(p.tarefa.id, "antes"), depois: de(p.tarefa.id, "depois"), feito: de(p.tarefa.id, "feito") }))
-    .map((x) => ({ ...x, concluida: x.tarefa.fotos ? !!(x.antes && x.depois) : !!x.feito }));
+    .map((x) => ({ ...x, concluida: x.tarefa.fotos === "antes_depois" ? !!(x.antes && x.depois) : x.tarefa.fotos === "uma" ? !!x.depois : !!x.feito }));
   const visiveis = veTodos ? itens : itens.filter((x) => x.pessoa === eu.nome);
   const feitas = visiveis.filter((x) => x.concluida).length;
 
@@ -113,11 +113,11 @@ function cartao(x, ehHoje) {
   const quem = (r) => (r ? `${esc(r.registradoPor)} às ${esc(r.hora)}` : "");
   div.innerHTML = `<div class="topo"><span class="texto">${esc(x.tarefa.texto)}</span>
       <span class="selo ${x.concluida ? "ok" : "pendente"}">${x.concluida ? "feita" : "a fazer"}</span></div>
-    ${x.tarefa.fotos ? `<div class="fotos">
+    ${x.tarefa.fotos === "uma" ? (x.depois ? `<div class="fotos"><figure><img data-foto="${esc(x.depois.fotoId)}" alt="Foto">Foto ${quem(x.depois)}</figure></div>` : "") : x.tarefa.fotos ? `<div class="fotos">
         <figure>${x.antes ? `<img data-foto="${esc(x.antes.fotoId)}" alt="Antes">` : `<div style="width:110px;height:110px;border:1px dashed var(--linha);border-radius:8px;display:flex;align-items:center;justify-content:center">sem foto</div>`}Antes ${quem(x.antes)}</figure>
         <figure>${x.depois ? `<img data-foto="${esc(x.depois.fotoId)}" alt="Depois">` : `<div style="width:110px;height:110px;border:1px dashed var(--linha);border-radius:8px;display:flex;align-items:center;justify-content:center">sem foto</div>`}Depois ${quem(x.depois)}</figure>
       </div>` : x.feito ? `<span class="suave">Feito por ${quem(x.feito)}</span>` : ""}
-    ${x.tarefa.fotos ? `<span class="suave" style="font-size:13px">Tire a foto antes de começar e outra quando terminar.</span>` : ""}`;
+    ${x.tarefa.fotos === "antes_depois" ? `<span class="suave" style="font-size:13px">Tire a foto antes de começar e outra quando terminar.</span>` : x.tarefa.fotos === "uma" ? `<span class="suave" style="font-size:13px">Tire uma foto para mostrar que está feito.</span>` : ""}`;
   div.querySelectorAll("img[data-foto]").forEach(async (img) => {
     img.src = await foto(img.dataset.foto);
     img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
@@ -125,10 +125,10 @@ function cartao(x, ehHoje) {
   const minha = x.pessoa === eu.nome || podeFazerDeOutro;
   if (ehHoje && faz && minha && !x.concluida) {
     if (x.tarefa.fotos) {
-      const etapa = x.antes ? "depois" : "antes";
+      const etapa = x.tarefa.fotos === "uma" || x.antes ? "depois" : "antes";
       const b = document.createElement("label");
       b.className = "acao" + (etapa === "depois" ? " verde" : "");
-      b.innerHTML = `📷 Foto ${etapa === "antes" ? "de antes" : "de depois (terminei)"}<input type="file" accept="image/*" capture="environment">`;
+      b.innerHTML = `📷 ${x.tarefa.fotos === "uma" ? "Tirar foto (feito)" : etapa === "antes" ? "Foto de antes" : "Foto de depois (terminei)"}<input type="file" accept="image/*" capture="environment">`;
       b.querySelector("input").onchange = (e) => e.target.files[0] && enviarFoto(x, etapa, e.target.files[0], b);
       div.append(b);
     } else {
