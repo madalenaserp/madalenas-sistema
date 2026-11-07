@@ -3,14 +3,19 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Madalena's · Painel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Kaushan+Script&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#4a2c1e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
-<header><h1>Painel da Daiane</h1><a href="turno.html">Voltar</a></header>
+<header><div data-logo="pequeno"></div><h1>Painel da Daiane</h1><a href="turno.html">Voltar</a></header>
 <main>
   <div class="cartao campo" style="margin:0">Dia <input type="date" id="dia"></div>
   <div id="resumo" style="display:flex;flex-direction:column;gap:10px"></div>
 </main>
+<script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, hoje } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";

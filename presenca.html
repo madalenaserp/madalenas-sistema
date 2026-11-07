@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Madalena's · Presença</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Kaushan+Script&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#4a2c1e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="estilo.css">
 <style>
   .linha { display:flex; justify-content:space-between; align-items:center; gap:8px; width:100%; background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:14px; font-size:17px; color:var(--tinta); cursor:pointer; text-align:left; }
@@ -25,7 +29,7 @@
 </style>
 </head>
 <body>
-<header><h1>Presença</h1><a href="turno.html">Voltar</a></header>
+<header><div data-logo="pequeno"></div><h1>Presença</h1><a href="turno.html">Voltar</a></header>
 <main>
   <div class="cartao"><h2 id="data"></h2><p class="suave">Toque no nome para registrar.</p><div class="contagem" id="contagem"></div></div>
   <div id="pessoas" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -35,6 +39,7 @@
   <div class="folha" id="folha"></div>
 </div>
 
+<script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";

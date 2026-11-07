@@ -1,9 +1,9 @@
 /* Estilo simples, pensado para celular no balcão. */
-:root { --fundo:#f6f1ec; --cartao:#fff; --tinta:#2a211c; --suave:#6d6058; --linha:#ddd2c9; --marca:#8a3b2a; --ok:#2f7a3e; --alerta:#b3261e; }
+:root { --fundo:#f7f1ea; --cartao:#fff; --tinta:#2b1d15; --suave:#76655a; --linha:#e5d9cd; --marca:#4a2c1e; --marca-escura:#33200f; --laranja:#e2732b; --creme:#f6ece0; --verde:#8cab3a; --ok:#2f7a3e; --alerta:#b3261e; }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--fundo); color:var(--tinta); font-family: system-ui, "Segoe UI", Arial, sans-serif; font-size:17px; line-height:1.4; }
-header { background:var(--marca); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
-header h1 { font-size:20px; margin:0; }
+header { background:var(--marca); color:var(--creme); padding:10px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; border-bottom:3px solid var(--laranja); }
+header h1 { font-size:17px; margin:0; font-weight:600; flex:1; text-align:center; }
 header a, header button { color:#fff; background:none; border:1px solid #fff8; border-radius:8px; padding:6px 10px; font-size:14px; text-decoration:none; cursor:pointer; }
 main { max-width:640px; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
 .cartao { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:14px; }
@@ -11,7 +11,7 @@ main { max-width:640px; margin:0 auto; padding:16px; display:flex; flex-directio
 .suave { color:var(--suave); font-size:14px; }
 .aviso { background:#fff4d6; border:1px solid #e9c46a; border-radius:10px; padding:10px 12px; font-size:14px; }
 .botao { display:block; width:100%; text-align:left; background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:14px; font-size:17px; color:var(--tinta); text-decoration:none; cursor:pointer; }
-.botao.principal { background:var(--marca); color:#fff; border-color:var(--marca); text-align:center; font-weight:600; }
+.botao.principal { background:var(--laranja); color:#fff; border-color:var(--laranja); text-align:center; font-weight:600; }
 .botao[aria-disabled="true"] { opacity:.5; pointer-events:none; }
 .grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
 .opcoes { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
@@ -26,3 +26,21 @@ input[type=text] { flex:1; min-width:0; }
 .selo.alerta { background:#fbe3e1; color:var(--alerta); }
 .selo.pendente { background:#eee; color:var(--suave); }
 ul.lista { margin:6px 0 0; padding-left:20px; }
+
+/* Logo */
+.logo { display:inline-flex; flex-direction:column; align-items:center; color:var(--laranja); line-height:1; }
+.logo .trigo { width:52px; height:auto; }
+.logo-nome { font-family:"Playfair Display", Georgia, serif; font-weight:700; font-size:46px; letter-spacing:.5px; }
+.logo-sub { display:flex; align-items:center; gap:10px; color:var(--creme); font-size:13px; letter-spacing:.35em; text-transform:uppercase; margin-top:6px; }
+.logo-sub::before, .logo-sub::after { content:""; width:28px; height:1px; background:var(--creme); opacity:.8; }
+.logo-pequeno .trigo { width:22px; }
+.logo-pequeno .logo-nome { font-size:20px; }
+.logo-pequeno .logo-sub { font-size:7.5px; gap:5px; margin-top:2px; letter-spacing:.3em; }
+.logo-pequeno .logo-sub::before, .logo-pequeno .logo-sub::after { width:10px; }
+.slogan { font-family:"Kaushan Script", cursive; color:var(--creme); font-size:30px; text-align:center; line-height:1.1; position:relative; display:inline-block; }
+.slogan b { color:var(--laranja); font-weight:400; }
+.slogan svg { display:block; width:150px; margin:2px auto 0; }
+/* Toques de laranja */
+a.botao, button.botao:not(.principal) { border-left:4px solid var(--laranja); }
+.cartao h2 { color:var(--marca); }
+header a, header button { border-color:var(--laranja); }

@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Madalena's · Equipe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Kaushan+Script&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#4a2c1e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="estilo.css">
 <style>
   form.cartao { display:flex; flex-direction:column; gap:8px; }
@@ -12,7 +16,7 @@
 </style>
 </head>
 <body>
-<header><h1>Equipe e acessos</h1><a href="turno.html">Voltar</a></header>
+<header><div data-logo="pequeno"></div><h1>Equipe e acessos</h1><a href="turno.html">Voltar</a></header>
 <main>
   <form class="cartao" id="novo">
     <h2>Criar login</h2>
@@ -29,6 +33,7 @@
   </form>
   <div class="cartao"><h2>Logins criados</h2><div id="lista" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div></div>
 </main>
+<script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, DOMINIO } from "./js/sessao.js";
 import { EQUIPE, pode } from "./js/equipe.js";
