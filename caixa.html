@@ -53,7 +53,6 @@
       <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
       <p id="resumo" style="margin:8px 0 0"></p>
     </div>
-    <div class="aviso" id="limite">Limite do caixa: <b>R$ 600,00</b> na gaveta. Passou disso, faça a sangria e registre aqui.</div>
     <button class="botao principal" id="novo">+ Registrar saída ou entrada</button>
     <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
   </section>
@@ -90,7 +89,7 @@ const TIPOS = {
   outro:      { nome: "Outra saída", desc: "Qualquer outra coisa (explique)", sinal: -1, campo: "O que foi", texto: true },
 };
 const AUTORIZOU = ["Daiane", "Fábio", "Ninguém"];
-const LIMITE_GAVETA = 600; // Daiane, 07/11/2026: com mais de R$ 600 na gaveta, faz sangria.
+const LIMITE_SANGRIA = 600; // Daiane, 07/11/2026: no máximo R$ 600 saem do caixa físico numa sangria.
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const agora = () => new Date().toTimeString().slice(0, 5);
@@ -139,7 +138,6 @@ async function mostrar() {
   document.getElementById("resumo").innerHTML = `<b>${dataBR(d)}</b> · saíram <b>${reais(saidas)}</b>${entradas ? ` · entraram ${reais(entradas)}` : ""}`
     + (nSem ? `<br><span class="selo alerta" style="margin-left:0">${nSem} saída(s) sem autorização</span>` : "");
   document.getElementById("novo").hidden = !lanca || d !== hoje();
-  document.getElementById("limite").hidden = !lanca || d !== hoje();
   const lista = document.getElementById("lista");
   lista.innerHTML = itens.length ? "" : `<p class="suave">Nada registrado neste dia.</p>`;
   for (const r of itens) {
@@ -195,6 +193,7 @@ function formulario(tipoMov) {
     : t.opcoes ? grupo("f-para-op", t.opcoes, t.opcoes.length === 3 ? "tres" : "") : `<input type="text" id="f-para" autocomplete="off">`;
   folha.innerHTML = `<h2>${t.sinal > 0 ? "Entrada" : "Saída"}: ${esc(t.nome)}</h2>
     <label class="rot" for="f-valor">Valor (R$)</label><input id="f-valor" inputmode="decimal" placeholder="0,00">
+    ${tipoMov === "sangria" ? `<p class="suave" style="margin:0;font-size:13px">Máximo de ${reais(LIMITE_SANGRIA)} por sangria.</p>` : ""}
     <label class="rot">${esc(t.campo)}</label>${campoPara}
     ${t.servico ? `<label class="rot" for="f-serv">Que serviço fez</label><input type="text" id="f-serv" autocomplete="off" placeholder="Ex.: ajudou na produção das 6h às 12h">` : ""}
     ${t.sinal < 0 ? `<label class="rot">Quem autorizou</label>${t.exigeAut ? grupo("f-aut", ["Daiane", "Fábio"]) + `<p class="suave" style="margin:0;font-size:13px">Não existe compra sem autorização. Sem a Daiane ou o Fábio autorizar, não compre.</p>` : grupo("f-aut", AUTORIZOU, "tres")}` : ""}
@@ -221,6 +220,7 @@ function formulario(tipoMov) {
     const servico = folha.querySelector("#f-serv")?.value.trim();
     const obs = folha.querySelector("#f-obs").value.trim();
     if (!(valor > 0)) return (erro.textContent = "Coloque o valor.");
+    if (tipoMov === "sangria" && valor > LIMITE_SANGRIA) return (erro.textContent = `A sangria pode ser de no máximo ${reais(LIMITE_SANGRIA)}.`);
     if (!para) return (erro.textContent = `Preencha: ${t.campo.toLowerCase()}.`);
     if (t.servico && !servico) return (erro.textContent = "Escreva que serviço a pessoa fez.");
     if (t.sinal < 0 && !sel.autorizadoPor) return (erro.textContent = t.exigeAut ? "Marque quem autorizou. Sem autorização, não pode comprar." : "Marque quem autorizou (ou Ninguém).");
