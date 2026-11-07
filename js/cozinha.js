@@ -10,6 +10,7 @@ export const TAREFAS_COZINHA = [
   { id: "chao", texto: "Varrer e lavar o chão", fotos: "antes_depois", freq: "diaria" },
   { id: "insumos_abertos", texto: "Fechar e identificar insumos abertos (nome e data)", fotos: "uma", freq: "diaria" },
   { id: "lixo", texto: "Tirar o lixo", fotos: null, freq: "diaria" },
+  { id: "lavar_cozinha", texto: "Lavar a cozinha toda (paredes, pias, ralos e chão)", fotos: "antes_depois", freq: "semanal" },
   { id: "forno", texto: "Limpar o forno por dentro", fotos: "antes_depois", freq: "semanal" },
   { id: "geladeira", texto: "Limpar e organizar geladeira e câmara fria", fotos: "antes_depois", freq: "semanal" },
   { id: "estoque", texto: "Organizar o estoque de farinha e insumos", fotos: "antes_depois", freq: "semanal" },
