@@ -105,7 +105,7 @@ async function mostrar() {
   const cxBruto = await listar("caixa", "data", campoDia.value);
   const cxCanc = new Set(cxBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const cx = cxBruto.filter((r) => r.tipo === "movimento" && !cxCanc.has(r.id));
-  const CX = { sangria: "Sangria", vale: "Vale", diarista: "Diarista", compra: "Compra", fornecedor: "Fornecedor", reforco: "Reforço de troco", outro: "Outra saída" };
+  const CX = { sangria: "Sangria", vale: "Vale", feriado: "Feriado pago", diarista: "Diarista", compra: "Compra", fornecedor: "Fornecedor", reforco: "Reforço de troco", outro: "Outra saída" };
   const cxSem = cx.filter((r) => r.tipoMov !== "reforco" && r.autorizadoPor === "Ninguém")
     .map((r) => `${CX[r.tipoMov]}: ${r.para} · ${(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} <span class="suave">(${r.registradoPor} às ${r.hora})</span>`);
   const cxSaiu = cx.filter((r) => r.tipoMov !== "reforco").reduce((s2, r) => s2 + r.valor, 0);
