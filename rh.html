@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>RH</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao"><p class="suave" style="margin:0">Área só sua. A equipe não vê nada daqui; cada um vê apenas a própria escala no Meu turno.</p></div>
+  <div id="secoes" style="display:flex;flex-direction:column;gap:8px"></div>
+  <p class="suave">Documentos pessoais (RG, CPF, atestados, exames) continuam no Google Drive, fora do sistema.</p>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { modoTeste } from "./js/db.js";
+
+const eu = await exigirUsuario();
+if (!pode.rh(eu)) location.href = "turno.html";
+
+// Cada seção do RH é uma tela separada.
+const secoes = [
+  { titulo: "Escala da semana", desc: "Montar a escala 5x2, folgas e horários", link: "escala.html" },
+  { titulo: "Equipe e acessos", desc: "Criar e desativar logins", link: "equipe.html", mostrar: !modoTeste },
+  { titulo: "Cadastro dos funcionários", desc: "Admissão, função, horário, contato", emBreve: true },
+  { titulo: "Uniformes", desc: "Entrega e termo assinado", emBreve: true },
+  { titulo: "Férias e 13º", desc: "Prazos e parcelas", emBreve: true },
+  { titulo: "Vales e diárias", desc: "Adiantamentos e pagamentos avulsos", emBreve: true },
+];
+const lista = document.getElementById("secoes");
+for (const s of secoes) {
+  if ("mostrar" in s && !s.mostrar) continue;
+  const a = document.createElement("a");
+  a.className = "botao";
+  a.href = s.link || "#";
+  if (s.emBreve) a.setAttribute("aria-disabled", "true");
+  a.innerHTML = `<b>${s.titulo}</b>${s.emBreve ? '<span class="selo pendente">em breve</span>' : ""}<br><span class="suave">${s.desc}</span>`;
+  lista.append(a);
+}
+</script>
+</body>
+</html>

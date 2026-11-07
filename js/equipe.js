@@ -33,6 +33,9 @@ export const pode = {
   darOrdens: (u) => ["dona", "gestor"].includes(u?.papel),
   registrarNoLivro: (u) => ["dona", "gestor", "lider"].includes(u?.papel),
   darVisto: (u) => u?.papel === "dona",
+  // RH: só a Daiane (escala, logins e, depois, cadastro, uniformes, férias e vales).
+  rh: (u) => u?.papel === "dona",
+  montarEscala: (u) => u?.papel === "dona",
   // Consumo da equipe: quem está no caixa registra; líderes e gestão também.
   // Notas das empresas: caixa lança; líderes conferem; gestão acompanha.
   notasEmpresas: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",

@@ -90,15 +90,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Escala da semana: todos veem; só Daiane e Fábio montam. Cada versão salva vai para o histórico.
+    // Escala da semana: todos veem; só a Daiane monta (RH). Cada versão salva vai para o histórico.
     match /escala/{semana} {
       allow read: if ativo();
-      allow create, update: if papel(["dona", "gestor"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
       allow delete: if false;
     }
     match /escala_historico/{id} {
       allow read: if papel(["dona"]);
-      allow create: if papel(["dona", "gestor"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow create: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
       allow update, delete: if false;
     }
 

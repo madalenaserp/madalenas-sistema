@@ -35,7 +35,7 @@
 </style>
 </head>
 <body>
-<header><div data-logo="pequeno"></div><h1>Escala</h1><a href="turno.html">Voltar</a></header>
+<header><div data-logo="pequeno"></div><h1 id="h1">Escala</h1><a href="turno.html">Voltar</a></header>
 <main>
   <div class="cartao semana"><button id="ant" aria-label="Semana anterior">‹</button><h2 id="titulo"></h2><button id="prox" aria-label="Próxima semana">›</button></div>
   <p class="suave" id="ajuda" style="margin:0"></p>
@@ -57,7 +57,8 @@ import { salvarComHistorico, ler } from "./js/db.js";
 import { segundaDe, somarDias, indiceDoDia } from "./js/escala.js";
 
 const eu = await exigirUsuario();
-const editor = pode.verPainel(eu); // Daiane e Fábio montam a escala
+const editor = pode.montarEscala(eu); // só a Daiane monta (área de RH)
+if (editor) document.querySelector("header a").href = "rh.html";
 const DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 let semana = segundaDe(hoje());
