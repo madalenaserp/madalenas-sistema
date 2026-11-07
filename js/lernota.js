@@ -47,16 +47,20 @@ export function separarItens(texto, insumos) {
     if (!qtd || !preco) continue;
     const descricao = (mq ? antes.slice(0, mq.index) : antes).replace(/^\d{1,4}\s+/, "").replace(/\d{8,14}/g, "").trim();
     if (descricao.length < 3) continue;
-    // Palpite do insumo: o nome do insumo cujas palavras mais aparecem na descrição.
-    const d = sem(descricao);
-    let melhor = null, nota = 0;
-    for (const ins of insumos) {
-      const pal = sem(ins.nome).split(/\s+/).filter((p) => p.length > 2 && !["de", "com"].includes(p));
-      const acertos = pal.filter((p) => d.includes(p.slice(0, Math.max(4, p.length - 2)))).length;
-      const n = pal.length ? acertos / pal.length : 0;
-      if (n > nota) { nota = n; melhor = ins.id; }
-    }
-    itens.push({ descricao, qtd, preco, total, insumoId: nota >= 0.5 ? melhor : "" });
+    itens.push({ descricao, qtd, preco, total, insumoId: palpiteInsumo(descricao, insumos) });
   }
   return itens;
+}
+
+// Palpite do insumo: o nome do insumo cujas palavras mais aparecem na descrição ("" se nenhum bate).
+export function palpiteInsumo(descricao, insumos) {
+  const d = sem(descricao);
+  let melhor = "", nota = 0;
+  for (const ins of insumos) {
+    const pal = sem(ins.nome).split(/\s+/).filter((p) => p.length > 2 && !["de", "com"].includes(p));
+    const acertos = pal.filter((p) => d.includes(p.slice(0, Math.max(4, p.length - 2)))).length;
+    const n = pal.length ? acertos / pal.length : 0;
+    if (n > nota) { nota = n; melhor = ins.id; }
+  }
+  return nota >= 0.5 ? melhor : "";
 }

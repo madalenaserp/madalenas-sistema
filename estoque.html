@@ -99,11 +99,11 @@ const ACOES = {
   contagem:      { nome: "Contagem", desc: "Contar o que tem de verdade na prateleira", sinal: 0 },
 };
 
-function reduzir(arquivo) {
+function reduzir(arquivo, ladoMax = 1400, limite = 500000) {
   return new Promise((ok, falha) => {
     const img = new Image();
     img.onload = () => {
-      let lado = 1400, qualidade = 0.7, url;
+      let lado = ladoMax, qualidade = 0.7, url;
       do {
         const escala = Math.min(1, lado / Math.max(img.width, img.height));
         const c = document.createElement("canvas");
@@ -111,7 +111,7 @@ function reduzir(arquivo) {
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
         url = c.toDataURL("image/jpeg", qualidade);
         lado -= 200; qualidade -= 0.05;
-      } while (url.length > 500000 && lado > 400);
+      } while (url.length > limite && lado > 400);
       URL.revokeObjectURL(img.src);
       ok(url);
     };
@@ -278,7 +278,7 @@ function formulario(acao) {
 async function lerNota() {
   let urlFoto = null, itens = [], local = localPadrao;
   folha.innerHTML = `<h2>📄 Ler nota pela foto</h2>
-    <p class="suave" style="margin:0;font-size:13px">Funciona melhor com cupom ou nota <b>impressa</b>, reta, com boa luz. Nota escrita à mão quase nunca dá certo: aí use "Chegou compra".</p>
+    <p class="suave" style="margin:0;font-size:13px">Tire a foto com boa luz, pegando a nota inteira. O sistema preenche e você <b>confere cada item</b> antes de salvar.</p>
     <label class="camera" id="l-cam">📷 <span>Tirar foto da nota</span><input type="file" accept="image/*" capture="environment"></label>
     <p id="l-prog" class="suave" style="margin:0"></p><div id="l-itens"></div>
     <p class="msg-erro" id="l-e"></p>
@@ -291,12 +291,21 @@ async function lerNota() {
     try {
       urlFoto = await reduzir(f);
       folha.querySelector("#l-cam").innerHTML = `<img src="${urlFoto}" alt="Nota" style="max-height:160px">`;
-      prog.textContent = "Lendo a nota… (na primeira vez demora um pouco para preparar o leitor)";
-      const { lerTexto, separarItens } = await import("./js/lernota.js");
-      const texto = await lerTexto(urlFoto, (st, p) => { prog.textContent = st === "recognizing text" ? `Lendo a nota… ${Math.round(p * 100)}%` : "Preparando o leitor…"; });
-      itens = separarItens(texto, INSUMOS);
+      let texto = "", fornLido = "";
+      const ia = await import("./js/ia.js");
+      if (ia.iaDisponivel) {
+        prog.textContent = "Lendo a nota… (uns 10 segundos)";
+        try { const r = await ia.lerNotaIA(await reduzir(f, 2400, 3000000), INSUMOS); itens = r.itens; fornLido = r.fornecedor; texto = itens.map((i) => `${i.descricao}: ${i.qtd} x ${i.preco}`).join("\n"); }
+        catch (err) { console.error(err); itens = null; prog.textContent = "A leitura inteligente não respondeu. Tentando o leitor simples…"; }
+      }
+      if (!ia.iaDisponivel || itens === null) {
+        const { lerTexto, separarItens } = await import("./js/lernota.js");
+        texto = await lerTexto(urlFoto, (st, p) => { prog.textContent = st === "recognizing text" ? `Lendo a nota… ${Math.round(p * 100)}%` : "Preparando o leitor…"; });
+        itens = separarItens(texto, INSUMOS);
+      }
       prog.innerHTML = itens.length ? `Achei <b>${itens.length}</b> item(ns). <b>Confira cada um</b> antes de salvar.` : `Não consegui achar os itens nesta foto. Tente outra foto mais reta e com mais luz, ou use "Chegou compra".`;
       desenharItens(texto);
+      if (fornLido && folha.querySelector("#l-forn")) folha.querySelector("#l-forn").value = fornLido;
     } catch (err) { prog.textContent = "O leitor não funcionou neste celular. Use \"Chegou compra\"."; console.error(err); }
   };
   const opcoesIns = (sel) => `<option value="">— não é do estoque —</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}`;
@@ -341,7 +350,9 @@ async function contagem() {
     folha.innerHTML = `<h2>Contagem</h2><p class="suave" style="margin:0">Conte o que tem de verdade na prateleira. Deixe em branco o que não contou.</p>
       ${grupo("c-l", LOCAIS, local)}
       ${campoCodigo("c-cod")}
-      <div>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<div class="cont"><span>${esc(i.nome)} <span class="suave" style="font-size:12px">(${esc(i.unidade)})</span></span><input inputmode="decimal" data-c="${esc(i.id)}"></div>`).join("")}</div>
+      <label class="camera" id="c-cam" style="padding:12px">📷 <span>Contar pela foto da prateleira (o sistema sugere, você confere)</span><input type="file" accept="image/*" capture="environment"></label>
+      <p id="c-ia" class="suave" style="margin:0;font-size:13px"></p>
+      <div>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<div class="cont"><span>${esc(i.nome)} <span class="suave" style="font-size:12px">(${esc(i.unidade)})</span></span><input inputmode="decimal" data-c="${esc(i.id)}"></div><div class="suave" data-obs="${esc(i.id)}" style="font-size:12px;margin:-4px 0 6px" hidden></div>`).join("")}</div>
       <p class="msg-erro" id="c-e"></p>
       <button class="botao principal" id="c-ok">Salvar contagem</button>
       <button class="botao" id="c-x" style="text-align:center;border:none">Cancelar</button>`;
@@ -353,6 +364,25 @@ async function contagem() {
       msg.innerHTML = `<span class="ok">✓ ${esc(ins(id).nome)}</span>`; c.value = "";
       campo.scrollIntoView({ block: "center" }); campo.focus();
     });
+    folha.querySelector("#c-cam input").onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return; e.target.value = "";
+      const msg = folha.querySelector("#c-ia");
+      const ia = await import("./js/ia.js");
+      if (!ia.iaDisponivel) return (msg.textContent = "A contagem pela foto só funciona no sistema de verdade (com a inteligência do Google ligada).");
+      msg.textContent = "Olhando a foto… (uns 10 segundos)";
+      try {
+        const achados = await ia.contarFotoIA(await reduzir(f, 2000, 3000000), INSUMOS);
+        if (!achados.length) return (msg.textContent = "Não reconheci nenhum insumo da lista nesta foto. Tente mais perto e com mais luz.");
+        for (const a of achados) {
+          const campo = folha.querySelector(`[data-c="${a.insumoId}"]`), ob = folha.querySelector(`[data-obs="${a.insumoId}"]`);
+          if (!campo) continue;
+          const atual = campo.value.trim() === "" ? 0 : numero(campo.value) || 0;
+          campo.value = n(atual + a.qtd); campo.style.background = "#fff6d6";
+          ob.hidden = false; ob.textContent = `📷 sugerido pela foto${atual ? " (somado)" : ""}: ${a.obs || n(a.qtd)}. Confira!`;
+        }
+        msg.innerHTML = `Preenchi <b>${achados.length}</b> item(ns) em amarelo. <b>Confira e corrija</b>: a foto não mostra o que está atrás. Pode tirar outra foto de outra prateleira que eu somo.`;
+      } catch (err) { console.error(err); msg.textContent = "A contagem pela foto não respondeu agora. Conte pela lista."; }
+    };
     folha.querySelector("#c-x").onclick = () => { fundo.hidden = true; };
     folha.querySelector("#c-ok").onclick = async (e) => {
       const itens = [...folha.querySelectorAll("[data-c]")].filter((i) => i.value.trim() !== "");
