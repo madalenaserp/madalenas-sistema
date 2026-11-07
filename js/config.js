@@ -8,3 +8,6 @@ export const firebaseConfig = {
   messagingSenderId: "48108956891",
   appId: "1:48108956891:web:f78029b719fd705ad1b0fe",
 };
+
+// App Check (reCAPTCHA Enterprise / Fraud Defense): só o nosso site usa a IA. Chave do SITE, pública (não é segredo).
+export const appCheck = { tipo: "enterprise", chave: "6LdNhhUuAAAAAC-j3pxvssvN0V6k3gW4A5_gBg7a" };
