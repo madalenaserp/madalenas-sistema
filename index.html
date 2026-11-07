@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Entrar</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header><h1>Madalena's</h1></header>
+<main>
+  <div class="cartao"><h2>Quem é você?</h2><p class="suave">Toque no seu nome.</p></div>
+  <div class="grade" id="nomes"></div>
+</main>
+<script type="module">
+import { EQUIPE } from "./js/equipe.js";
+import { entrar } from "./js/sessao.js";
+const caixa = document.getElementById("nomes");
+for (const p of EQUIPE) {
+  const b = document.createElement("button");
+  b.className = "botao";
+  b.innerHTML = `<b>${p.nome}</b><br><span class="suave">${p.setor}</span>`;
+  b.onclick = () => { entrar(p.nome); location.href = "turno.html"; };
+  caixa.append(b);
+}
+</script>
+</body>
+</html>

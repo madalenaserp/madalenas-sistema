@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Painel</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header><h1>Painel da Daiane</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao campo" style="margin:0">Dia <input type="date" id="dia"></div>
+  <div id="resumo" style="display:flex;flex-direction:column;gap:10px"></div>
+</main>
+<script type="module">
+import { exigirUsuario, hoje } from "./js/sessao.js";
+import { EQUIPE_DO_TURNO, pessoa } from "./js/equipe.js";
+import { listar } from "./js/db.js";
+
+if (!pessoa(exigirUsuario())?.painel) location.href = "turno.html";
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+
+function bloco(titulo, itens, tipo) {
+  const corpo = itens.length ? `<ul class="lista">${itens.map((i) => `<li>${i}</li>`).join("")}</ul>`
+                             : `<p class="suave">Nada aqui.</p>`;
+  return `<div class="cartao"><h2>${titulo} <span class="selo ${itens.length ? tipo : "ok"}">${itens.length}</span></h2>${corpo}</div>`;
+}
+
+async function mostrar() {
+  const registros = await listar("presenca", "data", campoDia.value);
+  const por = Object.fromEntries(registros.map((r) => [r.pessoa, r]));
+  const obs = (r) => (r.obs ? ` <span class="suave">(${r.obs})</span>` : "");
+  const faltas = registros.filter((r) => r.situacao === "faltou" || r.situacao === "atestado")
+    .map((r) => `${r.pessoa}: ${r.situacao}${obs(r)}`);
+  const apresentacao = registros.filter((r) => r.situacao === "veio" && (r.uniforme === "nao" || r.sapato !== "fechado"))
+    .map((r) => `${r.pessoa}: ${[r.uniforme === "nao" && "sem uniforme completo", r.sapato !== "fechado" && `sapato ${r.sapato}`].filter(Boolean).join(", ")}${obs(r)}`);
+  const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome]).map((p) => p.nome);
+  const vieram = registros.filter((r) => r.situacao === "veio")
+    .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
+  const folgas = registros.filter((r) => r.situacao === "folga").map((r) => r.pessoa);
+  document.getElementById("resumo").innerHTML =
+    bloco("Faltas", faltas, "alerta") +
+    bloco("Uniforme ou sapato fora do padrão", apresentacao, "alerta") +
+    bloco("Presença não marcada", semMarcar, "pendente") +
+    bloco("Vieram", vieram, "ok") +
+    bloco("De folga", folgas, "ok");
+}
+campoDia.onchange = mostrar;
+mostrar();
+</script>
+</body>
+</html>

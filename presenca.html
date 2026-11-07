@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Presença</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header><h1>Presença e apresentação</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao"><h2 id="data"></h2><p class="suave">Marque cada pessoa e toque em Salvar.</p></div>
+  <div id="pessoas" style="display:flex;flex-direction:column;gap:10px"></div>
+</main>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { EQUIPE_DO_TURNO, pessoa } from "./js/equipe.js";
+import { salvar, listar } from "./js/db.js";
+
+const quem = exigirUsuario();
+if (!pessoa(quem)?.marcaPresenca) location.href = "turno.html";
+const data = hoje();
+document.getElementById("data").textContent = `Dia ${dataBR(data)}`;
+
+const existentes = Object.fromEntries((await listar("presenca", "data", data)).map((r) => [r.pessoa, r]));
+const caixa = document.getElementById("pessoas");
+
+function opcoes(nome, campo, valores, atual) {
+  return `<div class="opcoes">${valores.map(([v, rotulo]) =>
+    `<label><input type="radio" name="${campo}-${nome}" value="${v}" ${atual === v ? "checked" : ""}>${rotulo}</label>`).join("")}</div>`;
+}
+
+function selo(r) {
+  if (!r) return '<span class="selo pendente">não marcado</span>';
+  const problema = r.situacao === "faltou" || r.uniforme === "nao" || r.sapato === "chinelo" || r.sapato === "outro";
+  return `<span class="selo ${problema ? "alerta" : "ok"}">salvo</span>`;
+}
+
+for (const p of EQUIPE_DO_TURNO) {
+  const r = existentes[p.nome];
+  const c = document.createElement("div");
+  c.className = "cartao";
+  c.innerHTML = `
+    <h2>${p.nome} <span class="suave">· ${p.setor}</span> <span data-selo>${selo(r)}</span></h2>
+    ${opcoes(p.nome, "situacao", [["veio", "Veio"], ["faltou", "Faltou"], ["folga", "Folga"], ["atestado", "Atestado"]], r?.situacao)}
+    <div data-veio>
+      <div class="campo">Chegou às <input type="time" name="chegada" value="${r?.chegada || ""}"></div>
+      <div class="campo">Uniforme completo?</div>
+      ${opcoes(p.nome, "uniforme", [["sim", "Sim"], ["nao", "Não"]], r?.uniforme)}
+      <div class="campo">Sapato</div>
+      ${opcoes(p.nome, "sapato", [["fechado", "Fechado"], ["chinelo", "Chinelo"], ["outro", "Outro"]], r?.sapato)}
+    </div>
+    <div class="campo"><input type="text" name="obs" placeholder="Observação (opcional)" value="${r?.obs || ""}"></div>
+    <div class="campo"><button class="botao principal" data-salvar>Salvar</button></div>`;
+  const valor = (campo) => c.querySelector(`input[name="${campo}-${p.nome}"]:checked`)?.value || null;
+  const veio = c.querySelector("[data-veio]");
+  const atualizar = () => { veio.hidden = valor("situacao") !== "veio"; };
+  c.addEventListener("change", atualizar);
+  atualizar();
+
+  c.querySelector("[data-salvar]").onclick = async (ev) => {
+    const situacao = valor("situacao");
+    if (!situacao) return alert(`Marque se ${p.nome} veio, faltou ou está de folga.`);
+    const registro = {
+      data, pessoa: p.nome, setor: p.setor, situacao,
+      chegada: situacao === "veio" ? c.querySelector('[name="chegada"]').value || null : null,
+      uniforme: situacao === "veio" ? valor("uniforme") : null,
+      sapato: situacao === "veio" ? valor("sapato") : null,
+      obs: c.querySelector('[name="obs"]').value.trim(),
+      marcadoPor: quem, marcadoEm: new Date().toISOString(),
+    };
+    if (situacao === "veio" && (!registro.uniforme || !registro.sapato))
+      return alert("Marque uniforme e sapato.");
+    ev.target.disabled = true;
+    try {
+      await salvar("presenca", `${data}_${p.nome}`, registro);
+      c.querySelector("[data-selo]").innerHTML = selo(registro);
+    } catch (e) {
+      alert("Não consegui salvar. Verifique a internet e tente de novo.");
+    } finally { ev.target.disabled = false; }
+  };
+  caixa.append(c);
+}
+</script>
+</body>
+</html>
