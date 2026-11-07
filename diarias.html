@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Madalena's · Diárias</title>
+<title>Madalena's · Salários e diárias</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#2c180e">
@@ -17,13 +17,13 @@
 </style>
 </head>
 <body>
-<header><div data-logo="pequeno"></div><h1>Diárias</h1><a href="rh.html">Voltar</a></header>
+<header><div data-logo="pequeno"></div><h1>Salários e diárias</h1><a href="rh.html">Voltar</a></header>
 <main>
-  <div class="cartao"><p class="suave" style="margin:0">Coloque o salário e o sistema calcula a diária (salário ÷ 30). Só a <b>diária</b> fica guardada. O salário não é salvo. Quem está no caixa vê a diária quando registra o pagamento de feriado de alguém.</p>
+  <div class="cartao"><p class="suave" style="margin:0">Coloque o salário de cada um. A diária é calculada sozinha (salário ÷ 30). O <b>salário só você vê</b>; quem está no caixa vê apenas a diária, quando registra o pagamento de feriado. Os salários também entram na Folha do mês.</p>
     <p class="suave" style="margin:8px 0 0">No feriado: quem recebe <b>pela conta</b> ganha 1 diária em mãos (o resto vem no salário). Quem recebe <b>em mãos</b> ganha 2 diárias. Nos dois casos, mais a passagem.</p></div>
   <div class="cartao"><table class="d" id="tabela"><tr><td><b>Pessoa</b></td><td class="n"><b>Salário</b></td><td class="n"><b>Diária</b></td></tr></table></div>
   <p class="msg" id="msg"></p>
-  <button class="botao principal" id="salvar" style="text-align:center">Salvar diárias</button>
+  <button class="botao principal" id="salvar" style="text-align:center">Salvar</button>
   <p class="suave" id="quando" style="font-size:13px"></p>
 </main>
 <script type="module" src="js/marca.js"></script>
@@ -36,15 +36,18 @@ const eu = await exigirUsuario();
 if (!pode.rh(eu)) location.href = "turno.html";
 const num = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
 const br = (v) => (v || v === 0) && v !== "" ? Number(v).toFixed(2).replace(".", ",") : "";
+const EM_MAOS = ["Lucas", "Natália", "Flávia", "Fabrícia", "Maria Helena", "Pablo"];
 const atual = (await ler("diarias", "atual")) || { valores: {} };
+const sal = (await ler("salarios", "atual")) || { valores: {} };
 const tab = document.getElementById("tabela");
 for (const p of EQUIPE_DO_TURNO) {
   const tr = document.createElement("tr");
   tr.innerHTML = `<td>${p.nome}<br><span class="suave" style="font-size:12px">${p.setor}</span></td>
-    <td class="n"><input inputmode="decimal" placeholder="R$" data-sal="${p.nome}"></td>
-    <td class="n"><input inputmode="decimal" placeholder="R$" data-dia="${p.nome}" value="${br(atual.valores[p.nome])}"></td>`;
+    <td class="n"><input inputmode="decimal" placeholder="R$" data-sal="${p.nome}" value="${br(sal.valores[p.nome])}"></td>
+    <td class="n"><input inputmode="decimal" placeholder="—" data-dia="${p.nome}" value="${br(atual.valores[p.nome])}" readonly style="background:#f6f1ec"></td>`;
   const tr2 = document.createElement("tr");
-  const forma = atual.formas?.[p.nome] || "";
+  // Padrão (Daiane, 07/11/2026): estes recebem em mãos porque ainda vão para a admissão; os outros, pela conta.
+  const forma = sal.formas?.[p.nome] || atual.formas?.[p.nome] || (EM_MAOS.includes(p.nome) ? "maos" : "conta");
   tr2.innerHTML = `<td colspan="3" style="padding-top:0"><span class="suave" style="font-size:13px">Recebe o salário:</span>
     <label style="margin-left:8px"><input type="radio" name="f-${p.nome}" value="conta" data-forma="${p.nome}" ${forma === "conta" ? "checked" : ""} style="width:auto"> pela conta</label>
     <label style="margin-left:8px"><input type="radio" name="f-${p.nome}" value="maos" data-forma="${p.nome}" ${forma === "maos" ? "checked" : ""} style="width:auto"> em mãos</label></td>`;
@@ -53,17 +56,22 @@ for (const p of EQUIPE_DO_TURNO) {
 }
 if (atual.alteradoEm) document.getElementById("quando").textContent = `Última alteração: ${dataBR(atual.alteradoEm.slice(0, 10))} por ${atual.alteradoPor}.`;
 document.getElementById("salvar").onclick = async (e) => {
-  const valores = {};
-  for (const i of tab.querySelectorAll("[data-dia]")) { const v = num(i.value); if (i.value.trim() && !(v > 0)) return (document.getElementById("msg").textContent = `Diária de ${i.dataset.dia} não é um número.`); if (v > 0) valores[i.dataset.dia] = Math.round(v * 100) / 100; }
+  const valores = {}, salarios = {};
+  for (const i of tab.querySelectorAll("[data-sal]")) {
+    const v = num(i.value);
+    if (i.value.trim() && !(v > 0)) return (document.getElementById("msg").textContent = `Salário de ${i.dataset.sal} não é um número.`);
+    if (v > 0) { salarios[i.dataset.sal] = Math.round(v * 100) / 100; valores[i.dataset.sal] = Math.round((v / 30) * 100) / 100; }
+  }
   const formas = {};
   for (const r of tab.querySelectorAll("[data-forma]:checked")) formas[r.dataset.forma] = r.value;
   const semForma = Object.keys(valores).find((n) => !formas[n]);
   if (semForma) return (document.getElementById("msg").textContent = `Marque se ${semForma} recebe pela conta ou em mãos.`);
   e.target.disabled = true;
   try {
-    await salvarComHistorico("diarias", "atual", { valores, formas, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() });
-    tab.querySelectorAll("[data-sal]").forEach((i) => (i.value = ""));
-    document.getElementById("msg").textContent = "Diárias salvas.";
+    const quem = { alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() };
+    await salvarComHistorico("salarios", "atual", { valores: salarios, formas, ...quem });
+    await salvarComHistorico("diarias", "atual", { valores, formas, ...quem });
+    document.getElementById("msg").textContent = "Salários e diárias salvos.";
   } catch { document.getElementById("msg").textContent = "Não consegui salvar. Verifique a internet."; }
   e.target.disabled = false;
 };

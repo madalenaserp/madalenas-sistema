@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Folha do mês</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .perda { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; gap:10px; }
+  .perda.cancelada { opacity:.5; }
+  .perda.cancelada .prod { text-decoration:line-through; }
+  .perda img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; flex-shrink:0; }
+  .perda .info { display:flex; flex-direction:column; gap:3px; flex:1; font-size:14px; }
+  .perda .prod { font-size:17px; font-weight:700; }
+  .perda button { align-self:flex-start; font-size:13px; padding:4px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--suave); cursor:pointer; }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha input[type=text], .folha input[inputmode] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes.tres { grid-template-columns:1fr 1fr 1fr; }
+  .opcoes button { padding:11px 6px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:14px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .camera { display:flex; align-items:center; gap:10px; border:1px dashed var(--linha); border-radius:10px; padding:10px; cursor:pointer; font-size:15px; }
+  .camera input { display:none; }
+  .camera img { width:64px; height:64px; object-fit:cover; border-radius:8px; }
+  .msg-erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  table.mes { width:100%; border-collapse:collapse; font-size:14px; }
+  table.mes th, table.mes td { text-align:left; padding:7px 4px; border-bottom:1px solid var(--linha); }
+  table.mes .n { text-align:right; white-space:nowrap; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
+  .pessoa { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; }
+  .pessoa summary { display:flex; justify-content:space-between; align-items:center; cursor:pointer; list-style:none; font-size:17px; }
+  .pessoa summary::-webkit-details-marker { display:none; }
+  .pessoa .total { font-weight:700; }
+  .pessoa table { width:100%; border-collapse:collapse; font-size:14px; margin-top:8px; }
+  .pessoa td { padding:5px 2px; border-bottom:1px solid var(--linha); }
+  .pessoa td.n { text-align:right; white-space:nowrap; }
+  .pessoa tr.fim td { font-weight:700; font-size:16px; border-bottom:none; }
+  .pessoa .x { border:none; background:none; color:var(--suave); font-size:12px; cursor:pointer; padding:0 0 0 6px; text-decoration:underline; }
+  .neg { color:var(--alerta); }
+  select.campo-sel { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Folha do mês</h1><a href="rh.html">Voltar</a></header>
+<main>
+  <div class="cartao">
+    <div class="campo" style="margin:0">Mês <input type="month" id="mes"></div>
+    <div id="resumo" style="margin-top:8px"></div>
+  </div>
+  <button class="botao principal" id="novo">+ Lançar vale, falta ou outro</button>
+  <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+  <p class="suave" style="font-size:13px">Esta conta é uma ajuda para pagar. Não calcula INSS, FGTS nem desconto de DSR; para quem é registrado, confira com a contabilidade. Vales lançados no caixa, faltas marcadas na Presença e consumo "descontar" entram sozinhos: não lance de novo.</p>
+</main>
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode, EQUIPE_DO_TURNO } from "./js/equipe.js";
+import { acrescentar, listar, listarEntre, ler } from "./js/db.js";
+
+const eu = await exigirUsuario();
+if (!pode.rh(eu)) location.href = "turno.html";
+const ADIANTAMENTO = 0.3; // Daiane, 07/11/2026: todos recebem 30% do salário de adiantamento.
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
+const r2 = (v) => Math.round(v * 100) / 100;
+const CAT = { vale: "Vale", falta: "Falta", desconto: "Outro desconto", acrescimo: "Acréscimo (hora extra, bônus...)" };
+const campoMes = document.getElementById("mes");
+campoMes.value = hoje().slice(0, 7);
+
+// Junta registros que têm cancelamento (registro novo com refId).
+const validos = (regs, tipo, campoTipo = "tipo") => {
+  const canc = new Set(regs.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  return regs.filter((r) => r[campoTipo] === tipo && !canc.has(r.id));
+};
+
+async function mostrar() {
+  const mes = campoMes.value;
+  const [sal, folhaRegs, caixaRegs, pres, consumo] = await Promise.all([
+    ler("salarios", "atual"), listar("folha", "mes", mes), listar("caixa", "mes", mes),
+    listarEntre("presenca", "data", `${mes}-01`, `${mes}-31`), listar("consumo", "mes", mes)]);
+  const salarios = sal?.valores || {};
+  const lanc = validos(folhaRegs, "lancamento");
+  const valesCaixa = validos(caixaRegs, "movimento").filter((r) => r.tipoMov === "vale");
+  const consumoDesc = validos(consumo, "consumo").filter((r) => r.pagamento === "descontar");
+  const pessoas = EQUIPE_DO_TURNO.filter((p) => salarios[p.nome]);
+  const semSal = EQUIPE_DO_TURNO.filter((p) => !salarios[p.nome]).map((p) => p.nome);
+  let totAd = 0, totSaldo = 0;
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+  for (const p of pessoas) {
+    const salario = salarios[p.nome], diaria = r2(salario / 30);
+    const linhas = [];  // [texto, valor (negativo desconta), idParaCancelar?]
+    const ad = r2(salario * ADIANTAMENTO);
+    linhas.push([`Adiantamento (${ADIANTAMENTO * 100}%)`, -ad]);
+    for (const v of valesCaixa.filter((r) => r.para === p.nome)) linhas.push([`Vale no caixa ${dataBR(v.data).slice(0, 5)} <span class="suave">(${esc(v.registradoPor)})</span>`, -v.valor]);
+    const faltasPres = pres.filter((r) => r.pessoa === p.nome && r.situacao === "faltou").map((r) => r.data).sort();
+    if (faltasPres.length) linhas.push([`${faltasPres.length} falta(s) na Presença <span class="suave">(${faltasPres.map((d) => dataBR(d).slice(0, 5)).join(", ")})</span> × ${reais(diaria)}`, -r2(faltasPres.length * diaria)]);
+    for (const c of consumoDesc.filter((r) => r.pessoa === p.nome)) linhas.push([`Consumo ${dataBR(c.data).slice(0, 5)}: ${esc(c.itens)}`, -c.valor]);
+    for (const l of lanc.filter((r) => r.pessoa === p.nome)) {
+      const v = l.categoria === "falta" ? -r2(l.dias * diaria) : l.categoria === "acrescimo" ? l.valor : -l.valor;
+      linhas.push([`${CAT[l.categoria]}${l.categoria === "falta" ? ` (${l.dias} dia(s) × ${reais(diaria)})` : ""}${l.obs ? ` <span class="suave">· ${esc(l.obs)}</span>` : ""}`, v, l.id]);
+    }
+    const descontos = linhas.reduce((s, [, v]) => s + v, 0) + ad; // sem o adiantamento
+    const saldo = r2(salario + descontos - ad);
+    totAd += ad; totSaldo += saldo;
+    const d = document.createElement("details");
+    d.className = "pessoa";
+    d.innerHTML = `<summary><span>${esc(p.nome)}<br><span class="suave" style="font-size:13px">${esc(p.setor)} · ${sal.formas?.[p.nome] === "maos" ? "em mãos" : sal.formas?.[p.nome] === "conta" ? "pela conta" : ""}</span></span>
+        <span class="total ${saldo < 0 ? "neg" : ""}">${reais(saldo)}</span></summary>
+      <table><tr><td>Salário</td><td class="n">${reais(salario)}</td></tr>
+        ${linhas.map(([t, v, id]) => `<tr><td>${t}${id ? `<button class="x" data-canc="${id}">desfazer</button>` : ""}</td><td class="n ${v < 0 ? "neg" : ""}">${v < 0 ? "− " : "+ "}${reais(Math.abs(v))}</td></tr>`).join("")}
+        <tr class="fim"><td>Saldo a receber no fim do mês</td><td class="n ${saldo < 0 ? "neg" : ""}">${reais(saldo)}</td></tr></table>
+      <p class="suave" style="margin:6px 0 0;font-size:13px">Adiantamento a pagar: <b>${reais(ad)}</b> · Diária: ${reais(diaria)}</p>`;
+    d.querySelectorAll("[data-canc]").forEach((b) => (b.onclick = async () => {
+      if (!confirm("Desfazer este lançamento?")) return;
+      await acrescentar("folha", { tipo: "cancelamento", refId: b.dataset.canc, mes, registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() }).catch(() => alert("Não consegui salvar."));
+      mostrar();
+    }));
+    lista.append(d);
+  }
+  document.getElementById("resumo").innerHTML = pessoas.length
+    ? `<p style="margin:0">Adiantamento (30%): <b>${reais(totAd)}</b><br>Saldo do fim do mês: <b>${reais(totSaldo)}</b></p><p class="suave" style="margin:6px 0 0;font-size:13px">Toque em cada pessoa para ver a conta.</p>`
+    : `<p class="suave" style="margin:0">Nenhum salário cadastrado. Cadastre em RH → Salários e diárias.</p>`;
+  if (semSal.length && pessoas.length) document.getElementById("resumo").innerHTML += `<p class="suave" style="margin:6px 0 0;font-size:13px">Sem salário cadastrado: ${semSal.join(", ")}.</p>`;
+  window._pessoas = pessoas;
+}
+
+/* ---------- Lançar ---------- */
+const fundo = document.getElementById("fundo");
+const folha = document.getElementById("folha");
+fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+document.getElementById("novo").onclick = () => {
+  const sel = { categoria: null };
+  folha.innerHTML = `<h2>Lançar na folha de ${campoMes.value.split("-").reverse().join("/")}</h2>
+    <label class="rot" for="l-p">Pessoa</label><select id="l-p" class="campo-sel"><option value="">Escolha</option>${(window._pessoas || []).map((p) => `<option>${esc(p.nome)}</option>`).join("")}</select>
+    <label class="rot">O que é</label><div class="opcoes" id="l-c">${Object.entries(CAT).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
+    <label class="rot" for="l-v" id="l-rot">Valor (R$)</label><input id="l-v" inputmode="decimal">
+    <input type="text" id="l-o" placeholder="Observação (opcional)" autocomplete="off">
+    <p class="msg-erro" id="l-e"></p>
+    <button class="botao principal" id="l-ok">Lançar</button>
+    <button class="botao" id="l-x" style="text-align:center;border:none">Cancelar</button>`;
+  folha.querySelector("#l-c").onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; sel.categoria = v;
+    folha.querySelectorAll("#l-c button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
+    folha.querySelector("#l-rot").textContent = v === "falta" ? "Quantos dias" : "Valor (R$)"; };
+  folha.querySelector("#l-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#l-ok").onclick = async (e) => {
+    const erro = folha.querySelector("#l-e"), pessoa = folha.querySelector("#l-p").value, n = numero(folha.querySelector("#l-v").value);
+    if (!pessoa) return (erro.textContent = "Escolha a pessoa.");
+    if (!sel.categoria) return (erro.textContent = "Escolha o que é.");
+    if (!(n > 0)) return (erro.textContent = sel.categoria === "falta" ? "Coloque quantos dias." : "Coloque o valor.");
+    e.target.disabled = true;
+    try {
+      await acrescentar("folha", { tipo: "lancamento", mes: campoMes.value, pessoa, categoria: sel.categoria,
+        valor: sel.categoria === "falta" ? null : r2(n), dias: sel.categoria === "falta" ? n : null, obs: folha.querySelector("#l-o").value.trim(),
+        registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      fundo.hidden = true; mostrar();
+    } catch { erro.textContent = "Não consegui salvar."; e.target.disabled = false; }
+  };
+  fundo.hidden = false;
+};
+campoMes.onchange = mostrar;
+mostrar();
+</script>
+</body>
+</html>

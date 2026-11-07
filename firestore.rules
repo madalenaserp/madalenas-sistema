@@ -185,6 +185,24 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Salários: só a dona lê e grava. Folha do mês (vales, faltas, descontos lançados): só a dona.
+    match /salarios/{id} {
+      allow read: if papel(["dona"]);
+      allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow delete: if false;
+    }
+    match /salarios_historico/{id} {
+      allow read: if papel(["dona"]);
+      allow create: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /folha/{id} {
+      allow read: if papel(["dona"]);
+      allow create: if papel(["dona"]) && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.tipo in ["lancamento", "cancelamento"];
+      allow update, delete: if false;
+    }
+
     match /escala/{semana} {
       allow read: if ativo();
       allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
