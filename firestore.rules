@@ -74,6 +74,21 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     // Fotos das notas assinadas (reduzidas no celular, até ~1 MB cada).
+    // Perdas e sobras: qualquer pessoa ativa (menos o gestor) registra; cancelar é registro novo, só dona e líderes.
+    match /perdas/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
+           request.resource.data.tipo == "perda"
+        || (request.resource.data.tipo == "cancelamento" && papel(["dona", "lider"])));
+      allow update, delete: if false;
+    }
+    match /perdas_fotos/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+
     match /notas_fotos/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid
@@ -128,7 +143,7 @@ service cloud.firestore {
     match /encomendas/{id} {
       allow read: if ativo();
       allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
-           request.resource.data.tipo in ["encomenda", "conferida"]
+           request.resource.data.tipo in ["encomenda", "conferida", "visto"]
         || (request.resource.data.tipo == "status" && request.resource.data.para in ["producao", "pronta", "entregue"])
         || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelada" && papel(["dona", "lider"])));
       allow update, delete: if false;

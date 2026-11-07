@@ -14,13 +14,14 @@
 <main>
   <div class="cartao"><h2 id="ola"></h2><p class="suave" id="data"></p></div>
   <div id="teste"></div>
+  <div class="cartao" id="enc-hoje" hidden style="border-left:4px solid var(--laranja)"></div>
   <div id="secoes" style="display:flex;flex-direction:column;gap:8px"></div>
 </main>
 <script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, sair, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
-import { modoTeste } from "./js/db.js";
+import { modoTeste, listar, acrescentar } from "./js/db.js";
 
 const eu = await exigirUsuario();
 if (eu.trocarSenha) { location.href = "senha.html"; await new Promise(() => {}); } // primeiro acesso: escolher a própria senha
@@ -36,6 +37,7 @@ const secoes = [
   { titulo: "Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
   { titulo: "Consumo da equipe", desc: "O que cada funcionário consumiu e como pagou", link: "consumo.html", mostrar: pode.verConsumo(eu) },
   { titulo: pode.verLivroCompleto(eu) ? "Rodízio do balcão" : "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização, com foto antes e depois", link: "tarefas.html", mostrar: pode.verLivroCompleto(eu) || eu.setor === "Balcão" },
+  { titulo: "Perdas e sobras", desc: "O que venceu, estragou, queimou ou sobrou, com foto", link: "perdas.html" },
   { titulo: "Checklists", desc: "Abertura, rondas e fechamento do salão e do caixa", link: "checklists.html" },
   { titulo: "Notas das empresas", desc: "Foto da nota assinada de cada empresa", link: "notas.html", mostrar: pode.notasEmpresas(eu) },
   { titulo: "Encomendas", desc: "Anotar, conferir e acompanhar até a entrega", link: "encomendas.html" },
@@ -59,6 +61,41 @@ if (!modoTeste) {
   t.textContent = "Trocar minha senha";
   lista.after(t);
 }
+
+// Encomendas de hoje na tela inicial de todos, com "Vi" registrado (quem e a que horas).
+// Se entrar encomenda nova depois do "Vi", o aviso volta.
+async function encomendasDeHoje() {
+  const d = hoje();
+  const regs = await listar("encomendas", "dataEntrega", d);
+  const ultimo = (id) => regs.filter((r) => r.refId === id && r.tipo === "status").sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1)?.para || "anotada";
+  const encs = regs.filter((r) => r.tipo === "encomenda").map((e) => ({ ...e, status: ultimo(e.id) }))
+    .filter((e) => e.status !== "cancelada").sort((a, b) => (a.horaEntrega || "").localeCompare(b.horaEntrega || ""));
+  const caixa = document.getElementById("enc-hoje");
+  if (!encs.length) { caixa.hidden = true; return; }
+  const meuVi = regs.filter((r) => r.tipo === "visto" && r.registradoPorUid === eu.uid).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
+  const novas = meuVi ? encs.filter((e) => e.criadoEm > meuVi.criadoEm).length : encs.length;
+  const ETAPA = { anotada: "a fazer", producao: "em produção", pronta: "pronta", entregue: "entregue" };
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  caixa.innerHTML = `<h2 style="margin:0 0 6px">Encomendas de hoje (${encs.length})</h2>
+    <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">${encs.map((e) => `<li${e.status === "entregue" ? ' style="opacity:.55"' : ""}><b>${esc(e.horaEntrega)}</b> · ${esc(e.cliente)}: ${esc(e.pedido)} <span class="suave">(${ETAPA[e.status]})</span></li>`).join("")}</ul>
+    <p style="margin:10px 0 0" id="enc-vi"></p>`;
+  const vi = document.getElementById("enc-vi");
+  if (!novas && meuVi) vi.innerHTML = `<span class="selo ok" style="margin-left:0">Você viu às ${esc(meuVi.hora)}</span> <a href="encomendas.html">Abrir encomendas</a>`;
+  else if (pode.somenteLeitura(eu)) vi.innerHTML = `<a href="encomendas.html">Abrir encomendas</a>`;
+  else {
+    vi.innerHTML = `${meuVi ? `<span class="selo alerta" style="margin-left:0">${novas} encomenda(s) nova(s) desde que você viu</span><br>` : ""}<button class="botao principal" style="margin-top:6px;width:100%">✓ Vi as encomendas de hoje</button>`;
+    vi.querySelector("button").onclick = async (ev) => {
+      ev.target.disabled = true;
+      try {
+        await acrescentar("encomendas", { tipo: "visto", dataEntrega: d, hora: new Date().toTimeString().slice(0, 5), setor: eu.setor || "",
+          registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+      encomendasDeHoje();
+    };
+  }
+  caixa.hidden = false;
+}
+encomendasDeHoje();
 </script>
 </body>
 </html>

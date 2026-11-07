@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Perdas e sobras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .perda { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; gap:10px; }
+  .perda.cancelada { opacity:.5; }
+  .perda.cancelada .prod { text-decoration:line-through; }
+  .perda img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; flex-shrink:0; }
+  .perda .info { display:flex; flex-direction:column; gap:3px; flex:1; font-size:14px; }
+  .perda .prod { font-size:17px; font-weight:700; }
+  .perda button { align-self:flex-start; font-size:13px; padding:4px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--suave); cursor:pointer; }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha input[type=text], .folha input[inputmode] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes.tres { grid-template-columns:1fr 1fr 1fr; }
+  .opcoes button { padding:11px 6px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:14px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .camera { display:flex; align-items:center; gap:10px; border:1px dashed var(--linha); border-radius:10px; padding:10px; cursor:pointer; font-size:15px; }
+  .camera input { display:none; }
+  .camera img { width:64px; height:64px; object-fit:cover; border-radius:8px; }
+  .msg-erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  table.mes { width:100%; border-collapse:collapse; font-size:14px; }
+  table.mes th, table.mes td { text-align:left; padding:7px 4px; border-bottom:1px solid var(--linha); }
+  table.mes .n { text-align:right; white-space:nowrap; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Perdas e sobras</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="abas" id="abas" hidden>
+    <button aria-pressed="true" data-aba="dia">Dia</button>
+    <button aria-pressed="false" data-aba="mes">Resumo do mês</button>
+  </div>
+  <section id="aba-dia" style="display:flex;flex-direction:column;gap:10px">
+    <div class="cartao">
+      <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
+      <p class="suave" id="resumo" style="margin:8px 0 0"></p>
+    </div>
+    <button class="botao principal" id="novo">+ Registrar perda ou sobra</button>
+    <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+  <section id="aba-mes" hidden>
+    <div class="cartao">
+      <div class="campo" style="margin:0">Mês <input type="month" id="mes"></div>
+      <div id="tabela" style="margin-top:8px"></div>
+    </div>
+  </section>
+</main>
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+<div class="zoom" id="zoom" hidden><img alt="Foto"></div>
+<datalist id="produtos"></datalist>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listar, ler } from "./js/db.js";
+
+const eu = await exigirUsuario();
+const lanca = !pode.somenteLeitura(eu);          // o Fábio só vê
+const podeCancelar = pode.registrarNoLivro(eu);  // dona e líderes
+const veMes = pode.verPainel(eu);
+
+const PRODUTOS = ["Pão francês", "Pão de queijo", "Pão doce", "Pão de forma", "Bisnaguinha", "Coxinha", "Salgado frito", "Salgado assado",
+  "Bolo (fatia)", "Bolo inteiro", "Torta (fatia)", "Torta inteira", "Sonho", "Croissant", "Frios", "Leite", "Bebida", "Café coado"];
+const UNIDADES = ["unidade", "kg", "fatia", "bandeja"];
+const MOTIVOS = { validade: "Venceu / validade", estragado: "Mofo ou estragado", padrao: "Queimou / fora do padrão", caiu: "Caiu ou quebrou",
+  sobra: "Sobrou no fim do dia", erro: "Erro de produção ou pedido", outro: "Outro" };
+const DESTINOS = { lixo: "Lixo", promocao: "Promoção amanhã", equipe: "Consumo da equipe", doacao: "Doação" };
+const SETORES = ["Balcão", "Panificadora", "Confeitaria"];
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+const numero = (t) => Number(String(t).replace(",", "."));
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+document.getElementById("produtos").innerHTML = PRODUTOS.map((p) => `<option value="${p}">`).join("");
+
+// Foto: reduzida no aparelho (~60 KB) e guardada à parte, em perdas_fotos.
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1200, qualidade = 0.65, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 500000 && lado > 400);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+const cache = {};
+const foto = (id) => (cache[id] ??= ler("perdas_fotos", id).then((d) => d?.foto || ""));
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
+
+function montar(regs) {
+  const canc = Object.fromEntries(regs.filter((r) => r.tipo === "cancelamento").map((r) => [r.refId, r]));
+  return regs.filter((r) => r.tipo === "perda").map((r) => ({ ...r, cancelamento: canc[r.id] })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+}
+const qtd = (r) => `${String(r.quantidade).replace(".", ",")} ${r.unidade}${r.quantidade > 1 && r.unidade !== "kg" ? "s" : ""}`;
+
+async function mostrar() {
+  const d = campoDia.value;
+  const itens = montar(await listar("perdas", "data", d));
+  const validos = itens.filter((r) => !r.cancelamento);
+  const lixo = validos.filter((r) => r.destino === "lixo").length;
+  document.getElementById("resumo").innerHTML = `${dataBR(d)} · ${validos.length} registro(s)` + (lixo ? ` · <span class="selo alerta">${lixo} para o lixo</span>` : "");
+  document.getElementById("novo").hidden = !lanca || d !== hoje();
+  const lista = document.getElementById("lista");
+  lista.innerHTML = itens.length ? "" : `<p class="suave">Nada registrado neste dia.</p>`;
+  for (const r of itens) {
+    const div = document.createElement("div");
+    div.className = "perda" + (r.cancelamento ? " cancelada" : "");
+    div.innerHTML = `${r.fotoId ? `<img data-foto="${esc(r.fotoId)}" alt="Foto">` : ""}
+      <div class="info"><span class="prod">${esc(r.produto)} · ${esc(qtd(r))}</span>
+        <span><span class="selo ${r.destino === "lixo" ? "alerta" : "pendente"}" style="margin-left:0">${esc(DESTINOS[r.destino])}</span> ${esc(MOTIVOS[r.motivo])}</span>
+        ${r.obs ? `<span class="suave">${esc(r.obs)}</span>` : ""}
+        <span class="suave">${esc(r.setor)} · ${esc(r.registradoPor)} às ${esc(r.hora)}</span>
+        ${r.cancelamento ? `<span class="suave">Cancelado por ${esc(r.cancelamento.registradoPor)}: ${esc(r.cancelamento.motivo)}</span>` : ""}
+      </div>`;
+    if (!r.cancelamento && podeCancelar && d === hoje()) {
+      const b = document.createElement("button"); b.textContent = "Cancelar";
+      b.onclick = async () => {
+        const m = prompt("Por que cancelar este registro?"); if (!m?.trim()) return;
+        await acrescentar("perdas", { tipo: "cancelamento", refId: r.id, motivo: m.trim(), data: r.data, mes: r.mes, hora: agora(),
+          registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() }).catch(() => alert("Não consegui salvar."));
+        mostrar();
+      };
+      div.querySelector(".info").append(b);
+    }
+    lista.append(div);
+  }
+  lista.querySelectorAll("img[data-foto]").forEach(async (img) => {
+    img.src = await foto(img.dataset.foto);
+    img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+  });
+}
+
+/* ---------- Registrar ---------- */
+const fundo = document.getElementById("fundo");
+const folha = document.getElementById("folha");
+fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+const botoes = (id, obj, classe = "") => `<div class="opcoes ${classe}" id="${id}">${Object.entries(obj).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>`;
+
+function abrir() {
+  const sel = { unidade: "unidade", motivo: null, destino: null, setor: eu.setor === "Produção" ? "Panificadora" : eu.setor === "Confeitaria" ? "Confeitaria" : "Balcão" };
+  let urlFoto = null;
+  folha.innerHTML = `<h2>Registrar perda ou sobra</h2>
+    <label class="rot" for="f-prod">Produto</label>
+    <input type="text" id="f-prod" list="produtos" placeholder="Ex.: Pão de queijo" autocomplete="off">
+    <div class="duas">
+      <div style="display:flex;flex-direction:column;gap:6px"><label class="rot" for="f-qtd">Quantidade</label><input id="f-qtd" inputmode="decimal" placeholder="0"></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><label class="rot">Unidade</label>${botoes("f-un", Object.fromEntries(UNIDADES.map((u) => [u, u])))}</div>
+    </div>
+    <label class="rot">Motivo</label>${botoes("f-mot", MOTIVOS)}
+    <label class="rot">Para onde foi</label>${botoes("f-dest", DESTINOS)}
+    <label class="rot">Setor</label>${botoes("f-set", Object.fromEntries(SETORES.map((s) => [s, s])), "tres")}
+    <label class="camera" id="f-cam">📷 <span>Foto do produto (obrigatória quando vai para o lixo)</span><input type="file" accept="image/*" capture="environment"></label>
+    <input type="text" id="f-obs" placeholder="Observação (opcional)" autocomplete="off">
+    <p class="msg-erro" id="f-erro"></p>
+    <button class="botao principal" id="f-ok">Salvar</button>
+    <button class="botao" id="f-x" style="text-align:center;border:none">Cancelar</button>`;
+  const marcar = (id, chave) => {
+    const g = folha.querySelector(id);
+    const pinta = () => g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === sel[chave]));
+    g.onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (v) { sel[chave] = v; pinta(); } };
+    pinta();
+  };
+  marcar("#f-un", "unidade"); marcar("#f-mot", "motivo"); marcar("#f-dest", "destino"); marcar("#f-set", "setor");
+  folha.querySelector("#f-cam input").onchange = async (e) => {
+    const arq = e.target.files[0]; if (!arq) return;
+    const cam = folha.querySelector("#f-cam");
+    cam.querySelector("span").textContent = "Preparando a foto…";
+    try {
+      urlFoto = await reduzir(arq);
+      cam.innerHTML = `<img src="${urlFoto}" alt="Foto"><span>Foto pronta. Toque para trocar.</span><input type="file" accept="image/*" capture="environment">`;
+      cam.querySelector("input").onchange = folha.querySelector("#f-cam input").onchange;
+    } catch { cam.querySelector("span").textContent = "Não consegui ler a foto. Tente de novo."; }
+  };
+  folha.querySelector("#f-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#f-ok").onclick = async (e) => {
+    const erro = folha.querySelector("#f-erro");
+    const produto = folha.querySelector("#f-prod").value.trim();
+    const quantidade = numero(folha.querySelector("#f-qtd").value);
+    if (!produto) return (erro.textContent = "Escreva o produto.");
+    if (!(quantidade > 0)) return (erro.textContent = "Coloque a quantidade.");
+    if (!sel.motivo) return (erro.textContent = "Escolha o motivo.");
+    if (!sel.destino) return (erro.textContent = "Escolha para onde foi.");
+    if (sel.destino === "lixo" && !urlFoto) return (erro.textContent = "Para o lixo, tire a foto do produto.");
+    e.target.disabled = true;
+    try {
+      const d = hoje();
+      const base = { data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+      const fotoId = urlFoto ? await acrescentar("perdas_fotos", { ...base, foto: urlFoto }) : null;
+      if (fotoId) cache[fotoId] = Promise.resolve(urlFoto);
+      await acrescentar("perdas", { ...base, tipo: "perda", produto, quantidade, unidade: sel.unidade, motivo: sel.motivo, destino: sel.destino,
+        setor: sel.setor, obs: folha.querySelector("#f-obs").value.trim(), fotoId });
+      fundo.hidden = true; campoDia.value = d; mostrar();
+    } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+  };
+  fundo.hidden = false;
+}
+document.getElementById("novo").onclick = abrir;
+campoDia.onchange = mostrar;
+
+/* ---------- Resumo do mês (Daiane e Fábio) ---------- */
+const campoMes = document.getElementById("mes");
+campoMes.value = hoje().slice(0, 7);
+async function mostrarMes() {
+  const itens = montar(await listar("perdas", "mes", campoMes.value)).filter((r) => !r.cancelamento);
+  if (!itens.length) { document.getElementById("tabela").innerHTML = `<p class="suave">Nada registrado neste mês.</p>`; return; }
+  const porProd = {};
+  for (const r of itens) {
+    const k = `${r.produto}|${r.unidade}`;
+    const t = (porProd[k] ||= { produto: r.produto, unidade: r.unidade, total: 0, lixo: 0, vezes: 0 });
+    t.total += Number(r.quantidade) || 0; t.vezes++;
+    if (r.destino === "lixo") t.lixo += Number(r.quantidade) || 0;
+  }
+  const porMotivo = {};
+  for (const r of itens) porMotivo[r.motivo] = (porMotivo[r.motivo] || 0) + 1;
+  const n = (v) => String(Math.round(v * 100) / 100).replace(".", ",");
+  document.getElementById("tabela").innerHTML = `
+    <table class="mes"><tr><th>Produto</th><th class="n">Total</th><th class="n">No lixo</th><th class="n">Vezes</th></tr>
+    ${Object.values(porProd).sort((a, b) => b.lixo - a.lixo || b.total - a.total).map((t) => `<tr><td><b>${esc(t.produto)}</b> <span class="suave">(${esc(t.unidade)})</span></td>
+      <td class="n">${n(t.total)}</td><td class="n" style="${t.lixo ? "color:var(--alerta);font-weight:700" : ""}">${n(t.lixo)}</td><td class="n">${t.vezes}</td></tr>`).join("")}
+    </table>
+    <h3 style="margin:14px 0 4px;font-size:15px">Por motivo</h3>
+    <table class="mes">${Object.entries(porMotivo).sort((a, b) => b[1] - a[1]).map(([m, v]) => `<tr><td>${esc(MOTIVOS[m])}</td><td class="n">${v} registro(s)</td></tr>`).join("")}</table>`;
+}
+campoMes.onchange = mostrarMes;
+
+if (veMes) {
+  const abas = document.getElementById("abas");
+  abas.hidden = false;
+  abas.onclick = (e) => {
+    const aba = e.target.closest("button")?.dataset.aba; if (!aba) return;
+    abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
+    document.getElementById("aba-dia").hidden = aba !== "dia";
+    document.getElementById("aba-mes").hidden = aba !== "mes";
+    if (aba === "mes") mostrarMes();
+  };
+}
+mostrar();
+</script>
+</body>
+</html>

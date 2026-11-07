@@ -51,6 +51,8 @@ async function mostrar() {
     .map((e) => `${e.horaEntrega} · ${e.cliente}: ${e.pedido} <span class="suave">(${ETAPA[e.status]}${e.status !== "entregue" && !e.conf.includes("abertura") ? ", <b>sem conferir na abertura</b>" : ""})</span>`);
   const encAmanha = encs.filter((e) => e.dataEntrega === diaSeguinte)
     .map((e) => `${e.horaEntrega} · ${e.cliente}: ${e.pedido}${e.conf.includes("vespera") ? "" : ' <span class="suave">(<b>sem conferir na véspera</b>)</span>'}`);
+  const viram = Object.values(Object.fromEntries(encBruto.filter((r) => r.tipo === "visto" && r.dataEntrega === campoDia.value)
+    .sort((x, y) => x.criadoEm.localeCompare(y.criadoEm)).map((r) => [r.registradoPor, r]))).map((r) => `${r.registradoPor} às ${r.hora}`);
   const notasBruto = await listar("notas", "data", campoDia.value);
   const notaUlt = (id, t) => notasBruto.filter((r) => r.refId === id && r.tipo === t).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm)).at(-1);
   const notas = notasBruto.filter((r) => r.tipo === "nota" && !notaUlt(r.id, "cancelado")).map((r) => ({ ...r, conf: notaUlt(r.id, "conferido") }));
@@ -74,6 +76,10 @@ async function mostrar() {
   }
   const ckProblemas = cks.flatMap((c) => c.respostas.filter((r) => !r.ok).map((r) =>
     `${c.titulo}${c.turno ? ` (${c.turno})` : ""}: ${r.texto}${r.valor != null ? ` = ${r.valor}` : ""} <span class="suave">(${r.obs}; ${c.registradoPor})</span>`));
+  const perdasBruto = await listar("perdas", "data", campoDia.value);
+  const perdasCanc = new Set(perdasBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  const perdas = perdasBruto.filter((r) => r.tipo === "perda" && !perdasCanc.has(r.id));
+  const perdasLixo = perdas.filter((r) => r.destino === "lixo").map((r) => `${r.produto}: ${String(r.quantidade).replace(".", ",")} ${r.unidade} <span class="suave">(${r.setor}, ${r.registradoPor})</span>`);
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -113,7 +119,10 @@ async function mostrar() {
     bloco("Notas das empresas com pendência", notasAtencao, "alerta") +
     `<div class="cartao"><h2>Notas das empresas</h2><p class="suave">${new Set(notas.map((n) => n.empresa)).size} empresa(s) com nota · ${notas.filter((n) => n.conf?.ok).length} conferida(s) e certa(s). <a href="notas.html">Abrir</a></p></div>` +
     bloco("Encomendas do dia", encDia, "pendente") +
+    (encDia.length ? `<div class="cartao"><h2>Quem viu as encomendas de hoje</h2><p class="suave">${viram.length ? viram.join(" · ") : "Ninguém marcou que viu ainda."}</p></div>` : "") +
     bloco("Encomendas do dia seguinte", encAmanha, "pendente") +
+    bloco("Perdas que foram para o lixo", perdasLixo, "alerta") +
+    `<div class="cartao"><h2>Perdas e sobras</h2><p class="suave">${perdas.length} registro(s) hoje · ${perdasLixo.length} para o lixo. <a href="perdas.html">Ver fotos e resumo do mês</a></p></div>` +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +
     `<div class="cartao"><h2>Consumo da equipe</h2><p class="suave">${consumo.length} registro(s) · total ${reais(consumoTotal)}${cancelados.size ? ` · ${cancelados.size} cancelado(s)` : ""}. <a href="consumo.html">Ver tudo</a></p></div>` +
     bloco("Faltas", faltas, "alerta") +
