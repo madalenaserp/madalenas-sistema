@@ -1,4 +1,4 @@
-# Publica as regras do Firestore sempre que firestore.rules muda na main.
+# Publica as regras do Firestore sempre que firestore.rules muda na main (chave configurada em 07/11/2026).
 # Precisa do segredo FIREBASE_SERVICE_ACCOUNT (chave JSON da conta de serviço do Firebase).
 name: Publicar regras do Firestore
 on:
