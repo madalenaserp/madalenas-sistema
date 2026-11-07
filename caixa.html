@@ -120,6 +120,8 @@ function reduzir(arquivo) {
     img.src = URL.createObjectURL(arquivo);
   });
 }
+let cacheDiarias;
+const diarias = async () => (cacheDiarias ??= (await ler("diarias", "atual").catch(() => null))?.valores || {});
 const cache = {};
 const foto = (id) => (cache[id] ??= ler("caixa_fotos", id).then((d) => d?.foto || ""));
 document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
@@ -194,8 +196,9 @@ function formulario(tipoMov) {
     : t.opcoes ? grupo("f-para-op", t.opcoes, t.opcoes.length === 3 ? "tres" : "") : `<input type="text" id="f-para" autocomplete="off">`;
   folha.innerHTML = `<h2>${t.sinal > 0 ? "Entrada" : "Saída"}: ${esc(t.nome)}</h2>
     <label class="rot" for="f-valor">Valor (R$)</label><input id="f-valor" inputmode="decimal" placeholder="0,00">
-    ${tipoMov === "sangria" ? `<p class="suave" style="margin:0;font-size:13px">Máximo de ${reais(LIMITE_SANGRIA)} por sangria. Pagamento de feriado não é sangria: registre em "Pagamento de feriado", um por pessoa.</p>` : tipoMov === "feriado" ? `<p class="suave" style="margin:0;font-size:13px">Um registro para cada pessoa.</p>` : ""}
+    ${tipoMov === "sangria" ? `<p class="suave" style="margin:0;font-size:13px">Máximo de ${reais(LIMITE_SANGRIA)} por sangria. Pagamento de feriado não é sangria: registre em "Pagamento de feriado", um por pessoa.</p>` : tipoMov === "feriado" ? `<p class="suave" style="margin:0;font-size:13px">Um registro para cada pessoa. Escolha a pessoa e o valor da diária aparece sozinho.</p>` : ""}
     <label class="rot">${esc(t.campo)}</label>${campoPara}
+    ${tipoMov === "feriado" ? `<p id="f-diaria" style="margin:0;font-size:15px"></p>` : ""}
     ${t.servico ? `<label class="rot" for="f-serv">Que serviço fez</label><input type="text" id="f-serv" autocomplete="off" placeholder="Ex.: ajudou na produção das 6h às 12h">` : ""}
     ${t.sinal < 0 ? `<label class="rot">Quem autorizou</label>${t.exigeAut ? grupo("f-aut", ["Daiane", "Fábio"]) + `<p class="suave" style="margin:0;font-size:13px">${tipoMov === "feriado" ? "Só paga com autorização da Daiane ou do Fábio." : "Não existe compra sem autorização. Sem a Daiane ou o Fábio autorizar, não compre."}</p>` : grupo("f-aut", AUTORIZOU, "tres")}` : ""}
     ${t.foto ? `<label class="camera" id="f-cam">📷 <span>Foto do comprovante ou nota (obrigatória)</span><input type="file" accept="image/*" capture="environment"></label>` : ""}
@@ -206,6 +209,13 @@ function formulario(tipoMov) {
   const liga = (id, chave) => { const g = folha.querySelector(id); if (!g) return;
     g.onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; sel[chave] = v; g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); }; };
   liga("#f-para-op", "para"); liga("#f-aut", "autorizadoPor");
+  // Feriado: preenche com a diária cadastrada pela Daiane no RH.
+  if (tipoMov === "feriado") folha.querySelector("#f-para").onchange = async (e) => {
+    const v = (await diarias())[e.target.value];
+    const dica = folha.querySelector("#f-diaria");
+    if (v) { folha.querySelector("#f-valor").value = v.toFixed(2).replace(".", ","); dica.innerHTML = `Diária de ${esc(e.target.value)}: <b>${reais(v)}</b>. Pague esse valor.`; }
+    else dica.textContent = e.target.value ? "A Daiane ainda não cadastrou a diária desta pessoa. Pergunte a ela o valor." : "";
+  };
   const cam = folha.querySelector("#f-cam");
   if (cam) cam.querySelector("input").onchange = async function trocar(e) {
     const a = e.target.files[0]; if (!a) return;

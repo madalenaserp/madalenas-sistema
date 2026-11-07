@@ -173,6 +173,18 @@ service cloud.firestore {
     }
 
     // Escala da semana: todos veem; só a Daiane monta (RH). Cada versão salva vai para o histórico.
+    // Diárias (para pagamento de feriado): só a dona grava; caixa, balcão e líderes leem para pagar certo.
+    match /diarias/{id} {
+      allow read: if caixaBalcao();
+      allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow delete: if false;
+    }
+    match /diarias_historico/{id} {
+      allow read: if papel(["dona"]);
+      allow create: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     match /escala/{semana} {
       allow read: if ativo();
       allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;

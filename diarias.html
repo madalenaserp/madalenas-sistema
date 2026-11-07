@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Diárias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  table.d { width:100%; border-collapse:collapse; font-size:15px; }
+  table.d td { padding:6px 3px; border-bottom:1px solid var(--linha); vertical-align:middle; }
+  table.d input { width:100%; box-sizing:border-box; font-size:16px; padding:8px; border:1px solid var(--linha); border-radius:8px; background:#fff; }
+  table.d .n { width:30%; }
+  .msg { font-size:14px; min-height:1em; margin:0; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Diárias</h1><a href="rh.html">Voltar</a></header>
+<main>
+  <div class="cartao"><p class="suave" style="margin:0">Coloque o salário e o sistema calcula a diária (salário ÷ 30). Só a <b>diária</b> fica guardada. O salário não é salvo. Quem está no caixa vê a diária quando registra o pagamento de feriado de alguém.</p></div>
+  <div class="cartao"><table class="d" id="tabela"><tr><td><b>Pessoa</b></td><td class="n"><b>Salário</b></td><td class="n"><b>Diária</b></td></tr></table></div>
+  <p class="msg" id="msg"></p>
+  <button class="botao principal" id="salvar" style="text-align:center">Salvar diárias</button>
+  <p class="suave" id="quando" style="font-size:13px"></p>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, dataBR } from "./js/sessao.js";
+import { pode, EQUIPE_DO_TURNO } from "./js/equipe.js";
+import { ler, salvarComHistorico } from "./js/db.js";
+
+const eu = await exigirUsuario();
+if (!pode.rh(eu)) location.href = "turno.html";
+const num = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
+const br = (v) => (v || v === 0) && v !== "" ? Number(v).toFixed(2).replace(".", ",") : "";
+const atual = (await ler("diarias", "atual")) || { valores: {} };
+const tab = document.getElementById("tabela");
+for (const p of EQUIPE_DO_TURNO) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${p.nome}<br><span class="suave" style="font-size:12px">${p.setor}</span></td>
+    <td class="n"><input inputmode="decimal" placeholder="R$" data-sal="${p.nome}"></td>
+    <td class="n"><input inputmode="decimal" placeholder="R$" data-dia="${p.nome}" value="${br(atual.valores[p.nome])}"></td>`;
+  tr.querySelector("[data-sal]").oninput = (e) => { const v = num(e.target.value); tr.querySelector("[data-dia]").value = v > 0 ? br(Math.round((v / 30) * 100) / 100) : ""; };
+  tab.append(tr);
+}
+if (atual.alteradoEm) document.getElementById("quando").textContent = `Última alteração: ${dataBR(atual.alteradoEm.slice(0, 10))} por ${atual.alteradoPor}.`;
+document.getElementById("salvar").onclick = async (e) => {
+  const valores = {};
+  for (const i of tab.querySelectorAll("[data-dia]")) { const v = num(i.value); if (i.value.trim() && !(v > 0)) return (document.getElementById("msg").textContent = `Diária de ${i.dataset.dia} não é um número.`); if (v > 0) valores[i.dataset.dia] = Math.round(v * 100) / 100; }
+  e.target.disabled = true;
+  try {
+    await salvarComHistorico("diarias", "atual", { valores, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() });
+    tab.querySelectorAll("[data-sal]").forEach((i) => (i.value = ""));
+    document.getElementById("msg").textContent = "Diárias salvas.";
+  } catch { document.getElementById("msg").textContent = "Não consegui salvar. Verifique a internet."; }
+  e.target.disabled = false;
+};
+</script>
+</body>
+</html>
