@@ -1,0 +1,26 @@
+# Publica as regras do Firestore sempre que firestore.rules muda na main.
+# Precisa do segredo FIREBASE_SERVICE_ACCOUNT (chave JSON da conta de serviço do Firebase).
+name: Publicar regras do Firestore
+on:
+  push:
+    branches: [main]
+    paths: [firestore.rules, .github/workflows/regras.yml]
+  workflow_dispatch: {}
+jobs:
+  regras:
+    runs-on: ubuntu-latest
+    env:
+      TEM_CHAVE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sem chave configurada
+        if: env.TEM_CHAVE != 'true'
+        run: echo "Segredo FIREBASE_SERVICE_ACCOUNT ainda não configurado; nada publicado."
+      - name: Publicar regras
+        if: env.TEM_CHAVE == 'true'
+        env:
+          CHAVE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$CHAVE" > "$RUNNER_TEMP/chave.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/chave.json"
+          npx -y firebase-tools@13.29.1 deploy --only firestore:rules --project madalenas-sistema --non-interactive
