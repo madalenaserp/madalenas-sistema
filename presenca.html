@@ -44,6 +44,7 @@
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { salvarComHistorico, listar } from "./js/db.js";
+import { folgasNoDia } from "./js/escala.js";
 
 const eu = await exigirUsuario();
 if (!pode.marcarPresenca(eu)) location.href = "turno.html";
@@ -58,13 +59,14 @@ const ITENS = [
 ];
 const rotuloProblema = Object.fromEntries(ITENS.map(([k, , r]) => [k, r]));
 
+const folgasEscala = await folgasNoDia(data);
 const registros = Object.fromEntries((await listar("presenca", "data", data)).map((r) => [r.pessoa, r]));
 const lista = document.getElementById("pessoas");
 const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
 
-function resumo(r) {
-  if (!r) return ["Pendente", "pendente"];
+function resumo(r, nome) {
+  if (!r) return folgasEscala.includes(nome) ? ["Folga na escala", "neutro"] : ["Pendente", "pendente"];
   if (r.situacao === "veio") {
     const hora = r.chegada ? ` ${r.chegada}` : "";
     if (!r.problemas?.length) return [`Presente${hora}`, "ok"];
@@ -85,7 +87,7 @@ function desenhar() {
       t.textContent = setorAtual;
       lista.append(t);
     }
-    const [texto, tipo] = resumo(registros[p.nome]);
+    const [texto, tipo] = resumo(registros[p.nome], p.nome);
     const b = document.createElement("button");
     b.className = "linha";
     b.innerHTML = `<span><b>${p.nome}</b> <span class="suave">· ${p.setor}</span></span><span class="estado ${tipo}">${texto}</span>`;

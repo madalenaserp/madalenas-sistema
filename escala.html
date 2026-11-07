@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Escala</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .semana { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .semana button { font-size:20px; width:44px; height:44px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); cursor:pointer; }
+  .semana h2 { margin:0; font-size:17px; text-align:center; }
+  .grade { width:100%; border-collapse:collapse; table-layout:fixed; background:var(--cartao); border-radius:12px; overflow:hidden; }
+  .grade th, .grade td { border-bottom:1px solid var(--linha); padding:4px 2px; text-align:center; font-size:13px; }
+  .grade th.nome, .grade td.nome { text-align:left; width:31%; padding-left:8px; }
+  .grade td.nome b { font-size:14px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .grade td.nome input { width:100%; box-sizing:border-box; font-size:12px; padding:3px 4px; border:1px solid var(--linha); border-radius:6px; margin-top:2px; }
+  .grade td.nome .hor { font-size:12px; color:var(--suave); }
+  .grade th.hoje { color:var(--laranja); }
+  .grade tr.setor td { background:#f3ebe2; font-weight:700; text-align:left; padding:6px 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--suave); }
+  .grade tr.eu td { background:#fff5ec; }
+  .dia { width:100%; height:38px; border-radius:8px; border:1px solid var(--linha); background:#fff; font-size:13px; font-weight:600; cursor:pointer; color:var(--tinta); padding:0; }
+  .dia.F { background:var(--laranja); color:#fff; border-color:var(--laranja); }
+  .dia[disabled] { cursor:default; }
+  .folgas { font-size:11px; display:block; }
+  .folgas.ruim { color:var(--alerta); font-weight:700; }
+  .folgas.bom { color:var(--ok); }
+  .grade tr.total td { font-weight:700; background:#faf6f1; }
+  .barra-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+  .barra-acoes button { flex:1; }
+  .aviso-salvar { color:var(--alerta); font-size:14px; margin:0; min-height:1em; text-align:center; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Escala</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao semana"><button id="ant" aria-label="Semana anterior">‹</button><h2 id="titulo"></h2><button id="prox" aria-label="Próxima semana">›</button></div>
+  <p class="suave" id="ajuda" style="margin:0"></p>
+  <div id="grade"></div>
+  <div id="edicao" hidden style="display:flex;flex-direction:column;gap:8px">
+    <p class="aviso-salvar" id="aviso"></p>
+    <div class="barra-acoes">
+      <button class="botao" id="copiar" style="text-align:center">Copiar semana anterior</button>
+      <button class="botao principal" id="salvar">Salvar escala</button>
+    </div>
+    <p class="suave" id="info" style="margin:0;text-align:center"></p>
+  </div>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
+import { salvarComHistorico, ler } from "./js/db.js";
+import { segundaDe, somarDias, indiceDoDia } from "./js/escala.js";
+
+const eu = await exigirUsuario();
+const editor = pode.verPainel(eu); // Daiane e Fábio montam a escala
+const DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+let semana = segundaDe(hoje());
+let pessoas = {}, salvo = null, mudou = false;
+
+document.getElementById("ajuda").textContent = editor
+  ? "Toque no dia para marcar folga (laranja). Na escala 5x2 cada pessoa tem 2 folgas na semana."
+  : "Sua escala está destacada. Laranja = folga.";
+document.getElementById("edicao").hidden = !editor;
+
+const vazio = () => ({ dias: ["T", "T", "T", "T", "T", "T", "T"], horario: "" });
+
+async function carregar() {
+  const doc = await ler("escala", semana);
+  salvo = doc;
+  pessoas = {};
+  for (const p of EQUIPE_DO_TURNO) pessoas[p.nome] = doc?.pessoas?.[p.nome] ? structuredClone(doc.pessoas[p.nome]) : vazio();
+  mudou = false;
+  desenhar();
+}
+
+function desenhar() {
+  document.getElementById("titulo").textContent = `Semana de ${dataBR(semana).slice(0, 5)} a ${dataBR(somarDias(semana, 6)).slice(0, 5)}`;
+  const hojeI = segundaDe(hoje()) === semana ? indiceDoDia(hoje()) : -1;
+  let html = `<table class="grade"><tr><th class="nome">Pessoa</th>${DIAS.map((d, i) => `<th class="${i === hojeI ? "hoje" : ""}">${d}<br><span style="font-weight:400">${dataBR(somarDias(semana, i)).slice(0, 2)}</span></th>`).join("")}</tr>`;
+  let setor = "";
+  for (const p of EQUIPE_DO_TURNO) {
+    if (p.setor !== setor) { setor = p.setor; html += `<tr class="setor"><td colspan="8">${esc(setor)}</td></tr>`; }
+    const x = pessoas[p.nome];
+    const nf = x.dias.filter((d) => d === "F").length;
+    html += `<tr class="${p.nome === eu.nome ? "eu" : ""}"><td class="nome"><b>${esc(p.nome)}</b>
+      ${editor ? `<input data-hor="${esc(p.nome)}" placeholder="horário" value="${esc(x.horario)}">` : x.horario ? `<span class="hor">${esc(x.horario)}</span>` : ""}
+      <span class="folgas ${nf === 2 ? "bom" : "ruim"}">${nf} folga(s)</span></td>
+      ${x.dias.map((d, i) => `<td><button class="dia ${d}" data-p="${esc(p.nome)}" data-i="${i}" ${editor ? "" : "disabled"} aria-label="${esc(p.nome)} ${DIAS[i]}: ${d === "F" ? "folga" : "trabalha"}">${d === "F" ? "F" : "·"}</button></td>`).join("")}</tr>`;
+  }
+  const trabalhando = DIAS.map((_, i) => EQUIPE_DO_TURNO.filter((p) => pessoas[p.nome].dias[i] === "T").length);
+  html += `<tr class="total"><td class="nome">Trabalham</td>${trabalhando.map((n) => `<td>${n}</td>`).join("")}</tr></table>`;
+  document.getElementById("grade").innerHTML = html;
+
+  if (editor) {
+    document.querySelectorAll(".dia").forEach((b) => (b.onclick = () => {
+      const x = pessoas[b.dataset.p]; const i = Number(b.dataset.i);
+      x.dias[i] = x.dias[i] === "F" ? "T" : "F"; mudou = true; desenhar();
+    }));
+    document.querySelectorAll("[data-hor]").forEach((inp) => (inp.oninput = () => { pessoas[inp.dataset.hor].horario = inp.value; mudou = true; avisar(); }));
+  }
+  avisar();
+}
+
+function avisar() {
+  if (!editor) return;
+  const fora = EQUIPE_DO_TURNO.filter((p) => pessoas[p.nome].dias.filter((d) => d === "F").length !== 2).map((p) => p.nome);
+  document.getElementById("aviso").textContent = mudou ? "Há mudanças não salvas." : "";
+  document.getElementById("info").textContent =
+    (salvo ? `Salva por ${salvo.alteradoPor} em ${dataBR(salvo.alteradoEm.slice(0, 10))}. ` : "Esta semana ainda não foi salva. ") +
+    (fora.length ? `Sem 2 folgas: ${fora.join(", ")}.` : "Todos com 2 folgas.");
+}
+
+document.getElementById("ant").onclick = () => { if (mudou && !confirm("Sair sem salvar as mudanças?")) return; semana = somarDias(semana, -7); carregar(); };
+document.getElementById("prox").onclick = () => { if (mudou && !confirm("Sair sem salvar as mudanças?")) return; semana = somarDias(semana, 7); carregar(); };
+
+document.getElementById("copiar").onclick = async () => {
+  const ant = await ler("escala", somarDias(semana, -7));
+  if (!ant?.pessoas) return alert("A semana anterior não tem escala salva.");
+  for (const p of EQUIPE_DO_TURNO) if (ant.pessoas[p.nome]) pessoas[p.nome] = structuredClone(ant.pessoas[p.nome]);
+  mudou = true; desenhar();
+};
+
+document.getElementById("salvar").onclick = async (e) => {
+  e.target.disabled = true;
+  try {
+    const dados = { semana, pessoas, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() };
+    await salvarComHistorico("escala", semana, dados);
+    salvo = dados; mudou = false; avisar();
+    document.getElementById("aviso").textContent = "";
+    document.getElementById("info").textContent = "Escala salva. " + document.getElementById("info").textContent.replace(/^.*?\. /, "");
+  } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+  e.target.disabled = false;
+};
+addEventListener("beforeunload", (e) => { if (mudou) e.preventDefault(); });
+
+carregar();
+</script>
+</body>
+</html>

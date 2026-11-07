@@ -21,6 +21,7 @@ import { exigirUsuario, hoje } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { listar, listarEntre } from "./js/db.js";
 import { CHECKLISTS } from "./js/checklists.js";
+import { folgasNoDia } from "./js/escala.js";
 
 if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
@@ -89,7 +90,8 @@ async function mostrar() {
   const ROTULO = { chinelo: "calçado inadequado", sem_uniforme: "uniforme incompleto", sem_touca: "sem touca" };
   const apresentacao = registros.filter((r) => r.situacao === "veio" && r.problemas?.length)
     .map((r) => `${r.pessoa}: ${r.problemas.map((x) => ROTULO[x] || x).join(", ")}${obs(r)}`);
-  const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome]).map((p) => p.nome);
+  const folgasEsc = await folgasNoDia(campoDia.value);
+  const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome] && !folgasEsc.includes(p.nome)).map((p) => p.nome);
   const vieram = registros.filter((r) => r.situacao === "veio")
     .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
   const folgas = registros.filter((r) => r.situacao === "folga").map((r) => r.pessoa);
@@ -110,7 +112,8 @@ async function mostrar() {
     bloco("Apresentação fora do padrão", apresentacao, "alerta") +
     bloco("Presença não marcada", semMarcar, "pendente") +
     bloco("Vieram", vieram, "ok") +
-    bloco("De folga", folgas, "ok");
+    bloco("De folga", folgas, "ok") +
+    bloco("Folga na escala (sem presença marcada)", folgasEsc.filter((n) => !por[n]), "ok");
 }
 campoDia.onchange = mostrar;
 mostrar();

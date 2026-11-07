@@ -38,6 +38,7 @@ const secoes = [
   { titulo: "Checklists", desc: "Abertura, rondas e fechamento do salão e do caixa", link: "checklists.html" },
   { titulo: "Notas das empresas", desc: "Foto da nota assinada de cada empresa", link: "notas.html", mostrar: pode.notasEmpresas(eu) },
   { titulo: "Encomendas", desc: "Anotar, conferir e acompanhar até a entrega", link: "encomendas.html" },
+  { titulo: "Escala da semana", desc: pode.verPainel(eu) ? "Montar a escala 5x2 e as folgas" : "Seus dias de trabalho e folga", link: "escala.html" },
   { titulo: "Equipe e acessos", desc: "Criar e desativar logins", link: "equipe.html", mostrar: pode.gerirEquipe(eu) && !modoTeste },
   { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: pode.verPainel(eu) },
 ];
