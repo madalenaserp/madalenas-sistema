@@ -8,10 +8,16 @@ service cloud.firestore {
     function ativo() { return logado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && perfil().ativo != false; }
     function papel(lista) { return ativo() && perfil().papel in lista; }
 
-    // Perfis: cada um lê o seu; só a dona cria e altera (pelo console do Firebase, por enquanto).
+    // Perfis: cada um lê o seu; só a dona cria e altera (tela Equipe).
+    // Exceção única: a conta daiane@madalenas.app cria o próprio perfil de dona no primeiro acesso.
     match /usuarios/{uid} {
       allow read: if logado() && (request.auth.uid == uid || papel(["dona", "gestor"]));
-      allow write: if papel(["dona"]);
+      allow create: if papel(["dona"])
+        || (logado() && request.auth.uid == uid
+            && request.auth.token.email == "daiane@madalenas.app"
+            && request.resource.data.papel == "dona");
+      allow update: if papel(["dona"]);
+      allow delete: if false;
     }
 
     // Presença do dia: líderes e dona marcam; dona e gestor leem tudo. Ninguém apaga.

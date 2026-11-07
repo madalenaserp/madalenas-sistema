@@ -31,6 +31,7 @@ const secoes = [
   { titulo: "Checklists do setor", desc: "Abertura e fechamento", emBreve: true },
   { titulo: "Notas das empresas", desc: "Pedidos a prazo do dia", emBreve: true },
   { titulo: "Encomendas do dia", desc: "", emBreve: true },
+  { titulo: "Equipe e acessos", desc: "Criar e desativar logins", link: "equipe.html", mostrar: pode.gerirEquipe(eu) && !modoTeste },
   { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: pode.verPainel(eu) },
 ];
 const lista = document.getElementById("secoes");

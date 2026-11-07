@@ -5,7 +5,7 @@ import { firebase, modoTeste } from "./firebase.js";
 import { pessoa } from "./equipe.js";
 
 const CHAVE = "madalenas.usuario";
-const DOMINIO = "madalenas.app"; // o usuário "jessica" vira jessica@madalenas.app no Firebase
+export const DOMINIO = "madalenas.app"; // o usuário "jessica" vira jessica@madalenas.app no Firebase
 
 function lerTeste() { try { return localStorage.getItem(CHAVE); } catch { return null; } }
 
@@ -34,7 +34,13 @@ export async function usuarioAtual() {
     const parar = f.auth.onAuthStateChanged(f.conta, (u) => { parar(); ok(u); });
   });
   if (!user) return null;
-  const perfil = await f.fs.getDoc(f.fs.doc(f.db, "usuarios", user.uid));
+  const ref = f.fs.doc(f.db, "usuarios", user.uid);
+  let perfil = await f.fs.getDoc(ref);
+  // Primeiro acesso da Daiane: cria o perfil de dona (as regras só permitem isso para este e-mail).
+  if (!perfil.exists() && user.email === `daiane@${DOMINIO}`) {
+    await f.fs.setDoc(ref, { nome: "Daiane", usuario: "daiane", setor: "Gestão", papel: "dona", ativo: true });
+    perfil = await f.fs.getDoc(ref);
+  }
   if (!perfil.exists() || perfil.data().ativo === false) return null;
   return { uid: user.uid, ...perfil.data() };
 }

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Equipe</title>
+<link rel="stylesheet" href="estilo.css">
+<style>
+  form.cartao { display:flex; flex-direction:column; gap:8px; }
+  select, input[type=password] { font-size:16px; padding:6px 8px; border:1px solid var(--linha); border-radius:8px; background:var(--cartao); }
+  .pessoa { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .pessoa button { font-size:14px; padding:6px 10px; border-radius:8px; border:1px solid var(--linha); background:var(--cartao); cursor:pointer; }
+</style>
+</head>
+<body>
+<header><h1>Equipe e acessos</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <form class="cartao" id="novo">
+    <h2>Criar login</h2>
+    <select id="pessoa" required></select>
+    <input type="text" id="usuario" placeholder="Usuário (ex.: jessica)" autocapitalize="none" required pattern="[a-z0-9]+">
+    <input type="password" id="senha" placeholder="Senha inicial (mínimo 6)" minlength="6" required autocomplete="new-password">
+    <select id="papel">
+      <option value="equipe">Equipe (só as próprias tarefas)</option>
+      <option value="lider">Líder (marca presença)</option>
+      <option value="gestor">Gestor (vê o painel)</option>
+    </select>
+    <p class="suave" id="msg" style="margin:0"></p>
+    <button class="botao principal" type="submit">Criar login</button>
+  </form>
+  <div class="cartao"><h2>Logins criados</h2><div id="lista" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div></div>
+</main>
+<script type="module">
+import { exigirUsuario, DOMINIO } from "./js/sessao.js";
+import { EQUIPE, pode } from "./js/equipe.js";
+import { firebase } from "./js/firebase.js";
+import { firebaseConfig } from "./js/config.js";
+
+const eu = await exigirUsuario();
+if (!pode.gerirEquipe(eu)) location.href = "turno.html";
+const f = await firebase();
+const SDK = "https://www.gstatic.com/firebasejs/10.12.2";
+
+const ROTULO = { dona: "Dona", gestor: "Gestor", lider: "Líder", equipe: "Equipe" };
+const selPessoa = document.getElementById("pessoa");
+const campoUsuario = document.getElementById("usuario");
+const msg = document.getElementById("msg");
+
+async function carregar() {
+  const snap = await f.fs.getDocs(f.fs.collection(f.db, "usuarios"));
+  const usuarios = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+  const comLogin = new Set(usuarios.map((u) => u.nome));
+  selPessoa.innerHTML = `<option value="">Escolha a pessoa…</option>` +
+    EQUIPE.filter((p) => !comLogin.has(p.nome)).map((p) => `<option>${p.nome}</option>`).join("");
+  const lista = document.getElementById("lista");
+  lista.innerHTML = usuarios.length ? "" : `<p class="suave">Nenhum ainda.</p>`;
+  for (const u of usuarios.sort((a, b) => a.nome.localeCompare(b.nome))) {
+    const linha = document.createElement("div");
+    linha.className = "pessoa";
+    linha.innerHTML = `<span><b>${u.nome}</b> <span class="suave">· ${u.usuario} · ${ROTULO[u.papel] || u.papel}${u.ativo === false ? " · desativado" : ""}</span></span>`;
+    if (u.uid !== eu.uid) {
+      const b = document.createElement("button");
+      b.textContent = u.ativo === false ? "Reativar" : "Desativar";
+      b.onclick = async () => {
+        await f.fs.updateDoc(f.fs.doc(f.db, "usuarios", u.uid), { ativo: u.ativo === false });
+        carregar();
+      };
+      linha.append(b);
+    }
+    lista.append(linha);
+  }
+}
+
+selPessoa.onchange = () => {
+  const p = EQUIPE.find((x) => x.nome === selPessoa.value);
+  if (p) { campoUsuario.value = p.usuario; document.getElementById("papel").value = p.papel === "dona" ? "gestor" : p.papel; }
+};
+
+// Cria a conta numa segunda conexão, para a Daiane não ser desconectada.
+async function criarConta(email, senha) {
+  const { initializeApp, deleteApp } = await import(`${SDK}/firebase-app.js`);
+  const app2 = initializeApp(firebaseConfig, `criar-${Date.now()}`);
+  try {
+    const conta2 = f.auth.getAuth(app2);
+    const cred = await f.auth.createUserWithEmailAndPassword(conta2, email, senha);
+    await f.auth.signOut(conta2);
+    return cred.user.uid;
+  } finally { await deleteApp(app2); }
+}
+
+document.getElementById("novo").onsubmit = async (e) => {
+  e.preventDefault();
+  const p = EQUIPE.find((x) => x.nome === selPessoa.value);
+  const usuario = campoUsuario.value.trim().toLowerCase();
+  const botao = e.submitter; botao.disabled = true; msg.textContent = "Criando…";
+  try {
+    const uid = await criarConta(`${usuario}@${DOMINIO}`, document.getElementById("senha").value);
+    await f.fs.setDoc(f.fs.doc(f.db, "usuarios", uid), {
+      nome: p.nome, usuario, setor: p.setor, papel: document.getElementById("papel").value, ativo: true,
+      criadoPor: eu.nome, criadoEm: new Date().toISOString(),
+    });
+    msg.textContent = `Pronto. ${p.nome} entra com o usuário "${usuario}" e a senha que você definiu.`;
+    e.target.reset();
+    carregar();
+  } catch (err) {
+    msg.textContent = err.code === "auth/email-already-in-use" ? "Esse usuário já existe." : `Não consegui criar (${err.code || err.message}).`;
+  } finally { botao.disabled = false; }
+};
+
+carregar();
+</script>
+</body>
+</html>

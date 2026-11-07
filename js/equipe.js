@@ -29,4 +29,5 @@ export const EQUIPE_DO_TURNO = EQUIPE.filter((p) => p.setor !== "Gestão");
 export const pode = {
   marcarPresenca: (u) => ["dona", "lider"].includes(u?.papel),
   verPainel: (u) => ["dona", "gestor"].includes(u?.papel),
+  gerirEquipe: (u) => u?.papel === "dona",
 };
