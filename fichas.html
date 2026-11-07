@@ -88,12 +88,14 @@ const num = (t) => Number(String(t ?? "").replace(",", "."));
 const br = (v) => String(Math.round(v * 1000) / 1000).replace(".", ",");
 const agora = () => new Date().toTimeString().slice(0, 5);
 const UN_ING = ["g", "kg", "ml", "L", "unidade"];
-const MAQUINAS = ["Masseira", "Batedeira", "Cilindro", "Divisora modeladora", "Fritadeira"];
+const FORNO = "Forno 8 telas a gás";
+const MAQUINAS = ["Masseira", "Batedeira", "Cilindro", "Divisora modeladora", FORNO, "Fritadeira"];
 // Texto das máquinas e seus detalhes (para a ficha e a impressão).
 const processo = (f) => !f.maquinas ? "" : f.maquinas.includes("mao") ? "Tudo à mão" + (f.mistura ? ` (sova ${f.mistura} min)` : "") : f.maquinas.map((m) =>
   m === "Masseira" ? `Masseira: ${br(Number(String(f.masseiraLenta).replace(",", ".")))} min na lenta${Number(String(f.masseiraRapida).replace(",", ".")) ? ` + ${br(Number(String(f.masseiraRapida).replace(",", ".")))} min na rápida` : ""}`
   : m === "Batedeira" ? `Batedeira: ${f.batedeiraTempo} min (${f.batedeiraVel})`
   : m === "Cilindro" ? `Cilindro: ${f.cilindroPassadas} passada(s), até ${f.cilindroPonto}`
+  : m === FORNO ? `${FORNO}: ${f.fornoTemp} °C por ${f.fornoTempo} min · ${f.telas} tela(s) por fornada, ${f.porTela} por tela`
   : m === "Fritadeira" ? `Fritadeira: óleo a ${f.fritaTemp} °C por ${f.fritaTempo} min`
   : `Divisora modeladora: pesada de ${br(Number(String(f.pesada).replace(",", ".")))} kg em ${f.partes} partes`).join("<br>");
 document.getElementById("ingredientes").innerHTML = ["Farinha de trigo", "Água", "Sal", "Açúcar", "Fermento biológico seco", "Fermento biológico fresco",
@@ -174,9 +176,9 @@ async function ver(p, s) {
       <dl>${f.divide === "divisora" ? `<dt>Pesada</dt><dd>${br(f.pesada)} kg em ${f.partes} partes (≈ ${Math.round((f.pesada * 1000) / f.partes)} g cada)</dd>` : `<dt>Peso de cada</dt><dd>${br(f.pesoUnidade)} g</dd>`}
         <dt>A receita rende</dt><dd>${f.rendimento} unidades</dd></dl>
       ${f.maquinas ? `<h3>Máquinas</h3><p class="preparo">${processo(f)}</p>` : ""}
-      <h3>Fermentação e forno</h3>
+      <h3>Fermentação</h3>
       <dl>${!f.maquinas && f.mistura ? `<dt>Mistura (sova)</dt><dd>${f.mistura} min</dd>` : ""}<dt>Fermentação</dt><dd>${f.fermentacao} min</dd>
-        <dt>Forno</dt><dd>${f.fornoTemp} °C por ${f.fornoTempo} min</dd></dl>
+        ${f.maquinas ? "" : `<dt>Forno</dt><dd>${f.fornoTemp} °C por ${f.fornoTempo} min</dd>`}</dl>
       <h3>Modo de preparo</h3>${f.passos ? `<div class="passos-ficha">${f.passos.map((x, k) => `<div class="p"><img data-foto="${esc(x.fotoId)}" alt="Passo ${k + 1}"><p class="preparo"><b>${k + 1}.</b> ${esc(x.texto)}</p></div>`).join("")}</div>` : `<p class="preparo">${esc(f.preparo)}</p>`}
       <p class="suave" style="margin:12px 0 0;font-size:13px">Preenchida por ${esc(f.registradoPor)} em ${dataBR(f.data)} às ${esc(f.hora)}${s.versao > 1 ? ` · versão ${s.versao}` : ""}</p>
       ${s.parecer ? `<p style="margin:8px 0 0">${s.parecer.tipo === "aprovacao" ? "✓ Aprovada" : "✗ Pedido de correção"} por ${esc(s.parecer.registradoPor)}${s.parecer.texto ? `: <b>${esc(s.parecer.texto)}</b>` : ""}</p>` : ""}
@@ -289,8 +291,11 @@ function perguntar(produto, anterior) {
       corpo: () => campoNum("rendimento", "Rendimento", "unidades"), liga: () => ligaNum("rendimento"), valida: () => (!(num(f.rendimento) >= 1) ? "Coloque quantas unidades rende." : "") },
     { titulo: "Quanto tempo de fermentação?", corpo: () => campoNum("fermentacao", "Fermentação (descanso)", "min", "Se não fermenta, coloque 0."),
       liga: () => ligaNum("fermentacao"), valida: () => (f.fermentacao === "" || !(num(f.fermentacao) >= 0) ? "Coloque o tempo de fermentação (0 se não tiver)." : "") },
-    { titulo: "Qual a temperatura e o tempo de forno?", corpo: () => campoNum("fornoTemp", "Temperatura", "°C") + campoNum("fornoTempo", "Tempo", "min"),
-      liga: () => ligaNum("fornoTemp", "fornoTempo"), valida: () => !(num(f.fornoTemp) >= 50) ? "Coloque a temperatura do forno." : !(num(f.fornoTempo) > 0) ? "Coloque o tempo de forno." : "" },
+    { titulo: "No forno de 8 telas: temperatura, tempo e quantas telas?", pula: () => !usa(FORNO),
+      corpo: () => campoNum("fornoTemp", "Temperatura", "°C") + campoNum("fornoTempo", "Tempo", "min") + campoNum("telas", "Telas por fornada (1 a 8)", "telas") + campoNum("porTela", "Quantos cabem em cada tela", "unidades"),
+      liga: () => ligaNum("fornoTemp", "fornoTempo", "telas", "porTela"),
+      valida: () => !(num(f.fornoTemp) >= 50) ? "Coloque a temperatura do forno." : !(num(f.fornoTempo) > 0) ? "Coloque o tempo de forno."
+        : !(num(f.telas) >= 1 && num(f.telas) <= 8) ? "Coloque quantas telas por fornada (de 1 a 8)." : !(num(f.porTela) >= 1) ? "Coloque quantos cabem em cada tela." : "" },
     { titulo: "Como faz, passo a passo?", ajuda: "Um passo de cada vez, como se fosse ensinar alguém que nunca fez. Cada passo tem a sua foto, tirada na hora de fazer.",
       corpo: () => `<div style="display:flex;flex-direction:column;gap:8px">${f.passos.map((x, k) => `<div class="etapa" data-k="${k}">
           <div class="cab"><span>Passo ${k + 1}</span>${f.passos.length > 3 ? `<button type="button" data-tira="${k}">Tirar passo</button>` : ""}</div>
@@ -364,7 +369,7 @@ function perguntar(produto, anterior) {
           <dt>Rende</dt><dd>${num(f.rendimento)} unidades</dd>
           <dt>Máquinas</dt><dd>${processo(f)}</dd>
           <dt>Fermentação</dt><dd>${num(f.fermentacao)} min</dd>
-          <dt>Forno</dt><dd>${num(f.fornoTemp)} °C por ${num(f.fornoTempo)} min</dd></dl>
+</dl>
         <div class="passos-ficha">${f.passos.map((x, k) => `<div class="p">${x.foto ? `<img src="${x.foto}" alt="">` : `<img data-foto="${esc(x.fotoId)}" alt="">`}<p class="preparo"><b>${k + 1}.</b> ${esc(x.texto)}</p></div>`).join("")}</div>
         ${f.foto ? `<img src="${f.foto}" class="pronto" alt="Foto">` : `<img data-foto="${esc(f.fotoId)}" class="pronto" alt="Foto">`}
         <p class="msg-erro" id="erro"></p>
@@ -389,7 +394,8 @@ function perguntar(produto, anterior) {
           batedeiraTempo: usa("Batedeira") ? num(f.batedeiraTempo) : null, batedeiraVel: usa("Batedeira") ? f.batedeiraVel.trim() : null,
           cilindroPassadas: usa("Cilindro") ? num(f.cilindroPassadas) : null, cilindroPonto: usa("Cilindro") ? f.cilindroPonto.trim() : null,
           fritaTemp: usa("Fritadeira") ? num(f.fritaTemp) : null, fritaTempo: usa("Fritadeira") ? num(f.fritaTempo) : null,
-          fornoTemp: num(f.fornoTemp), fornoTempo: num(f.fornoTempo), passos, fotoId });
+          fornoTemp: usa(FORNO) ? num(f.fornoTemp) : null, fornoTempo: usa(FORNO) ? num(f.fornoTempo) : null,
+          telas: usa(FORNO) ? num(f.telas) : null, porTela: usa(FORNO) ? num(f.porTela) : null, passos, fotoId });
         try { localStorage.removeItem(chave); } catch {}
         alert("Ficha enviada! A Daiane vai conferir.");
         lista();
