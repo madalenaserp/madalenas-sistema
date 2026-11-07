@@ -128,6 +128,20 @@ async function mostrar() {
     .map((i) => `${i.nome}: ${String(Math.round(LOCAIS.reduce((t, l) => t + (sd[`${i.id}|${l}`] || 0), 0) * 100) / 100).replace(".", ",")} ${i.unidade} <span class="suave">(mínimo ${i.minimo})</span>`) : [];
   const estDif = est.filter((m) => m.acao === "contagem" && m.data === campoDia.value && m.diferenca < 0).map((m) => `${m.nome} (${m.local}): faltou ${String(-m.diferenca).replace(".", ",")} ${m.unidade} <span class="suave">(contado por ${m.registradoPor})</span>`);
   const estCompras = est.filter((m) => m.acao === "entrada" && m.data === campoDia.value);
+  // Empresas: pedido sem separar hoje, nota sem valor hoje, cobranças atrasadas (últimos 6 meses).
+  const pedHoje = notasBruto.filter((r) => r.tipo === "pedido" && !notaUlt(r.id, "cancelado"));
+  const pedSemSep = pedHoje.filter((r) => !notaUlt(r.id, "separado")).map((r) => `${r.empresa}: ${r.texto.slice(0, 60)}${r.texto.length > 60 ? "…" : ""}`);
+  const pedSemNota = pedHoje.filter((r) => !notas.some((n) => n.empresa === r.empresa)).map((r) => `${r.empresa} <span class="suave">(pedido anotado, sem nota assinada)</span>`);
+  const notaSemValor = notas.filter((n) => n.valor == null).map((n) => `${n.empresa} <span class="suave">(foto às ${n.hora})</span>`);
+  const mes6 = new Date(campoDia.value); mes6.setMonth(mes6.getMonth() - 6);
+  const cobs = await listarEntre("cobrancas", "mes", mes6.toISOString().slice(0, 7), campoDia.value.slice(0, 7)).catch(() => []);
+  const cobCanc = new Set(cobs.filter((c) => c.tipo === "cancelamento").map((c) => c.refId));
+  const cobOk = cobs.filter((c) => !cobCanc.has(c.id)).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  const ultCob = {};
+  for (const c of cobOk.filter((c) => c.tipo === "cobranca")) ultCob[`${c.empresa}|${c.mes}`] = c;
+  const atrasadas = Object.values(ultCob).map((c) => ({ c, pago: cobOk.filter((p) => p.tipo === "pagamento" && p.empresa === c.empresa && p.mes === c.mes).reduce((t, p) => t + p.valor, 0) }))
+    .filter(({ c, pago }) => c.total - pago > 0.009 && campoDia.value > c.vencimento)
+    .map(({ c, pago }) => `${c.empresa} (${c.mes.split("-").reverse().join("/")}): falta ${(c.total - pago).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} <span class="suave">· venceu ${c.vencimento.split("-").reverse().join("/")}</span>`);
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -164,6 +178,10 @@ async function mostrar() {
     bloco("Checklists com problema", ckProblemas, "alerta") +
     bloco("Checklists não feitos", ckPendentes, "pendente") +
     bloco("Checklists feitos", ckFeitos, "ok") +
+    bloco("Empresas com pagamento atrasado", atrasadas, "alerta") +
+    bloco("Pedidos das empresas sem separar", pedSemSep, "pendente") +
+    bloco("Pedido sem nota assinada", pedSemNota, "alerta") +
+    bloco("Nota de empresa sem valor", notaSemValor, "alerta") +
     bloco("Notas das empresas com pendência", notasAtencao, "alerta") +
     `<div class="cartao"><h2>Notas das empresas</h2><p class="suave">${new Set(notas.map((n) => n.empresa)).size} empresa(s) com nota · ${notas.filter((n) => n.conf?.ok).length} conferida(s) e certa(s). <a href="notas.html">Abrir</a></p></div>` +
     bloco("Encomendas do dia", encDia, "pendente") +

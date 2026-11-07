@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Madalena's · Notas das empresas</title>
+<title>Madalena's · Empresas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#2c180e">
@@ -43,20 +43,31 @@
   table.mes { width:100%; border-collapse:collapse; font-size:14px; }
   table.mes th, table.mes td { text-align:left; padding:8px 4px; border-bottom:1px solid var(--linha); }
   table.mes .n { text-align:right; }
+  .pedido { background:#fbf6ef; border-radius:8px; padding:8px 10px; font-size:14px; display:flex; flex-direction:column; gap:6px; }
+  .pedido .txt { white-space:pre-wrap; font-size:15px; }
+  .alerta-linha { color:var(--alerta); font-size:14px; font-weight:600; }
+  .folha textarea { font-size:16px; padding:10px; border:1px solid var(--linha); border-radius:10px; width:100%; box-sizing:border-box; font-family:inherit; }
+  .folha input[inputmode], .folha input[type=date] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .emp-mes { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+  .emp-mes.pago { border-left-color:var(--ok); }
+  .emp-mes.aberto { border-left-color:var(--laranja); }
+  .emp-mes.atrasado { border-left-color:var(--alerta); background:#fff5f4; }
+  .emp-mes .cab { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .emp-mes .acoes button.principal { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
 </style>
 </head>
 <body>
-<header><div data-logo="pequeno"></div><h1>Notas das empresas</h1><a href="turno.html">Voltar</a></header>
+<header><div data-logo="pequeno"></div><h1>Empresas</h1><a href="turno.html">Voltar</a></header>
 <main>
   <div class="abas" id="abas" hidden>
     <button aria-pressed="true" data-aba="dia">Dia</button>
-    <button aria-pressed="false" data-aba="mes">Mês por empresa</button>
+    <button aria-pressed="false" data-aba="mes">Mês, cobrança e pagamento</button>
   </div>
   <section id="aba-dia" style="display:flex;flex-direction:column;gap:10px">
     <div class="cartao">
       <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
       <p class="suave" id="resumo" style="margin:8px 0 0"></p>
-      <p class="suave" style="margin:6px 0 0;font-size:13px">Lançou no Guappo e a empresa assinou? Tire a foto da via assinada. Pronto.</p>
+      <p class="suave" style="margin:6px 0 0;font-size:13px">1. À noite: anote o pedido que chegou no WhatsApp (escolha o dia da entrega). 2. De manhã: separe conferindo o pedido e marque "Separei". 3. Lançou no Guappo e a empresa assinou: tire a foto da via assinada e coloque o valor.</p>
     </div>
     <div id="empresas" style="display:flex;flex-direction:column;gap:8px"></div>
   </section>
@@ -92,12 +103,14 @@ const campoDia = document.getElementById("dia");
 campoDia.value = hoje();
 
 // A foto fica guardada à parte (coleção notas_fotos); aqui só os registros leves. Nada se altera nem se apaga.
-function montar(registros) {
-  const passos = registros.filter((r) => r.tipo !== "nota");
-  const ultimo = (id, tipo) => passos.filter((r) => r.refId === id && r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
-  return registros.filter((r) => r.tipo === "nota").sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
-    .map((n) => ({ ...n, conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado") }));
+function montar(registros, tipo = "nota") {
+  const passos = registros.filter((r) => r.refId);
+  const ultimo = (id, t) => passos.filter((r) => r.refId === id && r.tipo === t).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
+  return registros.filter((r) => r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
+    .map((n) => ({ ...n, conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }));
 }
+const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
 
 // Reduz a foto para caber no banco (cerca de 150 KB) sem perder a leitura do número e da assinatura.
 function reduzir(arquivo) {
@@ -129,13 +142,16 @@ async function miniatura(fotoId, el) {
 
 async function mostrar() {
   const d = campoDia.value;
-  const notas = montar(await listar("notas", "data", d));
+  const regsDia = await listar("notas", "data", d);
+  const notas = montar(regsDia);
+  const pedidos = montar(regsDia, "pedido").filter((p) => !p.cancelado);
   const ativas = notas.filter((n) => !n.cancelado);
   const semConferir = ativas.filter((n) => !n.conferido).length;
   const problemas = ativas.filter((n) => n.conferido && !n.conferido.ok).length;
   const comNota = new Set(ativas.map((n) => n.empresa)).size;
   document.getElementById("resumo").innerHTML = `${dataBR(d)} · ${comNota} empresa(s) com nota` +
     (semConferir ? ` · <span class="selo pendente">${semConferir} sem conferir</span>` : "") +
+    (pedidos.filter((p) => !p.separado).length ? ` · <span class="selo pendente">${pedidos.filter((p) => !p.separado).length} pedido(s) sem separar</span>` : "") +
     (problemas ? ` · <span class="selo alerta">${problemas} com problema</span>` : "") +
     (ativas.length && !semConferir && !problemas ? ` · <span class="selo ok">tudo conferido</span>` : "");
 
@@ -143,14 +159,20 @@ async function mostrar() {
   box.innerHTML = "";
   for (const nome of EMPRESAS) {
     const minhas = notas.filter((n) => n.empresa === nome);
+    const meusPedidos = pedidos.filter((p) => p.empresa === nome);
     const div = document.createElement("div");
     div.className = "empresa";
     div.innerHTML = `<div class="cab"><b>${esc(nome)}</b>${minhas.length ? "" : `<span class="suave">sem nota</span>`}</div>`;
+    for (const p of meusPedidos) div.append(blocoPedido(p, minhas.some((n) => !n.cancelado)));
+    if (d >= hoje() && podeFoto && !meusPedidos.length) {
+      const b = document.createElement("button"); b.className = "foto-btn secundario"; b.style.alignSelf = "flex-start";
+      b.textContent = "+ Anotar pedido do WhatsApp"; b.onclick = () => folhaPedido(nome, d); div.append(b);
+    }
     if (d === hoje() && podeFoto) {
       const rot = document.createElement("label");
       rot.className = "foto-btn" + (minhas.length ? " secundario" : "");
       rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" capture="environment">`;
-      rot.querySelector("input").onchange = (e) => e.target.files[0] && salvarFoto(nome, e.target.files[0], rot);
+      rot.querySelector("input").onchange = (e) => e.target.files[0] && folhaValor(nome, e.target.files[0]);
       div.querySelector(".cab").append(rot);
     }
     for (const n of minhas) div.append(linhaNota(n));
@@ -171,7 +193,8 @@ function linhaNota(n) {
     : `<span class="erro">✗ ${esc(PROBLEMAS[n.conferido.problema])}${n.conferido.detalhe ? `: ${esc(n.conferido.detalhe)}` : ""} (${esc(n.conferido.registradoPor)}, foi para o Livro)</span>`;
   const info = document.createElement("div");
   info.className = "info";
-  info.innerHTML = `<span class="ok">✓ Foto por ${esc(n.registradoPor)} às ${esc(n.hora)}</span>${conf}<div class="acoes"></div>`;
+  info.innerHTML = `${n.valor != null ? `<span style="font-size:16px"><b>${reais(n.valor)}</b>${n.pedidoGuappo ? ` <span class="suave">· Guappo nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>` : `<span class="erro">Sem valor</span>`}
+    <span class="ok">✓ Foto por ${esc(n.registradoPor)} às ${esc(n.hora)}</span>${conf}<div class="acoes"></div>`;
   const acoes = info.querySelector(".acoes");
   if (podeConferir && !n.conferido && !n.cancelado && campoDia.value === hoje()) {
     const b = (t, c, f) => { const x = document.createElement("button"); x.textContent = t; x.className = c; x.onclick = f; acoes.append(x); };
@@ -183,19 +206,76 @@ function linhaNota(n) {
   return div;
 }
 
-async function salvarFoto(empresa, arquivo, rotulo) {
-  rotulo.style.pointerEvents = "none";
-  rotulo.firstChild.textContent = "Enviando…";
-  try {
-    const foto = await reduzir(arquivo);
-    const d = hoje();
-    const base = { empresa, data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
-    const fotoId = await acrescentar("notas_fotos", { ...base, foto });
-    await acrescentar("notas", { ...base, tipo: "nota", fotoId });
-  } catch {
-    alert("Não consegui enviar a foto. Verifique a internet e tente de novo.");
+// Foto da via assinada + valor do Guappo (sem valor não salva: é o que vira a cobrança do mês).
+async function folhaValor(empresa, arquivo) {
+  let foto = null;
+  folha.innerHTML = `<h2>Nota · ${esc(empresa)}</h2><img id="v-img" alt="Nota" style="max-height:200px;object-fit:contain;border-radius:8px" hidden><p class="suave" id="v-prep" style="margin:0">Preparando a foto…</p>
+    <label class="suave" for="v-valor">Valor da nota no Guappo (R$)</label><input id="v-valor" inputmode="decimal" placeholder="0,00">
+    <label class="suave" for="v-num">Número do pedido no Guappo (se tiver)</label><input id="v-num" inputmode="numeric">
+    <p class="msg-erro" id="v-e"></p>
+    <button class="botao principal" id="v-ok">Salvar nota</button>
+    <button class="botao" id="v-x" style="text-align:center;border:none">Cancelar</button>`;
+  fundo.hidden = false;
+  folha.querySelector("#v-x").onclick = () => { fundo.hidden = true; };
+  try { foto = await reduzir(arquivo); const i = folha.querySelector("#v-img"); i.src = foto; i.hidden = false; folha.querySelector("#v-prep").remove(); }
+  catch { folha.querySelector("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; }
+  folha.querySelector("#v-valor").focus();
+  folha.querySelector("#v-ok").onclick = async (e) => {
+    const valor = numero(folha.querySelector("#v-valor").value);
+    if (!foto) return (folha.querySelector("#v-e").textContent = "A foto não carregou.");
+    if (!(valor > 0)) return (folha.querySelector("#v-e").textContent = "Coloque o valor da nota.");
+    e.target.disabled = true;
+    try {
+      const d = hoje();
+      const base = { empresa, data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+      const fotoId = await acrescentar("notas_fotos", { ...base, foto });
+      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: folha.querySelector("#v-num").value.trim() });
+      fundo.hidden = true; mostrar();
+    } catch { folha.querySelector("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+  };
+}
+
+// Pedido do WhatsApp: anotado na noite anterior; de manhã quem separa confere e marca.
+function blocoPedido(p, temNota) {
+  const div = document.createElement("div");
+  div.className = "pedido";
+  div.innerHTML = `<span class="suave">Pedido anotado por ${esc(p.registradoPor)} (${dataBR(p.criadoEm.slice(0, 10)).slice(0, 5)} às ${esc(p.hora)})</span>
+    <span class="txt">${esc(p.texto)}</span>
+    ${p.separado ? `<span class="ok">✓ Separado conferindo o pedido · ${esc(p.separado.registradoPor)} às ${esc(p.separado.hora)}${p.separado.obs ? ` · ${esc(p.separado.obs)}` : ""}</span>` : `<span class="falta">○ Ainda não separado</span>`}
+    ${p.data < hoje() && !temNota ? `<span class="alerta-linha">Teve pedido e não tem nota assinada!</span>` : ""}<div class="acoes"></div>`;
+  const ac = div.querySelector(".acoes");
+  if (podeFoto && !p.separado && p.data === hoje()) {
+    const b = document.createElement("button"); b.className = "conferir"; b.textContent = "Separei conferindo item por item";
+    b.onclick = () => { const obs = prompt("Faltou ou trocou alguma coisa? (deixe em branco se saiu tudo certo)"); if (obs === null) return; gravar(p, { tipo: "separado", obs: obs.trim() }); };
+    ac.append(b);
   }
-  mostrar();
+  if (podeConferir && !p.separado && p.data >= hoje()) {
+    const b = document.createElement("button"); b.textContent = "Anular pedido";
+    b.onclick = () => { const m = prompt("Por que anular este pedido?"); if (m?.trim()) gravar(p, { tipo: "cancelado", motivo: m.trim() }); };
+    ac.append(b);
+  }
+  return div;
+}
+function folhaPedido(empresa, dia) {
+  folha.innerHTML = `<h2>Pedido · ${esc(empresa)}</h2>
+    <label class="suave" for="p-dia">Dia da entrega</label><input type="date" id="p-dia" value="${dia}" min="${hoje()}">
+    <label class="suave" for="p-txt">O que pediram (copie do WhatsApp)</label><textarea id="p-txt" rows="6" placeholder="Ex.: 30 pães franceses, 10 pães de queijo, 2 L de café"></textarea>
+    <p class="msg-erro" id="p-e"></p>
+    <button class="botao principal" id="p-ok">Salvar pedido</button>
+    <button class="botao" id="p-x" style="text-align:center;border:none">Cancelar</button>`;
+  folha.querySelector("#p-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#p-ok").onclick = async (e) => {
+    const texto = folha.querySelector("#p-txt").value.trim(), d = folha.querySelector("#p-dia").value;
+    if (!d || d < hoje()) return (folha.querySelector("#p-e").textContent = "Escolha o dia da entrega (hoje ou depois).");
+    if (texto.length < 3) return (folha.querySelector("#p-e").textContent = "Escreva o que pediram.");
+    e.target.disabled = true;
+    try {
+      await acrescentar("notas", { tipo: "pedido", empresa, texto, data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      fundo.hidden = true; campoDia.value = d; mostrar();
+    } catch { folha.querySelector("#p-e").textContent = "Não consegui salvar."; e.target.disabled = false; }
+  };
+  fundo.hidden = false;
+  folha.querySelector("#p-txt").focus();
 }
 
 async function gravar(n, dados) {
@@ -240,26 +320,136 @@ function folhaProblema(n) {
   fundo.hidden = false;
 }
 
-/* ---------- Mês por empresa (Daiane e Fábio) ---------- */
+/* ---------- Mês, cobrança e pagamento (Daiane; o Fábio só vê) ---------- */
 const campoMes = document.getElementById("mes");
 campoMes.value = hoje().slice(0, 7);
+const cobra = eu.papel === "dona";
+const FORMAS = ["PIX", "Dinheiro", "Transferência", "Boleto"];
+const mesBR = (m) => m.split("-").reverse().join("/");
+const proxDia10 = (m) => { const [a, mm] = m.split("-").map(Number); const d = new Date(a, mm, 10); return d.toISOString().slice(0, 10); };
+async function situacaoEmpresas(mes) {
+  const [regs, cobs] = await Promise.all([listar("notas", "mes", mes), listar("cobrancas", "mes", mes)]);
+  const notas = montar(regs).filter((n) => !n.cancelado);
+  const pedidos = montar(regs, "pedido").filter((p) => !p.cancelado);
+  const canc = new Set(cobs.filter((c) => c.tipo === "cancelamento").map((c) => c.refId));
+  const ok = cobs.filter((c) => !canc.has(c.id)).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  return EMPRESAS.map((e) => {
+    const ns = notas.filter((n) => n.empresa === e).sort((x, y) => x.data.localeCompare(y.data));
+    const total = ns.reduce((t, n) => t + (n.valor || 0), 0);
+    const cobranca = ok.filter((c) => c.tipo === "cobranca" && c.empresa === e).at(-1);
+    const pagos = ok.filter((c) => c.tipo === "pagamento" && c.empresa === e);
+    const pago = pagos.reduce((t, c) => t + c.valor, 0);
+    const devido = cobranca ? cobranca.total : total;
+    const falta = Math.round((devido - pago) * 100) / 100;
+    const estado = !ns.length && !cobranca ? "vazio" : falta <= 0.009 && (cobranca || pago) ? "pago" : cobranca && hoje() > cobranca.vencimento ? "atrasado" : cobranca ? "aberto" : "sem";
+    const pedidosSemNota = pedidos.filter((p) => p.empresa === e && p.data < hoje() && !ns.some((n) => n.data === p.data));
+    return { empresa: e, ns, total, cobranca, pagos, pago, falta, estado, semValor: ns.filter((n) => n.valor == null).length,
+      problemas: ns.filter((n) => n.conferido && !n.conferido.ok).length, semConferir: ns.filter((n) => !n.conferido).length, pedidosSemNota };
+  });
+}
 async function mostrarMes() {
-  const notas = montar(await listar("notas", "mes", campoMes.value)).filter((n) => !n.cancelado);
-  const por = {};
-  for (const n of notas) {
-    const t = (por[n.empresa] ||= { notas: 0, dias: new Set(), problemas: 0, semConferir: 0 });
-    t.notas++; t.dias.add(n.data);
-    if (n.conferido && !n.conferido.ok) t.problemas++;
-    if (!n.conferido) t.semConferir++;
-  }
-  const linhas = EMPRESAS.filter((e) => por[e]).map((e) => [e, por[e]]);
-  document.getElementById("tabela").innerHTML = linhas.length ? `
-    <table class="mes"><tr><th>Empresa</th><th class="n">Notas</th><th class="n">Dias</th><th class="n">Problemas</th><th class="n">Sem conferir</th></tr>
-    ${linhas.map(([n, t]) => `<tr><td><b>${esc(n)}</b></td><td class="n">${t.notas}</td><td class="n">${t.dias.size}</td>
-      <td class="n" style="${t.problemas ? "color:var(--alerta);font-weight:700" : ""}">${t.problemas}</td><td class="n">${t.semConferir}</td></tr>`).join("")}
-    </table>
-    <p class="suave" style="font-size:13px">Compare com o relatório a prazo de cada empresa no Guappo. As fotos de cada dia ficam na aba Dia.</p>`
+  const mes = campoMes.value;
+  const sit = (await situacaoEmpresas(mes)).filter((x) => x.estado !== "vazio");
+  const t = (f) => sit.reduce((s, x) => s + f(x), 0);
+  const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
+  const box = document.getElementById("tabela");
+  box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
+    <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
+    <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar. As fotos de cada dia ficam na aba Dia.</p>`
     : `<p class="suave">Nenhuma nota neste mês.</p>`;
+  for (const x of sit) {
+    const div = document.createElement("div");
+    div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
+    const atraso = x.estado === "atrasado" ? Math.round((new Date(hoje()) - new Date(x.cobranca.vencimento)) / 86400000) : 0;
+    div.innerHTML = `<div class="cab"><b style="font-size:17px">${esc(x.empresa)}</b><span class="selo ${ROT[x.estado][1]}">${ROT[x.estado][0]}${atraso ? ` há ${atraso} dia(s)` : ""}</span></div>
+      <span>${x.ns.length} nota(s) · <b>${reais(x.total)}</b>${x.pago ? ` · recebido ${reais(x.pago)}` : ""}${x.cobranca && x.falta > 0 ? ` · falta <b>${reais(x.falta)}</b>` : ""}</span>
+      ${x.cobranca ? `<span class="suave">Cobrança de ${reais(x.cobranca.total)} enviada em ${dataBR(x.cobranca.criadoEm.slice(0, 10))}, vence ${dataBR(x.cobranca.vencimento)}</span>` : ""}
+      ${x.pagos.map((pg) => `<span class="ok">✓ ${reais(pg.valor)} em ${dataBR(pg.dataPagto)} (${esc(pg.forma)})</span>`).join("")}
+      ${x.semValor ? `<span class="alerta-linha">${x.semValor} nota(s) sem valor: o total está incompleto</span>` : ""}
+      ${x.problemas ? `<span class="alerta-linha">${x.problemas} nota(s) com problema na conferência</span>` : ""}
+      ${x.pedidosSemNota.length ? `<span class="alerta-linha">Pedido sem nota assinada em: ${x.pedidosSemNota.map((p) => dataBR(p.data).slice(0, 5)).join(", ")}</span>` : ""}
+      <div class="acoes"></div>`;
+    const ac = div.querySelector(".acoes");
+    const bt = (txt, cls, fn) => { const b = document.createElement("button"); b.textContent = txt; if (cls) b.className = cls; b.onclick = fn; ac.append(b); };
+    bt("Ver notas do mês", "", () => verNotasMes(x));
+    if (cobra && x.estado !== "pago") {
+      bt(x.cobranca ? "Cobrar de novo" : "Gerar cobrança", x.cobranca ? "" : "principal", () => folhaCobranca(x, mes));
+      bt("Recebi pagamento", x.cobranca ? "principal" : "", () => folhaPagamento(x, mes));
+    }
+    box.querySelector("#emps").append(div);
+  }
+}
+function textoCobranca(x, mes, venc, pix) {
+  return `Olá! Segue o fechamento de ${mesBR(mes)} da ${x.empresa} na Madalena's Coffee Shop:\n\n`
+    + x.ns.map((n) => `${dataBR(n.data).slice(0, 5)}: ${n.valor != null ? reais(n.valor) : "(sem valor)"}${n.pedidoGuappo ? ` (pedido ${n.pedidoGuappo})` : ""}`).join("\n")
+    + `\n\nTotal: ${reais(x.total)}\nVencimento: ${dataBR(venc)}${pix ? `\nPIX: ${pix}` : ""}\n\nTodas as notas assinadas estão guardadas com foto. Qualquer dúvida, é só chamar. Obrigada!`;
+}
+function folhaCobranca(x, mes) {
+  let pix = ""; try { pix = localStorage.getItem("madalenas.pix") || ""; } catch {}
+  folha.innerHTML = `<h2>Cobrança · ${esc(x.empresa)} · ${mesBR(mes)}</h2>
+    ${x.semValor ? `<p class="alerta-linha" style="margin:0">Atenção: ${x.semValor} nota(s) sem valor.</p>` : ""}
+    <label class="suave" for="c-v">Vencimento</label><input type="date" id="c-v" value="${proxDia10(mes)}">
+    <label class="suave" for="c-pix">Chave PIX (fica guardada neste celular)</label><input type="text" id="c-pix" value="${esc(pix)}" autocomplete="off">
+    <label class="suave">Mensagem</label><textarea id="c-t" rows="12"></textarea>
+    <p class="msg-erro" id="c-e"></p>
+    <button class="botao principal" id="c-zap">Abrir no WhatsApp e marcar como cobrado</button>
+    <button class="botao" id="c-cop" style="text-align:center">Copiar a mensagem e marcar como cobrado</button>
+    <button class="botao" id="c-x" style="text-align:center;border:none">Cancelar</button>`;
+  const atualiza = () => { folha.querySelector("#c-t").value = textoCobranca(x, mes, folha.querySelector("#c-v").value, folha.querySelector("#c-pix").value.trim()); };
+  folha.querySelector("#c-v").onchange = atualiza; folha.querySelector("#c-pix").oninput = atualiza; atualiza();
+  folha.querySelector("#c-x").onclick = () => { fundo.hidden = true; };
+  const salvar = async () => {
+    const venc = folha.querySelector("#c-v").value;
+    if (!venc) { folha.querySelector("#c-e").textContent = "Escolha o vencimento."; return false; }
+    try { localStorage.setItem("madalenas.pix", folha.querySelector("#c-pix").value.trim()); } catch {}
+    await acrescentar("cobrancas", { tipo: "cobranca", empresa: x.empresa, mes, total: Math.round(x.total * 100) / 100, vencimento: venc, qtdNotas: x.ns.length,
+      texto: folha.querySelector("#c-t").value, data: hoje(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+    return true;
+  };
+  folha.querySelector("#c-zap").onclick = async () => {
+    const txt = folha.querySelector("#c-t").value;
+    const w = window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+    try { if (await salvar()) { fundo.hidden = true; mostrarMes(); } } catch { folha.querySelector("#c-e").textContent = "Não consegui salvar."; }
+  };
+  folha.querySelector("#c-cop").onclick = async () => {
+    try { await navigator.clipboard.writeText(folha.querySelector("#c-t").value); } catch { folha.querySelector("#c-t").select(); document.execCommand?.("copy"); }
+    try { if (await salvar()) { alert("Mensagem copiada. Cole no WhatsApp da empresa."); fundo.hidden = true; mostrarMes(); } } catch { folha.querySelector("#c-e").textContent = "Não consegui salvar."; }
+  };
+  fundo.hidden = false;
+}
+function folhaPagamento(x, mes) {
+  let forma = "PIX";
+  folha.innerHTML = `<h2>Pagamento · ${esc(x.empresa)} · ${mesBR(mes)}</h2>
+    <label class="suave" for="g-v">Valor recebido (R$)</label><input id="g-v" inputmode="decimal" value="${x.falta > 0 ? String(x.falta.toFixed(2)).replace(".", ",") : ""}">
+    <label class="suave" for="g-d">Dia que caiu</label><input type="date" id="g-d" value="${hoje()}">
+    <label class="suave">Como pagou</label><div class="opcoes" id="g-f">${FORMAS.map((f) => `<button type="button" data-v="${f}" aria-pressed="${f === forma}" style="${f === forma ? "background:var(--ok);border-color:var(--ok);color:#fff" : ""}">${f}</button>`).join("")}</div>
+    <p class="msg-erro" id="g-e"></p>
+    <button class="botao principal" id="g-ok">Salvar pagamento</button>
+    <button class="botao" id="g-x" style="text-align:center;border:none">Cancelar</button>`;
+  folha.querySelector("#g-f").onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; forma = v;
+    folha.querySelectorAll("#g-f button").forEach((b) => { const on = b.dataset.v === v; b.setAttribute("aria-pressed", on); b.style.cssText = on ? "background:var(--ok);border-color:var(--ok);color:#fff" : ""; }); };
+  folha.querySelector("#g-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#g-ok").onclick = async (e) => {
+    const valor = numero(folha.querySelector("#g-v").value), d = folha.querySelector("#g-d").value;
+    if (!(valor > 0)) return (folha.querySelector("#g-e").textContent = "Coloque o valor recebido.");
+    if (!d) return (folha.querySelector("#g-e").textContent = "Coloque o dia.");
+    e.target.disabled = true;
+    try {
+      await acrescentar("cobrancas", { tipo: "pagamento", empresa: x.empresa, mes, valor: Math.round(valor * 100) / 100, dataPagto: d, forma, data: hoje(),
+        registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      fundo.hidden = true; mostrarMes();
+    } catch { folha.querySelector("#g-e").textContent = "Não consegui salvar."; e.target.disabled = false; }
+  };
+  fundo.hidden = false;
+}
+function verNotasMes(x) {
+  folha.innerHTML = `<h2>${esc(x.empresa)} · notas do mês</h2>
+    <div style="display:flex;flex-direction:column;gap:8px">${x.ns.map((n) => `<div class="nota"><img data-foto="${esc(n.fotoId)}" alt="Nota"><div class="info"><b>${dataBR(n.data)} · ${n.valor != null ? reais(n.valor) : "sem valor"}</b>
+      <span class="suave">${n.conferido ? (n.conferido.ok ? "✓ conferida" : "✗ " + esc(PROBLEMAS[n.conferido.problema])) : "sem conferir"}</span></div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
+    <button class="botao" id="n-x" style="text-align:center">Fechar</button>`;
+  folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
+  folha.querySelector("#n-x").onclick = () => { fundo.hidden = true; };
+  fundo.hidden = false;
 }
 campoMes.onchange = mostrarMes;
 campoDia.onchange = mostrar;

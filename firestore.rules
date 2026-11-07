@@ -69,8 +69,14 @@ service cloud.firestore {
     match /notas/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid && (
-           request.resource.data.tipo == "nota"
+           request.resource.data.tipo in ["nota", "pedido", "separado"]
         || (request.resource.data.tipo in ["conferido", "cancelado"] && papel(["dona", "lider"])));
+    }
+    // Cobrança e pagamento das empresas: só a dona registra; o gestor vê.
+    match /cobrancas/{id} {
+      allow read: if papel(["dona", "gestor"]);
+      allow create: if papel(["dona"]) && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.tipo in ["cobranca", "pagamento", "cancelamento"];
       allow update, delete: if false;
     }
     // Fotos das notas assinadas (reduzidas no celular, até ~1 MB cada).
