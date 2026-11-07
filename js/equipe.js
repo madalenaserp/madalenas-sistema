@@ -46,6 +46,9 @@ export const pode = {
   // Produção: a equipe da produção e da confeitaria lança; a Daiane também; o Fábio só vê.
   producao: (u) => ["dona", "gestor"].includes(u?.papel) || ["Produção", "Confeitaria"].includes(u?.setor),
   lancarProducao: (u) => u?.papel === "dona" || (u?.papel !== "gestor" && ["Produção", "Confeitaria"].includes(u?.setor)),
+  // Saídas do caixa: caixa, balconistas e líderes registram; Daiane e Fábio acompanham (o Fábio só vê).
+  verCaixa: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || ["Caixa", "Balcão"].includes(u?.setor),
+  lancarCaixa: (u) => ["dona", "lider"].includes(u?.papel) || (u?.papel !== "gestor" && ["Caixa", "Balcão"].includes(u?.setor)),
   verConsumo: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
   registrarConsumo: (u) => ["dona", "lider"].includes(u?.papel) || u?.setor === "Caixa",
 };

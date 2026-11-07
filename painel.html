@@ -102,6 +102,13 @@ async function mostrar() {
   for (const r of fichasRegs.filter((r) => r.tipo === "ficha")) fichaAtual[r.produto] = r;
   const fichasEsperando = Object.values(fichaAtual).filter((f) => !fichasRegs.some((r) => r.refId === f.id)).map((f) => `${f.produto} <span class="suave">(${f.registradoPor})</span>`);
   const fichasAprovadas = Object.values(fichaAtual).filter((f) => fichasRegs.filter((r) => r.refId === f.id).at(-1)?.tipo === "aprovacao").length;
+  const cxBruto = await listar("caixa", "data", campoDia.value);
+  const cxCanc = new Set(cxBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  const cx = cxBruto.filter((r) => r.tipo === "movimento" && !cxCanc.has(r.id));
+  const CX = { sangria: "Sangria", vale: "Vale", diarista: "Diarista", compra: "Compra", fornecedor: "Fornecedor", reforco: "Reforço de troco", outro: "Outra saída" };
+  const cxSem = cx.filter((r) => r.tipoMov !== "reforco" && r.autorizadoPor === "Ninguém")
+    .map((r) => `${CX[r.tipoMov]}: ${r.para} · ${(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} <span class="suave">(${r.registradoPor} às ${r.hora})</span>`);
+  const cxSaiu = cx.filter((r) => r.tipoMov !== "reforco").reduce((s2, r) => s2 + r.valor, 0);
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -151,6 +158,8 @@ async function mostrar() {
     `<div class="cartao"><h2>Fichas técnicas</h2><p class="suave">${fichasAprovadas} aprovada(s). <a href="fichas.html">Abrir</a></p></div>` +
     bloco("Perdas que foram para o lixo", perdasLixo, "alerta") +
     `<div class="cartao"><h2>Perdas e sobras</h2><p class="suave">${perdas.length} registro(s) hoje · ${perdasLixo.length} para o lixo. <a href="perdas.html">Ver fotos e resumo do mês</a></p></div>` +
+    bloco("Saídas do caixa sem autorização", cxSem, "alerta") +
+    `<div class="cartao"><h2>Saídas do caixa</h2><p class="suave">${cx.length} registro(s) · saíram ${cxSaiu.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. <a href="caixa.html">Ver tudo</a></p></div>` +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +
     `<div class="cartao"><h2>Consumo da equipe</h2><p class="suave">${consumo.length} registro(s) · total ${reais(consumoTotal)}${cancelados.size ? ` · ${cancelados.size} cancelado(s)` : ""}. <a href="consumo.html">Ver tudo</a></p></div>` +
     bloco("Faltas", faltas, "alerta") +

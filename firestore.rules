@@ -128,6 +128,23 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Saídas do caixa (sangria, vale, diarista, compra, fornecedor, reforço): caixa, balcão e líderes registram; cancelar só dona e líderes.
+    function caixaBalcao() { return caixaOuLider() || (ativo() && perfil().setor == "Balcão"); }
+    function caixaBalcaoEdita() { return caixaOuLiderEdita() || (edita() && perfil().setor == "Balcão"); }
+    match /caixa/{id} {
+      allow read: if caixaBalcao();
+      allow create: if caixaBalcaoEdita() && request.resource.data.registradoPorUid == request.auth.uid && (
+           (request.resource.data.tipo == "movimento" && request.resource.data.valor is number && request.resource.data.valor > 0)
+        || (request.resource.data.tipo == "cancelamento" && papel(["dona", "lider"])));
+      allow update, delete: if false;
+    }
+    match /caixa_fotos/{id} {
+      allow read: if caixaBalcao();
+      allow create: if caixaBalcaoEdita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+
     match /notas_fotos/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid

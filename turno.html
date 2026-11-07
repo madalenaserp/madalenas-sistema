@@ -35,6 +35,7 @@ if (modoTeste) document.getElementById("teste").innerHTML =
 const secoes = [
   { titulo: "Presença e apresentação", desc: "Quem veio, faltou, folga, uniforme e sapato", link: "presenca.html", mostrar: pode.marcarPresenca(eu) },
   { titulo: "Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
+  { titulo: "Saídas do caixa", desc: "Sangria, vale, diarista, compra e fornecedor, com quem autorizou", link: "caixa.html", mostrar: pode.verCaixa(eu) },
   { titulo: "Consumo da equipe", desc: "O que cada funcionário consumiu e como pagou", link: "consumo.html", mostrar: pode.verConsumo(eu) },
   { titulo: pode.verLivroCompleto(eu) ? "Rodízio do balcão" : "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização, com foto antes e depois", link: "tarefas.html", mostrar: pode.verLivroCompleto(eu) || eu.setor === "Balcão" },
   { titulo: "Produção", desc: "Produção do dia, perdas e encomendas da panificadora e da confeitaria", link: "producao.html", mostrar: pode.producao(eu) },
