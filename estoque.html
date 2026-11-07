@@ -195,8 +195,9 @@ async function abaSaldo() {
 /* ---------- Registrar ---------- */
 function abaMov() {
   if (!lanca) { sec.innerHTML = `<p class="suave">Você só acompanha o estoque.</p>`; return; }
-  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}</div>`;
-  sec.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => (b.dataset.a === "contagem" ? contagem() : formulario(b.dataset.a))));
+  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}
+    <button data-a="ler" style="border-style:dashed"><b>📄 Ler nota pela foto</b><span class="suave">Teste: o sistema tenta preencher a compra sozinho</span></button></div>`;
+  sec.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => (b.dataset.a === "contagem" ? contagem() : b.dataset.a === "ler" ? lerNota() : formulario(b.dataset.a))));
 }
 const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
@@ -271,6 +272,66 @@ function formulario(acao) {
     } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; e.target.disabled = false; }
   };
   fundo.hidden = false;
+}
+
+// Ler a nota pela foto (teste): lê o texto no celular, separa os itens e a pessoa confere tudo antes de salvar.
+async function lerNota() {
+  let urlFoto = null, itens = [], local = localPadrao;
+  folha.innerHTML = `<h2>📄 Ler nota pela foto</h2>
+    <p class="suave" style="margin:0;font-size:13px">Funciona melhor com cupom ou nota <b>impressa</b>, reta, com boa luz. Nota escrita à mão quase nunca dá certo: aí use "Chegou compra".</p>
+    <label class="camera" id="l-cam">📷 <span>Tirar foto da nota</span><input type="file" accept="image/*" capture="environment"></label>
+    <p id="l-prog" class="suave" style="margin:0"></p><div id="l-itens"></div>
+    <p class="msg-erro" id="l-e"></p>
+    <button class="botao" id="l-x" style="text-align:center;border:none">Cancelar</button>`;
+  folha.querySelector("#l-x").onclick = () => { fundo.hidden = true; };
+  fundo.hidden = false;
+  folha.querySelector("#l-cam input").onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const prog = folha.querySelector("#l-prog");
+    try {
+      urlFoto = await reduzir(f);
+      folha.querySelector("#l-cam").innerHTML = `<img src="${urlFoto}" alt="Nota" style="max-height:160px">`;
+      prog.textContent = "Lendo a nota… (na primeira vez demora um pouco para preparar o leitor)";
+      const { lerTexto, separarItens } = await import("./js/lernota.js");
+      const texto = await lerTexto(urlFoto, (st, p) => { prog.textContent = st === "recognizing text" ? `Lendo a nota… ${Math.round(p * 100)}%` : "Preparando o leitor…"; });
+      itens = separarItens(texto, INSUMOS);
+      prog.innerHTML = itens.length ? `Achei <b>${itens.length}</b> item(ns). <b>Confira cada um</b> antes de salvar.` : `Não consegui achar os itens nesta foto. Tente outra foto mais reta e com mais luz, ou use "Chegou compra".`;
+      desenharItens(texto);
+    } catch (err) { prog.textContent = "O leitor não funcionou neste celular. Use \"Chegou compra\"."; console.error(err); }
+  };
+  const opcoesIns = (sel) => `<option value="">— não é do estoque —</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}`;
+  function desenharItens(texto) {
+    const box = folha.querySelector("#l-itens");
+    if (!itens.length) { box.innerHTML = `<details><summary class="suave">Ver o texto que o leitor entendeu</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(texto)}</pre></details>`; return; }
+    box.innerHTML = `${itens.map((it, k) => `<div class="cartao" style="padding:10px;margin:6px 0;display:flex;flex-direction:column;gap:6px" data-k="${k}">
+        <span class="suave" style="font-size:13px">Na nota: <b>${esc(it.descricao)}</b></span>
+        <select class="sel" data-f="insumoId">${opcoesIns(it.insumoId)}</select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="suave" style="font-size:12px">Quantidade<input data-f="qtd" inputmode="decimal" value="${n(it.qtd)}" style="font-size:16px;padding:8px;border:1px solid var(--linha);border-radius:8px;width:100%;box-sizing:border-box"></label>
+          <label class="suave" style="font-size:12px">Preço de cada (R$)<input data-f="preco" inputmode="decimal" value="${String(it.preco.toFixed(2)).replace(".", ",")}" style="font-size:16px;padding:8px;border:1px solid var(--linha);border-radius:8px;width:100%;box-sizing:border-box"></label></div></div>`).join("")}
+      <label class="rot">Onde</label>${grupo("l-local", LOCAIS, local)}
+      <label class="rot" for="l-forn">Fornecedor</label><input type="text" id="l-forn" autocomplete="off" style="font-size:17px;padding:10px;border:1px solid var(--linha);border-radius:10px;width:100%;box-sizing:border-box">
+      <details><summary class="suave" style="font-size:13px">Ver o texto que o leitor entendeu</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(texto)}</pre></details>
+      <button class="botao principal" id="l-ok" style="text-align:center;margin-top:8px">Conferi: salvar compra</button>`;
+    ligaGrupo("#l-local", (v) => { local = v; });
+    box.querySelectorAll("[data-k]").forEach((c) => c.querySelectorAll("[data-f]").forEach((el) => (el.oninput = el.onchange = () => { itens[c.dataset.k][el.dataset.f] = el.dataset.f === "insumoId" ? el.value : numero(el.value); })));
+    box.querySelector("#l-ok").onclick = async (e) => {
+      const erro = folha.querySelector("#l-e");
+      const validos = itens.filter((it) => it.insumoId);
+      const fornecedor = folha.querySelector("#l-forn").value.trim();
+      if (!validos.length) return (erro.textContent = "Escolha o insumo de pelo menos um item.");
+      if (validos.some((it) => !(it.qtd > 0) || !(it.preco > 0))) return (erro.textContent = "Tem item sem quantidade ou sem preço.");
+      if (!fornecedor) return (erro.textContent = "Escreva o fornecedor.");
+      e.target.disabled = true;
+      try {
+        const d = hoje();
+        const base = { data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+        const fotoId = await acrescentar("estoque_fotos", { ...base, foto: urlFoto });
+        for (const it of validos) await acrescentar("estoque", { ...base, criadoEm: new Date().toISOString(), tipo: "mov", acao: "entrada", insumoId: it.insumoId, nome: ins(it.insumoId).nome, unidade: ins(it.insumoId).unidade,
+          qtd: it.qtd, local, de: null, para: null, preco: Math.round(it.preco * 100) / 100, fornecedor, obs: `Lido da nota: ${it.descricao}`, fotoId, codigo: null, lidoPelaFoto: true });
+        fundo.hidden = true; ir("hist");
+      } catch { erro.textContent = "Não consegui salvar. Verifique a internet."; e.target.disabled = false; }
+    };
+  }
 }
 
 async function contagem() {
