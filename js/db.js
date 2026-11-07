@@ -40,8 +40,10 @@ export async function listar(colecao, campo, valor, campo2, valores2) {
 // Acrescenta um registro novo (para livros em que nada se altera nem se apaga).
 export async function acrescentar(colecao, dados) {
   const f = await firebase();
-  if (f) return f.fs.addDoc(f.fs.collection(f.db, colecao), { ...dados, gravadoEm: f.fs.serverTimestamp() });
-  const tudo = lerLocal(colecao); tudo[`${Date.now()}_${Math.random().toString(36).slice(2, 7)}`] = dados; gravarLocal(colecao, tudo);
+  if (f) return (await f.fs.addDoc(f.fs.collection(f.db, colecao), { ...dados, gravadoEm: f.fs.serverTimestamp() })).id;
+  const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const tudo = lerLocal(colecao); tudo[id] = dados; gravarLocal(colecao, tudo);
+  return id;
 }
 
 // Lista os documentos em que campo está entre "de" e "ate" (inclusive). Ex.: datas de entrega da semana.
@@ -55,4 +57,11 @@ export async function listarEntre(colecao, campo, de, ate) {
   return Object.entries(lerLocal(colecao))
     .filter(([, d]) => d[campo] >= de && d[campo] <= ate)
     .map(([id, d]) => ({ id, ...d }));
+}
+
+// Lê um documento pelo id (ou null).
+export async function ler(colecao, id) {
+  const f = await firebase();
+  if (f) { const d = await f.fs.getDoc(f.fs.doc(f.db, colecao, id)); return d.exists() ? { id: d.id, ...d.data() } : null; }
+  const d = lerLocal(colecao)[id]; return d ? { id, ...d } : null;
 }

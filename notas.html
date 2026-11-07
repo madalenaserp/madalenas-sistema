@@ -16,27 +16,26 @@
   .empresa { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
   .empresa .cab { display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .empresa .cab b { font-size:18px; }
-  .empresa .cab button { font-size:14px; padding:6px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; cursor:pointer; }
-  .pedido { border-top:1px dashed var(--linha); padding-top:8px; display:flex; flex-direction:column; gap:6px; }
-  .pedido.cancelado { opacity:.55; }
-  .pedido.cancelado .resumo { text-decoration:line-through; }
-  .pedido .resumo { font-size:16px; }
-  .passos { display:flex; flex-direction:column; gap:3px; font-size:14px; }
-  .passos .ok { color:var(--ok); }
-  .passos .falta { color:var(--suave); }
-  .passos .erro { color:var(--alerta); font-weight:600; }
+  .foto-btn { white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px; font-size:15px; padding:10px 14px; border-radius:10px; background:var(--laranja); color:#fff; font-weight:600; cursor:pointer; border:none; }
+  .foto-btn.secundario { background:#fff; color:var(--tinta); border:1px solid var(--linha); font-weight:400; font-size:14px; padding:8px 12px; }
+  .foto-btn input { display:none; }
+  .nota { display:flex; gap:10px; border-top:1px dashed var(--linha); padding-top:8px; }
+  .nota.cancelada { opacity:.5; }
+  .nota img { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; flex-shrink:0; }
+  .nota .info { display:flex; flex-direction:column; gap:4px; font-size:14px; flex:1; }
+  .ok { color:var(--ok); }
+  .falta { color:var(--suave); }
+  .erro { color:var(--alerta); font-weight:600; }
   .acoes { display:flex; gap:6px; flex-wrap:wrap; }
-  .acoes button { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--linha); background:#fff; cursor:pointer; }
-  .acoes button.avancar { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .acoes button { font-size:14px; padding:8px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; cursor:pointer; }
   .acoes button.conferir { background:var(--ok); color:#fff; border-color:var(--ok); font-weight:600; }
   .acoes button.problema { color:var(--alerta); border-color:var(--alerta); }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
   .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
   .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
   .folha h2 { margin:0; font-size:19px; }
-  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
-  .folha input[type=text], .folha input[inputmode], .folha textarea { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; font-family:inherit; }
-  .folha label.marca { display:flex; gap:10px; align-items:center; border:1px solid var(--linha); border-radius:10px; padding:12px; }
-  .folha label.marca input { width:20px; height:20px; }
+  .folha input[type=text] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
   .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
   .opcoes button { padding:12px 8px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; }
   .opcoes button[aria-pressed="true"] { background:var(--alerta); color:#fff; border-color:var(--alerta); font-weight:600; }
@@ -57,7 +56,7 @@
     <div class="cartao">
       <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
       <p class="suave" id="resumo" style="margin:8px 0 0"></p>
-      <p class="suave" style="margin:6px 0 0;font-size:13px">O Guappo é a verdade. Sem lançamento, não sai. Sem assinatura de quem retira, não sai.</p>
+      <p class="suave" style="margin:6px 0 0;font-size:13px">Lançou no Guappo e a empresa assinou? Tire a foto da via assinada. Pronto.</p>
     </div>
     <div id="empresas" style="display:flex;flex-direction:column;gap:8px"></div>
   </section>
@@ -70,12 +69,13 @@
 </main>
 
 <div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+<div class="zoom" id="zoom" hidden><img alt="Nota assinada"></div>
 
 <script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
-import { acrescentar, listar } from "./js/db.js";
+import { acrescentar, listar, ler } from "./js/db.js";
 
 const eu = await exigirUsuario();
 if (!pode.notasEmpresas(eu)) location.href = "turno.html";
@@ -84,208 +84,181 @@ const veMes = pode.verPainel(eu);
 
 // TECMAR, Tecsea e Redsea são contas diferentes no Guappo.
 const EMPRESAS = ["ABG", "TWAS", "TECMAR", "Tecsea", "Redsea", "LANDSEAAIR", "Artemis", "Cliente Bruno"];
-const PROBLEMAS = {
-  sem_via: "Faltou a via na pasta",
-  sem_assinatura: "Via sem assinatura",
-  fora_guappo: "Não está no Guappo",
-  outro: "Outro problema",
-};
+const PROBLEMAS = { sem_via: "Faltou a via na pasta", sem_assinatura: "Via sem assinatura", fora_guappo: "Não está no Guappo", outro: "Outro problema" };
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const agora = () => new Date().toTimeString().slice(0, 5);
 const campoDia = document.getElementById("dia");
 campoDia.value = hoje();
 
-// Cada passo é um registro novo; nada se altera nem se apaga.
+// A foto fica guardada à parte (coleção notas_fotos); aqui só os registros leves. Nada se altera nem se apaga.
 function montar(registros) {
-  const passos = registros.filter((r) => r.tipo !== "pedido");
+  const passos = registros.filter((r) => r.tipo !== "nota");
   const ultimo = (id, tipo) => passos.filter((r) => r.refId === id && r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
-  return registros.filter((r) => r.tipo === "pedido").sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).map((p) => ({
-    ...p,
-    lancado: ultimo(p.id, "lancado"),
-    assinada: ultimo(p.id, "assinada"),
-    conferido: ultimo(p.id, "conferido"),
-    cancelado: ultimo(p.id, "cancelado"),
-  }));
+  return registros.filter((r) => r.tipo === "nota").sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
+    .map((n) => ({ ...n, conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado") }));
 }
-const temProblema = (p) => p.conferido && !p.conferido.ok;
+
+// Reduz a foto para caber no banco (cerca de 150 KB) sem perder a leitura do número e da assinatura.
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1400, qualidade = 0.7, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 700000 && lado > 500);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+
+const miniaturas = {};
+async function miniatura(fotoId, el) {
+  miniaturas[fotoId] ??= ler("notas_fotos", fotoId).then((d) => d?.foto || "");
+  el.src = await miniaturas[fotoId];
+}
 
 async function mostrar() {
   const d = campoDia.value;
-  const pedidos = montar(await listar("notas", "data", d));
-  const ativos = pedidos.filter((p) => !p.cancelado);
-  const semLancar = ativos.filter((p) => !p.lancado).length;
-  const semConferir = ativos.filter((p) => !p.conferido).length;
-  const problemas = ativos.filter(temProblema).length;
-  document.getElementById("resumo").innerHTML = `${dataBR(d)} · ${ativos.length} pedido(s)` +
-    (semLancar ? ` · <span class="selo pendente">${semLancar} sem lançar</span>` : "") +
+  const notas = montar(await listar("notas", "data", d));
+  const ativas = notas.filter((n) => !n.cancelado);
+  const semConferir = ativas.filter((n) => !n.conferido).length;
+  const problemas = ativas.filter((n) => n.conferido && !n.conferido.ok).length;
+  const comNota = new Set(ativas.map((n) => n.empresa)).size;
+  document.getElementById("resumo").innerHTML = `${dataBR(d)} · ${comNota} empresa(s) com nota` +
     (semConferir ? ` · <span class="selo pendente">${semConferir} sem conferir</span>` : "") +
     (problemas ? ` · <span class="selo alerta">${problemas} com problema</span>` : "") +
-    (ativos.length && !semConferir && !problemas ? ` · <span class="selo ok">tudo conferido</span>` : "");
+    (ativas.length && !semConferir && !problemas ? ` · <span class="selo ok">tudo conferido</span>` : "");
 
   const box = document.getElementById("empresas");
   box.innerHTML = "";
-  const empresas = [...EMPRESAS, ...new Set(pedidos.map((p) => p.empresa).filter((e) => !EMPRESAS.includes(e)))];
-  for (const nome of empresas) {
-    const meus = pedidos.filter((p) => p.empresa === nome);
+  for (const nome of EMPRESAS) {
+    const minhas = notas.filter((n) => n.empresa === nome);
     const div = document.createElement("div");
     div.className = "empresa";
-    div.innerHTML = `<div class="cab"><b>${esc(nome)}</b>${!meus.length ? `<span class="suave">sem pedido</span>` : ""}</div>`;
-    if (d === hoje() || d > hoje()) {
-      const b = document.createElement("button");
-      b.textContent = meus.length ? "+ Outro pedido" : "+ Pedido";
-      b.onclick = () => folhaPedido(nome);
-      div.querySelector(".cab").append(b);
+    div.innerHTML = `<div class="cab"><b>${esc(nome)}</b>${minhas.length ? "" : `<span class="suave">sem nota</span>`}</div>`;
+    if (d === hoje()) {
+      const rot = document.createElement("label");
+      rot.className = "foto-btn" + (minhas.length ? " secundario" : "");
+      rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" capture="environment">`;
+      rot.querySelector("input").onchange = (e) => e.target.files[0] && salvarFoto(nome, e.target.files[0], rot);
+      div.querySelector(".cab").append(rot);
     }
-    for (const p of meus) div.append(linhaPedido(p));
+    for (const n of minhas) div.append(linhaNota(n));
     box.append(div);
   }
 }
 
-function linhaPedido(p) {
+function linhaNota(n) {
   const div = document.createElement("div");
-  div.className = "pedido" + (p.cancelado ? " cancelado" : "");
-  const passo = (feito, texto, faltando) => `<span class="${feito ? "ok" : "falta"}">${feito ? "✓" : "○"} ${feito ? texto : faltando}</span>`;
-  const conf = p.conferido
-    ? (p.conferido.ok ? `<span class="ok">✓ Conferido por ${esc(p.conferido.registradoPor)} às ${esc(p.conferido.hora)}: na pasta</span>`
-                      : `<span class="erro">✗ ${esc(PROBLEMAS[p.conferido.problema])}${p.conferido.detalhe ? `: ${esc(p.conferido.detalhe)}` : ""} (${esc(p.conferido.registradoPor)}, ${esc(p.conferido.hora)}, foi para o Livro)</span>`)
-    : `<span class="falta">○ Falta conferir (7h)</span>`;
-  div.innerHTML = `
-    <div class="resumo">${esc(p.resumo)}</div>
-    <div class="passos">
-      <span class="ok">✓ Pedido anotado por ${esc(p.registradoPor)} às ${esc(p.hora)}</span>
-      ${passo(p.lancado, `Lançado no Guappo · pedido nº ${esc(p.lancado?.numero)} (${esc(p.lancado?.registradoPor)})`, "Falta lançar no Guappo a prazo")}
-      ${passo(p.assinada, `Retirado e assinado por ${esc(p.assinada?.quem)}${p.assinada?.foto ? " · foto enviada no grupo" : " · <b style=\"color:var(--alerta)\">foto não enviada</b>"}`, "Falta retirar e assinar")}
-      ${conf}
-      ${p.cancelado ? `<span class="falta">Cancelado por ${esc(p.cancelado.registradoPor)}: ${esc(p.cancelado.motivo)}</span>` : ""}
-    </div>
-    <div class="acoes"></div>`;
-  const acoes = div.querySelector(".acoes");
-  if (p.cancelado || campoDia.value < hoje()) return div;
-  const botao = (texto, classe, acao) => { const b = document.createElement("button"); b.textContent = texto; b.className = classe; b.onclick = acao; acoes.append(b); };
-  if (!p.lancado) botao("Lancei no Guappo", "avancar", () => folhaLancado(p));
-  else if (!p.assinada) botao("Retirou e assinou", "avancar", () => folhaAssinada(p));
-  if (podeConferir && !p.conferido) {
-    if (p.lancado && p.assinada) botao("Na pasta, tudo certo", "conferir", () => gravar(p, { tipo: "conferido", ok: true }));
-    botao("Problema", "problema", () => folhaProblema(p));
+  div.className = "nota" + (n.cancelado ? " cancelada" : "");
+  const img = document.createElement("img");
+  img.alt = `Nota ${n.empresa}`;
+  img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+  miniatura(n.fotoId, img);
+  const conf = n.cancelado ? `<span class="falta">Cancelada por ${esc(n.cancelado.registradoPor)}: ${esc(n.cancelado.motivo)}</span>`
+    : !n.conferido ? `<span class="falta">○ Falta a conferência da Dara</span>`
+    : n.conferido.ok ? `<span class="ok">✓ Na pasta · conferido por ${esc(n.conferido.registradoPor)} às ${esc(n.conferido.hora)}</span>`
+    : `<span class="erro">✗ ${esc(PROBLEMAS[n.conferido.problema])}${n.conferido.detalhe ? `: ${esc(n.conferido.detalhe)}` : ""} (${esc(n.conferido.registradoPor)}, foi para o Livro)</span>`;
+  const info = document.createElement("div");
+  info.className = "info";
+  info.innerHTML = `<span class="ok">✓ Foto por ${esc(n.registradoPor)} às ${esc(n.hora)}</span>${conf}<div class="acoes"></div>`;
+  const acoes = info.querySelector(".acoes");
+  if (podeConferir && !n.conferido && !n.cancelado && campoDia.value === hoje()) {
+    const b = (t, c, f) => { const x = document.createElement("button"); x.textContent = t; x.className = c; x.onclick = f; acoes.append(x); };
+    b("Na pasta, certo", "conferir", () => gravar(n, { tipo: "conferido", ok: true }));
+    b("Problema", "problema", () => folhaProblema(n));
+    b("Foto errada", "", () => { const m = prompt("Por que anular esta foto?"); if (m?.trim()) gravar(n, { tipo: "cancelado", motivo: m.trim() }); });
   }
-  if (podeConferir && !p.conferido) botao("Cancelar", "", () => {
-    const motivo = prompt(`Por que cancelar o pedido da ${p.empresa}?`);
-    if (motivo?.trim()) gravar(p, { tipo: "cancelado", motivo: motivo.trim() });
-  });
+  div.append(img, info);
   return div;
 }
 
-async function gravar(p, dados) {
+async function salvarFoto(empresa, arquivo, rotulo) {
+  rotulo.style.pointerEvents = "none";
+  rotulo.firstChild.textContent = "Enviando…";
   try {
-    await acrescentar("notas", { ...dados, refId: p.id, empresa: p.empresa, data: p.data, mes: p.mes, hora: agora(),
+    const foto = await reduzir(arquivo);
+    const d = hoje();
+    const base = { empresa, data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+    const fotoId = await acrescentar("notas_fotos", { ...base, foto });
+    await acrescentar("notas", { ...base, tipo: "nota", fotoId });
+  } catch {
+    alert("Não consegui enviar a foto. Verifique a internet e tente de novo.");
+  }
+  mostrar();
+}
+
+async function gravar(n, dados) {
+  try {
+    await acrescentar("notas", { ...dados, refId: n.id, empresa: n.empresa, data: n.data, mes: n.mes, hora: agora(),
       registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
   } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
   fundo.hidden = true;
   mostrar();
 }
 
-/* ---------- Folhas (janelas de baixo) ---------- */
 const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
 fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
-function abrir(html, salvar) {
-  folha.innerHTML = `${html}<p class="msg-erro" id="f-erro"></p>
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
+
+function folhaProblema(n) {
+  let problema = null;
+  folha.innerHTML = `<h2>Problema · ${esc(n.empresa)}</h2>
+    <div class="opcoes" id="f-prob">${Object.entries(PROBLEMAS).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
+    <input type="text" id="f-det" placeholder="Detalhe (o que você viu)" autocomplete="off">
+    <p class="suave" style="margin:0;font-size:13px">Vai também para o Livro de Ordens e Ocorrências. Avise a Daiane.</p>
+    <p class="msg-erro" id="f-erro"></p>
     <button class="botao principal" id="f-ok">Salvar</button>
     <button class="botao" id="f-x" style="text-align:center;border:none">Cancelar</button>`;
-  folha.querySelector("#f-x").onclick = () => { fundo.hidden = true; };
-  folha.querySelector("#f-ok").onclick = async (e) => {
-    const erro = salvar((t) => (folha.querySelector("#f-erro").textContent = t));
-    if (erro === false) return;
-    e.target.disabled = true;
-  };
-  fundo.hidden = false;
-  folha.querySelector("input, textarea")?.focus();
-}
-
-function folhaPedido(empresa) {
-  abrir(`<h2>Pedido · ${esc(empresa)}</h2>
-    <label class="rot" for="f-resumo">O que foi pedido (resumo)</label>
-    <textarea id="f-resumo" rows="3" placeholder="Ex.: 20 pães, 10 salgados, 2 L de café"></textarea>`,
-  (erro) => {
-    const resumo = folha.querySelector("#f-resumo").value.trim();
-    if (!resumo) return erro("Escreva o que foi pedido."), false;
-    const d = campoDia.value;
-    acrescentar("notas", { tipo: "pedido", empresa, resumo, data: d, mes: d.slice(0, 7), hora: agora(),
-      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() })
-      .then(() => { fundo.hidden = true; mostrar(); })
-      .catch(() => { erro("Não consegui salvar. Verifique a internet e tente de novo."); folha.querySelector("#f-ok").disabled = false; });
-  });
-}
-
-function folhaLancado(p) {
-  abrir(`<h2>Lançado no Guappo · ${esc(p.empresa)}</h2>
-    <p class="suave" style="margin:0">Lance a prazo na conta certa${["TECMAR", "Tecsea", "Redsea"].includes(p.empresa) ? " (TECMAR, Tecsea e Redsea são contas diferentes)" : ""} e imprima 2 vias.</p>
-    <label class="rot" for="f-num">Nº do pedido no Guappo</label>
-    <input id="f-num" inputmode="numeric" autocomplete="off">`,
-  (erro) => {
-    const numero = folha.querySelector("#f-num").value.trim();
-    if (!numero) return erro("Coloque o nº do pedido do Guappo."), false;
-    gravar(p, { tipo: "lancado", numero });
-  });
-}
-
-function folhaAssinada(p) {
-  abrir(`<h2>Retirada · ${esc(p.empresa)}</h2>
-    <p class="suave" style="margin:0">Quem retira confere e assina as 2 vias com nome legível. Uma via vai, a outra fica na pasta.</p>
-    <label class="rot" for="f-quem">Nome de quem retirou e assinou</label>
-    <input type="text" id="f-quem" autocomplete="off">
-    <label class="marca"><input type="checkbox" id="f-foto"> Mandei a foto da via assinada no grupo da empresa</label>`,
-  (erro) => {
-    const quem = folha.querySelector("#f-quem").value.trim();
-    if (!quem) return erro("Escreva quem retirou."), false;
-    gravar(p, { tipo: "assinada", quem, foto: folha.querySelector("#f-foto").checked });
-  });
-}
-
-function folhaProblema(p) {
-  let problema = null;
-  abrir(`<h2>Problema · ${esc(p.empresa)}</h2>
-    <div class="opcoes" id="f-prob">${Object.entries(PROBLEMAS).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
-    <label class="rot" for="f-det">Detalhe</label>
-    <input type="text" id="f-det" placeholder="O que você viu" autocomplete="off">
-    <p class="suave" style="margin:0;font-size:13px">Vai também para o Livro de Ordens e Ocorrências. Avise a Daiane.</p>`,
-  (erro) => {
-    if (!problema) return erro("Escolha qual foi o problema."), false;
-    const detalhe = folha.querySelector("#f-det").value.trim();
-    if (problema === "outro" && !detalhe) return erro("Explique o problema no detalhe."), false;
-    // Registro no Livro (mesmo formato da tela do Livro).
-    acrescentar("livro", { data: p.data, tipo: "ocorrencia", turno: new Date().getHours() < 13 ? "Manhã" : "Tarde", hora: agora(), codigo: "D",
-      fato: `Nota da empresa ${p.empresa}: ${PROBLEMAS[problema]}${detalhe ? ` (${detalhe})` : ""}.${p.lancado ? ` Pedido Guappo nº ${p.lancado.numero}.` : ""}`,
-      providencia: "", comunicado: "", urgente: false, autor: eu.nome, autorUid: eu.uid, em: new Date().toISOString() }).catch(() => {});
-    gravar(p, { tipo: "conferido", ok: false, problema, detalhe });
-  });
   folha.querySelector("#f-prob").onclick = (e) => {
     const v = e.target.closest("button")?.dataset.v; if (!v) return;
     problema = v; e.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
   };
+  folha.querySelector("#f-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#f-ok").onclick = (e) => {
+    const erro = folha.querySelector("#f-erro");
+    const detalhe = folha.querySelector("#f-det").value.trim();
+    if (!problema) return (erro.textContent = "Escolha qual foi o problema.");
+    if (problema === "outro" && !detalhe) return (erro.textContent = "Explique o problema no detalhe.");
+    e.target.disabled = true;
+    acrescentar("livro", { data: n.data, tipo: "ocorrencia", turno: new Date().getHours() < 13 ? "Manhã" : "Tarde", hora: agora(), codigo: "D",
+      fato: `Nota da empresa ${n.empresa}: ${PROBLEMAS[problema]}${detalhe ? ` (${detalhe})` : ""}.`,
+      providencia: "", comunicado: "", urgente: false, autor: eu.nome, autorUid: eu.uid, em: new Date().toISOString() }).catch(() => {});
+    gravar(n, { tipo: "conferido", ok: false, problema, detalhe });
+  };
+  fundo.hidden = false;
 }
 
 /* ---------- Mês por empresa (Daiane e Fábio) ---------- */
 const campoMes = document.getElementById("mes");
 campoMes.value = hoje().slice(0, 7);
 async function mostrarMes() {
-  const pedidos = montar(await listar("notas", "mes", campoMes.value)).filter((p) => !p.cancelado);
+  const notas = montar(await listar("notas", "mes", campoMes.value)).filter((n) => !n.cancelado);
   const por = {};
-  for (const p of pedidos) {
-    const t = (por[p.empresa] ||= { pedidos: 0, numeros: [], problemas: 0, semConferir: 0 });
-    t.pedidos++;
-    if (p.lancado) t.numeros.push(p.lancado.numero);
-    if (temProblema(p)) t.problemas++;
-    if (!p.conferido) t.semConferir++;
+  for (const n of notas) {
+    const t = (por[n.empresa] ||= { notas: 0, dias: new Set(), problemas: 0, semConferir: 0 });
+    t.notas++; t.dias.add(n.data);
+    if (n.conferido && !n.conferido.ok) t.problemas++;
+    if (!n.conferido) t.semConferir++;
   }
-  const linhas = Object.entries(por).sort((a, b) => a[0].localeCompare(b[0]));
+  const linhas = EMPRESAS.filter((e) => por[e]).map((e) => [e, por[e]]);
   document.getElementById("tabela").innerHTML = linhas.length ? `
-    <table class="mes"><tr><th>Empresa</th><th class="n">Pedidos</th><th class="n">Problemas</th><th class="n">Sem conferir</th></tr>
-    ${linhas.map(([n, t]) => `<tr><td><b>${esc(n)}</b><br><span class="suave" style="font-size:12px">Nºs Guappo: ${esc(t.numeros.join(", ") || "—")}</span></td>
-      <td class="n">${t.pedidos}</td><td class="n" style="${t.problemas ? "color:var(--alerta);font-weight:700" : ""}">${t.problemas}</td><td class="n">${t.semConferir}</td></tr>`).join("")}
+    <table class="mes"><tr><th>Empresa</th><th class="n">Notas</th><th class="n">Dias</th><th class="n">Problemas</th><th class="n">Sem conferir</th></tr>
+    ${linhas.map(([n, t]) => `<tr><td><b>${esc(n)}</b></td><td class="n">${t.notas}</td><td class="n">${t.dias.size}</td>
+      <td class="n" style="${t.problemas ? "color:var(--alerta);font-weight:700" : ""}">${t.problemas}</td><td class="n">${t.semConferir}</td></tr>`).join("")}
     </table>
-    <p class="suave" style="font-size:13px">Compare com o relatório a prazo de cada empresa no Guappo. Bateu, cobra. Não bateu, olhe o Livro.</p>`
-    : `<p class="suave">Nenhum pedido neste mês.</p>`;
+    <p class="suave" style="font-size:13px">Compare com o relatório a prazo de cada empresa no Guappo. As fotos de cada dia ficam na aba Dia.</p>`
+    : `<p class="suave">Nenhuma nota neste mês.</p>`;
 }
 campoMes.onchange = mostrarMes;
 campoDia.onchange = mostrar;

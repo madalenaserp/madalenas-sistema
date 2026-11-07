@@ -49,11 +49,10 @@ async function mostrar() {
   const encAmanha = encs.filter((e) => e.dataEntrega === diaSeguinte)
     .map((e) => `${e.horaEntrega} · ${e.cliente}: ${e.pedido}${e.conf.includes("vespera") ? "" : ' <span class="suave">(<b>sem conferir na véspera</b>)</span>'}`);
   const notasBruto = await listar("notas", "data", campoDia.value);
-  const notasPassos = notasBruto.filter((r) => r.tipo !== "pedido");
-  const notaUlt = (id, t) => notasPassos.filter((r) => r.refId === id && r.tipo === t).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm)).at(-1);
-  const notas = notasBruto.filter((r) => r.tipo === "pedido" && !notaUlt(r.id, "cancelado"))
-    .map((r) => ({ ...r, lanc: notaUlt(r.id, "lancado"), ass: notaUlt(r.id, "assinada"), conf: notaUlt(r.id, "conferido") }));
-  const notasAtencao = notas.filter((n) => !n.conf || !n.conf.ok).map((n) => `${n.empresa}: ${n.conf ? `<b>problema</b> (${n.conf.detalhe || n.conf.problema})` : !n.lanc ? "não lançado no Guappo" : !n.ass ? "não retirado/assinado" : "falta conferir"}`);
+  const notaUlt = (id, t) => notasBruto.filter((r) => r.refId === id && r.tipo === t).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm)).at(-1);
+  const notas = notasBruto.filter((r) => r.tipo === "nota" && !notaUlt(r.id, "cancelado")).map((r) => ({ ...r, conf: notaUlt(r.id, "conferido") }));
+  const notasAtencao = notas.filter((n) => !n.conf || !n.conf.ok)
+    .map((n) => `${n.empresa}: ${n.conf ? `<b>problema</b> (${n.conf.detalhe || ({ sem_via: "faltou a via na pasta", sem_assinatura: "via sem assinatura", fora_guappo: "não está no Guappo" })[n.conf.problema] || n.conf.problema})` : "foto enviada, falta conferir"}`);
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -85,7 +84,7 @@ async function mostrar() {
     bloco("Ordens ainda não feitas", ordensAbertas, "pendente") +
     `<div class="cartao"><h2>Livro do dia</h2><p class="suave">${fechou ? "Dia fechado" : "Dia ainda não fechado"} · ${visto ? "com seu visto" : "sem seu visto"} · ${ocorr.length} outra(s) ocorrência(s). <a href="livro.html">Abrir o livro</a></p></div>` +
     bloco("Notas das empresas com pendência", notasAtencao, "alerta") +
-    `<div class="cartao"><h2>Notas das empresas</h2><p class="suave">${notas.length} pedido(s) · ${notas.filter((n) => n.conf?.ok).length} conferido(s) e certo(s). <a href="notas.html">Abrir</a></p></div>` +
+    `<div class="cartao"><h2>Notas das empresas</h2><p class="suave">${new Set(notas.map((n) => n.empresa)).size} empresa(s) com nota · ${notas.filter((n) => n.conf?.ok).length} conferida(s) e certa(s). <a href="notas.html">Abrir</a></p></div>` +
     bloco("Encomendas do dia", encDia, "pendente") +
     bloco("Encomendas do dia seguinte", encAmanha, "pendente") +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +

@@ -58,12 +58,19 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Notas das empresas: caixa e líderes lançam e registram a retirada; conferir e cancelar só líderes e gestão.
+    // Notas das empresas: caixa e líderes mandam a foto da nota assinada; conferir e anular só líderes e gestão.
     match /notas/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLider() && request.resource.data.registradoPorUid == request.auth.uid && (
-           request.resource.data.tipo in ["pedido", "lancado", "assinada"]
+           request.resource.data.tipo == "nota"
         || (request.resource.data.tipo in ["conferido", "cancelado"] && papel(["dona", "gestor", "lider"])));
+      allow update, delete: if false;
+    }
+    // Fotos das notas assinadas (reduzidas no celular, até ~1 MB cada).
+    match /notas_fotos/{id} {
+      allow read: if caixaOuLider();
+      allow create: if caixaOuLider() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
       allow update, delete: if false;
     }
 
