@@ -34,7 +34,7 @@ const secoes = [
   { titulo: "Presença e apresentação", desc: "Quem veio, faltou, folga, uniforme e sapato", link: "presenca.html", mostrar: pode.marcarPresenca(eu) },
   { titulo: "Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
   { titulo: "Consumo da equipe", desc: "O que cada funcionário consumiu e como pagou", link: "consumo.html", mostrar: pode.verConsumo(eu) },
-  { titulo: "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização", emBreve: true },
+  { titulo: pode.verLivroCompleto(eu) ? "Rodízio do balcão" : "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização, com foto antes e depois", link: "tarefas.html", mostrar: pode.verLivroCompleto(eu) || eu.setor === "Balcão" },
   { titulo: "Checklists", desc: "Abertura, rondas e fechamento do salão e do caixa", link: "checklists.html" },
   { titulo: "Notas das empresas", desc: "Foto da nota assinada de cada empresa", link: "notas.html", mostrar: pode.notasEmpresas(eu) },
   { titulo: "Encomendas", desc: "Anotar, conferir e acompanhar até a entrega", link: "encomendas.html" },

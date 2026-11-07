@@ -22,6 +22,7 @@ import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { listar, listarEntre } from "./js/db.js";
 import { CHECKLISTS } from "./js/checklists.js";
 import { folgasNoDia } from "./js/escala.js";
+import { distribuir } from "./js/rodizio.js";
 
 if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
@@ -55,6 +56,11 @@ async function mostrar() {
   const notas = notasBruto.filter((r) => r.tipo === "nota" && !notaUlt(r.id, "cancelado")).map((r) => ({ ...r, conf: notaUlt(r.id, "conferido") }));
   const notasAtencao = notas.filter((n) => !n.conf || !n.conf.ok)
     .map((n) => `${n.empresa}: ${n.conf ? `<b>problema</b> (${n.conf.detalhe || ({ sem_via: "faltou a via na pasta", sem_assinatura: "via sem assinatura", fora_guappo: "não está no Guappo" })[n.conf.problema] || n.conf.problema})` : "foto enviada, falta conferir"}`);
+  const plano = await distribuir(campoDia.value);
+  const tarefasRegs = await listar("tarefas", "data", campoDia.value);
+  const tFeita = (t) => t.fotos ? ["antes", "depois"].every((k) => tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === k)) : tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === "feito");
+  const tarefasAbertas = plano.filter((p) => !tFeita(p.tarefa)).map((p) => `${p.pessoa || "ninguém"}: ${p.tarefa.texto}`);
+  const tarefasFeitas = plano.filter((p) => tFeita(p.tarefa)).map((p) => `${p.pessoa}: ${p.tarefa.texto}`);
   const cks = await listar("checklists", "data", campoDia.value);
   const ckFeitos = [], ckPendentes = [];
   for (const l of CHECKLISTS) {
@@ -99,6 +105,8 @@ async function mostrar() {
     bloco("Ocorrências urgentes", urgentes, "alerta") +
     bloco("Ordens ainda não feitas", ordensAbertas, "pendente") +
     `<div class="cartao"><h2>Livro do dia</h2><p class="suave">${fechou ? "Dia fechado" : "Dia ainda não fechado"} · ${visto ? "com seu visto" : "sem seu visto"} · ${ocorr.length} outra(s) ocorrência(s). <a href="livro.html">Abrir o livro</a></p></div>` +
+    bloco("Tarefas do balcão não feitas", tarefasAbertas, "pendente") +
+    `<div class="cartao"><h2>Rodízio do balcão</h2><p class="suave">${tarefasFeitas.length} de ${plano.length} feitas. <a href="tarefas.html">Ver fotos</a></p></div>` +
     bloco("Checklists com problema", ckProblemas, "alerta") +
     bloco("Checklists não feitos", ckPendentes, "pendente") +
     bloco("Checklists feitos", ckFeitos, "ok") +

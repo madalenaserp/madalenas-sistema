@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Tarefas do balcão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .tarefa { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--laranja); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+  .tarefa.feita { border-left-color:var(--ok); background:#f3faf4; }
+  .tarefa .topo { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .tarefa .texto { font-size:17px; font-weight:600; }
+  .fotos { display:flex; gap:10px; }
+  .fotos figure { margin:0; display:flex; flex-direction:column; gap:2px; font-size:12px; color:var(--suave); text-align:center; }
+  .fotos img { width:110px; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; }
+  .acao { display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:16px; padding:12px 16px; border-radius:10px; background:var(--laranja); color:#fff; font-weight:600; cursor:pointer; border:none; }
+  .acao.verde { background:var(--ok); }
+  .acao input { display:none; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
+  .pessoa-titulo { margin:8px 0 0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--suave); font-size:14px; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Tarefas do balcão</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao">
+    <div class="campo" style="margin:0" id="campo-dia" hidden>Dia <input type="date" id="dia"></div>
+    <h2 id="titulo" style="margin:0"></h2>
+    <p class="suave" id="resumo" style="margin:6px 0 0"></p>
+  </div>
+  <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+</main>
+<div class="zoom" id="zoom" hidden><img alt="Foto"></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listar, ler } from "./js/db.js";
+import { distribuir, PESSOAS_BALCAO } from "./js/rodizio.js";
+
+const eu = await exigirUsuario();
+const veTodos = pode.verLivroCompleto(eu);           // dona, líderes e o Fábio veem o dia inteiro
+const faz = !pode.somenteLeitura(eu);                 // o Fábio só vê
+const podeFazerDeOutro = pode.registrarNoLivro(eu);   // dona e líderes podem marcar por quem faltou
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+if (veTodos) document.getElementById("campo-dia").hidden = false;
+
+// Fotos reduzidas no aparelho e guardadas à parte (tarefas_fotos).
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1200, qualidade = 0.65, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 500000 && lado > 400);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+const cacheFotos = {};
+const foto = (id) => (cacheFotos[id] ??= ler("tarefas_fotos", id).then((d) => d?.foto || ""));
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
+
+async function mostrar() {
+  const d = campoDia.value;
+  const ehHoje = d === hoje();
+  const plano = await distribuir(d);
+  const regs = await listar("tarefas", "data", d);
+  const de = (id, tipo) => regs.filter((r) => r.tarefa === id && r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
+  const itens = plano.map((p) => ({ ...p, antes: de(p.tarefa.id, "antes"), depois: de(p.tarefa.id, "depois"), feito: de(p.tarefa.id, "feito") }))
+    .map((x) => ({ ...x, concluida: x.tarefa.fotos ? !!(x.antes && x.depois) : !!x.feito }));
+  const visiveis = veTodos ? itens : itens.filter((x) => x.pessoa === eu.nome);
+  const feitas = visiveis.filter((x) => x.concluida).length;
+
+  document.getElementById("titulo").textContent = veTodos ? `Rodízio do balcão · ${dataBR(d)}` : `Minhas tarefas de hoje`;
+  document.getElementById("resumo").innerHTML = visiveis.length
+    ? `${feitas} de ${visiveis.length} feita(s)` + (feitas === visiveis.length ? ` · <span class="selo ok">tudo feito</span>` : "")
+    : (PESSOAS_BALCAO.includes(eu.nome) ? "Você não tem tarefa de rodízio hoje (folga na escala)." : "O rodízio é só para o balcão.");
+
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+  let pessoaAtual = null;
+  for (const x of veTodos ? [...visiveis].sort((a, b) => a.pessoa.localeCompare(b.pessoa)) : visiveis) {
+    if (veTodos && x.pessoa !== pessoaAtual) {
+      pessoaAtual = x.pessoa;
+      const t = document.createElement("p"); t.className = "pessoa-titulo"; t.textContent = x.pessoa || "Sem ninguém escalado"; lista.append(t);
+    }
+    lista.append(cartao(x, ehHoje));
+  }
+}
+
+function cartao(x, ehHoje) {
+  const div = document.createElement("div");
+  div.className = "tarefa" + (x.concluida ? " feita" : "");
+  const quem = (r) => (r ? `${esc(r.registradoPor)} às ${esc(r.hora)}` : "");
+  div.innerHTML = `<div class="topo"><span class="texto">${esc(x.tarefa.texto)}</span>
+      <span class="selo ${x.concluida ? "ok" : "pendente"}">${x.concluida ? "feita" : "a fazer"}</span></div>
+    ${x.tarefa.fotos ? `<div class="fotos">
+        <figure>${x.antes ? `<img data-foto="${esc(x.antes.fotoId)}" alt="Antes">` : `<div style="width:110px;height:110px;border:1px dashed var(--linha);border-radius:8px;display:flex;align-items:center;justify-content:center">sem foto</div>`}Antes ${quem(x.antes)}</figure>
+        <figure>${x.depois ? `<img data-foto="${esc(x.depois.fotoId)}" alt="Depois">` : `<div style="width:110px;height:110px;border:1px dashed var(--linha);border-radius:8px;display:flex;align-items:center;justify-content:center">sem foto</div>`}Depois ${quem(x.depois)}</figure>
+      </div>` : x.feito ? `<span class="suave">Feito por ${quem(x.feito)}</span>` : ""}
+    ${x.tarefa.fotos ? `<span class="suave" style="font-size:13px">Tire a foto antes de começar e outra quando terminar.</span>` : ""}`;
+  div.querySelectorAll("img[data-foto]").forEach(async (img) => {
+    img.src = await foto(img.dataset.foto);
+    img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+  });
+  const minha = x.pessoa === eu.nome || podeFazerDeOutro;
+  if (ehHoje && faz && minha && !x.concluida) {
+    if (x.tarefa.fotos) {
+      const etapa = x.antes ? "depois" : "antes";
+      const b = document.createElement("label");
+      b.className = "acao" + (etapa === "depois" ? " verde" : "");
+      b.innerHTML = `📷 Foto ${etapa === "antes" ? "de antes" : "de depois (terminei)"}<input type="file" accept="image/*" capture="environment">`;
+      b.querySelector("input").onchange = (e) => e.target.files[0] && enviarFoto(x, etapa, e.target.files[0], b);
+      div.append(b);
+    } else {
+      const b = document.createElement("button");
+      b.className = "acao verde"; b.textContent = "✓ Marcar feita";
+      b.onclick = async () => { b.disabled = true; await registrar(x, { tipo: "feito" }); };
+      div.append(b);
+    }
+  }
+  return div;
+}
+
+async function registrar(x, dados) {
+  try {
+    await acrescentar("tarefas", { ...dados, tarefa: x.tarefa.id, texto: x.tarefa.texto, pessoa: x.pessoa, data: campoDia.value, mes: campoDia.value.slice(0, 7),
+      hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+  } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+  mostrar();
+}
+
+async function enviarFoto(x, etapa, arquivo, botao) {
+  botao.style.pointerEvents = "none"; botao.firstChild.textContent = "Enviando… ";
+  try {
+    const url = await reduzir(arquivo);
+    const fotoId = await acrescentar("tarefas_fotos", { tarefa: x.tarefa.id, etapa, data: hoje(), foto: url,
+      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+    cacheFotos[fotoId] = Promise.resolve(url);
+    await registrar(x, { tipo: etapa, fotoId });
+  } catch { alert("Não consegui enviar a foto. Verifique a internet e tente de novo."); mostrar(); }
+}
+
+campoDia.onchange = mostrar;
+mostrar();
+</script>
+</body>
+</html>

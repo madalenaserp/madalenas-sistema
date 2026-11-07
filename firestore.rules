@@ -105,6 +105,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Rodízio de tarefas do balcão: cada passo (foto antes, foto depois, feito) é um registro novo.
+    match /tarefas/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.tipo in ["antes", "depois", "feito"];
+      allow update, delete: if false;
+    }
+    match /tarefas_fotos/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+
     // Encomendas de clientes: toda a equipe anota, confere e avança a etapa. Só se acrescenta.
     // Cancelar só dona e líderes.
     match /encomendas/{id} {
