@@ -12,7 +12,8 @@ function lerTeste() { try { return localStorage.getItem(CHAVE); } catch { return
 export async function entrar(usuarioOuNome, senha) {
   if (modoTeste) { try { localStorage.setItem(CHAVE, usuarioOuNome); } catch {} return; }
   const f = await firebase();
-  const email = `${usuarioOuNome.trim().toLowerCase()}@${DOMINIO}`;
+  const u = usuarioOuNome.trim().toLowerCase();
+  const email = u.includes("@") ? u : `${u}@${DOMINIO}`; // aceita "daiane" ou "daiane@madalenas.app"
   await f.auth.signInWithEmailAndPassword(f.conta, email, senha);
 }
 
