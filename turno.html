@@ -32,6 +32,7 @@ if (modoTeste) document.getElementById("teste").innerHTML =
 // Cada seção é uma tela separada. As que ainda não existem aparecem como "em breve".
 const secoes = [
   { titulo: "Presença e apresentação", desc: "Quem veio, faltou, folga, uniforme e sapato", link: "presenca.html", mostrar: pode.marcarPresenca(eu) },
+  { titulo: "Livro do dia", desc: pode.registrarNoLivro(eu) || pode.darOrdens(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
   { titulo: "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização", emBreve: true },
   { titulo: "Checklists do setor", desc: "Abertura e fechamento", emBreve: true },
   { titulo: "Notas das empresas", desc: "Pedidos a prazo do dia", emBreve: true },

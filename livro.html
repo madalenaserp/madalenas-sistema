@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Livro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Kaushan+Script&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#4a2c1e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  .abas { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:4px; }
+  .abas button { border:none; background:none; padding:10px 4px; border-radius:9px; font-size:14px; color:var(--suave); cursor:pointer; }
+  .abas button[aria-selected="true"] { background:var(--marca); color:var(--creme); font-weight:600; }
+  .abas .num { display:inline-block; min-width:18px; margin-left:3px; border-radius:9px; background:var(--laranja); color:#fff; font-size:11px; padding:1px 5px; }
+  form.cartao { display:flex; flex-direction:column; gap:8px; }
+  form.cartao textarea, form.cartao select, form.cartao input[type=text], form.cartao input[type=time], form.cartao input[type=date] { font:inherit; font-size:16px; padding:8px; border:1px solid var(--linha); border-radius:8px; background:var(--cartao); width:100%; }
+  form.cartao textarea { min-height:70px; resize:vertical; }
+  .linha2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .registro { border-left:4px solid var(--linha); }
+  .registro.urgente { border-left-color:var(--alerta); }
+  .registro.ordem { border-left-color:var(--laranja); }
+  .registro .meta { color:var(--suave); font-size:13px; margin-top:6px; }
+  .registro .acoes { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .registro .acoes button { font-size:14px; padding:6px 10px; border-radius:8px; border:1px solid var(--linha); background:var(--cartao); cursor:pointer; }
+  .registro .acoes button.forte { background:var(--laranja); border-color:var(--laranja); color:#fff; }
+  .correcao { background:#fff7ec; border-radius:8px; padding:6px 8px; margin-top:6px; font-size:14px; }
+  .codigo { display:inline-block; background:var(--marca); color:var(--creme); border-radius:6px; padding:1px 7px; font-size:13px; font-weight:700; margin-right:4px; }
+  .lembrete { font-size:13px; color:var(--suave); }
+  form.cartao label.campo { flex-wrap:nowrap; align-items:flex-start; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Livro do dia</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao campo" style="margin:0;justify-content:space-between">
+    <span>Dia <input type="date" id="dia"></span>
+    <span class="lembrete">Nada se apaga. Errou? Corrija acrescentando.</span>
+  </div>
+  <div class="abas" role="tablist" id="abas"></div>
+  <div id="conteudo" style="display:flex;flex-direction:column;gap:10px"></div>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { EQUIPE, pode } from "./js/equipe.js";
+import { listar, acrescentar } from "./js/db.js";
+
+const eu = await exigirUsuario();
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+
+const CODIGOS = {
+  T: "Troca de turno", C: "Cliente", E: "Equipamento", P: "Produto / perda",
+  D: "Dinheiro", F: "Falta / atraso", A: "Atestado", O: "Outros",
+};
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+const hora = (iso) => (iso ? new Date(iso).toTimeString().slice(0, 5) : "");
+const turnoAgora = () => (new Date().getHours() < 13 ? "Manhã" : "Tarde");
+const opcoesPessoas = (extra = "") => extra + EQUIPE.map((p) => `<option>${esc(p.nome)}</option>`).join("");
+
+let registros = [];
+let aba = "ordens";
+
+// Um registro novo no livro. Nunca altera os anteriores.
+async function registrar(tipo, campos) {
+  const r = { data: campoDia.value, tipo, ...campos, autor: eu.nome, autorUid: eu.uid, em: new Date().toISOString() };
+  try { await acrescentar("livro", r); await carregar(); }
+  catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+}
+
+const deTipo = (t) => registros.filter((r) => r.tipo === t).sort((a, b) => a.em.localeCompare(b.em));
+const ligados = (tipo, id) => registros.filter((r) => r.tipo === tipo && r.refId === id);
+
+function correcoes(id) {
+  return ligados("correcao", id).map((c) =>
+    `<div class="correcao"><b>Correção</b> (${esc(c.autor)}, ${hora(c.em)}): ${esc(c.texto)}</div>`).join("");
+}
+function botaoCorrigir(id) {
+  return pode.registrarNoLivro(eu) || pode.darOrdens(eu) ? `<button data-corrigir="${id}">Corrigir</button>` : "";
+}
+
+const ordensVisiveis = () => deTipo("ordem").filter((o) => pode.darOrdens(eu) || pode.registrarNoLivro(eu) || o.para === "Todos" || o.para === eu.nome);
+
+const telas = {
+  ordens() {
+    const ordens = ordensVisiveis();
+    let html = "";
+    if (pode.darOrdens(eu)) html += `
+      <form class="cartao" data-form="ordem">
+        <h2>Nova ordem</h2>
+        <textarea name="texto" required placeholder="O que precisa ser feito"></textarea>
+        <div class="linha2">
+          <select name="para">${opcoesPessoas("<option>Todos</option>")}</select>
+          <input type="time" name="prazo" title="Prazo">
+        </div>
+        <button class="botao principal">Registrar ordem</button>
+      </form>`;
+    html += ordens.length ? ordens.map((o) => {
+      const cientes = ligados("ciente", o.id), feitos = ligados("feito", o.id);
+      const souAlvo = o.para === "Todos" || o.para === eu.nome;
+      const jaCiente = cientes.some((c) => c.autorUid === eu.uid), jaFeito = feitos.length > 0;
+      return `<div class="cartao registro ordem">
+        <div><b>${esc(o.texto)}</b></div>
+        <div class="meta">Para: ${esc(o.para)}${o.prazo ? ` · prazo ${esc(o.prazo)}` : ""} · por ${esc(o.autor)} às ${hora(o.em)}</div>
+        <div class="meta">Ciente: ${cientes.length ? cientes.map((c) => `${esc(c.autor)} ${hora(c.em)}`).join(", ") : "ninguém ainda"}
+          · Feito: ${jaFeito ? feitos.map((c) => `${esc(c.autor)} ${hora(c.em)}`).join(", ") : "não"}</div>
+        ${correcoes(o.id)}
+        <div class="acoes">
+          ${souAlvo && !jaCiente ? `<button class="forte" data-ciente="${o.id}">Estou ciente</button>` : ""}
+          ${souAlvo && !jaFeito ? `<button data-feito="${o.id}">Marcar feito</button>` : ""}
+          ${botaoCorrigir(o.id)}
+        </div></div>`;
+    }).join("") : `<div class="cartao"><p class="suave">Nenhuma ordem neste dia.</p></div>`;
+    return html;
+  },
+
+  ocorrencias() {
+    let html = "";
+    if (pode.registrarNoLivro(eu)) html += `
+      <form class="cartao" data-form="ocorrencia">
+        <h2>Nova ocorrência</h2>
+        <div class="linha2">
+          <select name="turno"><option ${turnoAgora() === "Manhã" ? "selected" : ""}>Manhã</option><option ${turnoAgora() === "Tarde" ? "selected" : ""}>Tarde</option></select>
+          <input type="time" name="hora" value="${agora()}">
+        </div>
+        <select name="codigo">${Object.entries(CODIGOS).map(([k, v]) => `<option value="${k}">${k} · ${v}</option>`).join("")}</select>
+        <p class="lembrete" style="margin:0">Faltas e atestados já ficam na Presença. Aqui, só se precisar explicar algo a mais.</p>
+        <textarea name="fato" required placeholder="O que aconteceu (só o fato, sem opinião)"></textarea>
+        <textarea name="providencia" placeholder="O que foi feito"></textarea>
+        <input type="text" name="comunicado" placeholder="Avisado a quem?">
+        <label class="campo" style="margin:0"><input type="checkbox" name="urgente"> Urgente (segurança, saúde ou dinheiro). Avise a gestão na hora também.</label>
+        <button class="botao principal">Registrar ocorrência</button>
+      </form>`;
+    const lista = deTipo("ocorrencia");
+    html += lista.length ? lista.map((o) => `<div class="cartao registro ${o.urgente ? "urgente" : ""}">
+        <div><span class="codigo">${esc(o.codigo)}</span>${o.urgente ? '<span class="selo alerta">urgente</span> ' : ""}<b>${esc(o.fato)}</b></div>
+        ${o.providencia ? `<div style="margin-top:4px">Providência: ${esc(o.providencia)}</div>` : ""}
+        <div class="meta">${esc(o.turno)} · ${esc(o.hora)} · ${esc(CODIGOS[o.codigo] || "")}${o.comunicado ? ` · avisado: ${esc(o.comunicado)}` : ""} · por ${esc(o.autor)}</div>
+        ${correcoes(o.id)}
+        <div class="acoes">${botaoCorrigir(o.id)}</div></div>`).join("")
+      : `<div class="cartao"><p class="suave">Nenhuma ocorrência neste dia.</p></div>`;
+    return html;
+  },
+
+  passagem() {
+    let html = "";
+    if (pode.registrarNoLivro(eu)) html += `
+      <form class="cartao" data-form="passagem">
+        <h2>Passagem de turno (manhã → tarde)</h2>
+        <textarea name="pendencias" required placeholder="O que fica pendente para o próximo turno"></textarea>
+        <select name="recebeu" required>${opcoesPessoas('<option value="">Quem recebeu o turno?</option>')}</select>
+        <button class="botao principal">Registrar passagem</button>
+      </form>`;
+    const lista = deTipo("passagem");
+    html += lista.length ? lista.map((p) => `<div class="cartao registro">
+        <div><b>${esc(p.pendencias)}</b></div>
+        <div class="meta">Entregou: ${esc(p.autor)} · recebeu: ${esc(p.recebeu)} · ${hora(p.em)}</div>
+        ${correcoes(p.id)}<div class="acoes">${botaoCorrigir(p.id)}</div></div>`).join("")
+      : `<div class="cartao"><p class="suave">Nenhuma passagem registrada neste dia.</p></div>`;
+    return html;
+  },
+
+  fechamento() {
+    let html = "";
+    const fech = deTipo("fechamento");
+    if (pode.registrarNoLivro(eu)) html += `
+      <form class="cartao" data-form="fechamento">
+        <h2>Fechamento do dia</h2>
+        <textarea name="pendencias" required placeholder="Pendências para amanhã (escreva &quot;nenhuma&quot; se não houver)"></textarea>
+        <button class="botao principal">Registrar fechamento</button>
+      </form>`;
+    html += fech.length ? fech.map((f) => `<div class="cartao registro">
+        <div><b>${esc(f.pendencias)}</b></div>
+        <div class="meta">Fechado por ${esc(f.autor)} às ${hora(f.em)}</div>
+        ${correcoes(f.id)}<div class="acoes">${botaoCorrigir(f.id)}</div></div>`).join("")
+      : `<div class="cartao"><p class="suave">O dia ainda não foi fechado.</p></div>`;
+    const vistos = deTipo("visto");
+    html += vistos.map((v) => `<div class="cartao registro ordem"><b>Visto da Daiane</b> às ${hora(v.em)}${v.decisao ? `<div style="margin-top:4px">Decisão: ${esc(v.decisao)}</div>` : ""}</div>`).join("");
+    if (pode.darVisto(eu)) html += `
+      <form class="cartao" data-form="visto">
+        <h2>Seu visto</h2>
+        <textarea name="decisao" placeholder="Decisão ou orientação (opcional)"></textarea>
+        <button class="botao principal">Dar visto no dia</button>
+      </form>`;
+    return html;
+  },
+};
+
+const NOMES = pode.registrarNoLivro(eu) || pode.darOrdens(eu)
+  ? { ordens: "Ordens", ocorrencias: "Ocorrências", passagem: "Passagem", fechamento: "Fechamento" }
+  : { ordens: "Minhas ordens" };
+
+function desenhar() {
+  const contagem = {
+    ordens: ordensVisiveis().length, ocorrencias: deTipo("ocorrencia").length,
+    passagem: deTipo("passagem").length, fechamento: deTipo("fechamento").length,
+  };
+  document.getElementById("abas").style.gridTemplateColumns = `repeat(${Object.keys(NOMES).length},1fr)`;
+  document.getElementById("abas").innerHTML = Object.entries(NOMES).map(([k, v]) =>
+    `<button role="tab" data-aba="${k}" aria-selected="${aba === k}">${v}${contagem[k] ? `<span class="num">${contagem[k]}</span>` : ""}</button>`).join("");
+  document.getElementById("conteudo").innerHTML = telas[aba]();
+}
+
+async function carregar() {
+  // A equipe só vê as ordens; ocorrências e passagens ficam para líderes e gestão.
+  registros = pode.registrarNoLivro(eu) || pode.darOrdens(eu)
+    ? await listar("livro", "data", campoDia.value)
+    : await listar("livro", "data", campoDia.value, "tipo", ["ordem", "ciente", "feito"]);
+  desenhar();
+}
+
+document.getElementById("abas").onclick = (e) => {
+  const b = e.target.closest("[data-aba]"); if (!b) return;
+  aba = b.dataset.aba; desenhar();
+};
+
+const conteudo = document.getElementById("conteudo");
+conteudo.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target, tipo = form.dataset.form, d = Object.fromEntries(new FormData(form));
+  form.querySelector("button").disabled = true;
+  if (tipo === "ordem") await registrar("ordem", { texto: d.texto.trim(), para: d.para, prazo: d.prazo || null });
+  if (tipo === "ocorrencia") await registrar("ocorrencia", { turno: d.turno, hora: d.hora, codigo: d.codigo, fato: d.fato.trim(), providencia: d.providencia.trim(), comunicado: d.comunicado.trim(), urgente: !!d.urgente });
+  if (tipo === "passagem") await registrar("passagem", { pendencias: d.pendencias.trim(), recebeu: d.recebeu });
+  if (tipo === "fechamento") await registrar("fechamento", { pendencias: d.pendencias.trim() });
+  if (tipo === "visto") await registrar("visto", { decisao: d.decisao.trim() });
+});
+conteudo.addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.dataset.ciente) await registrar("ciente", { refId: t.dataset.ciente });
+  if (t.dataset.feito) await registrar("feito", { refId: t.dataset.feito });
+  if (t.dataset.corrigir) {
+    const texto = prompt("Escreva a correção. O registro original continua no livro.");
+    if (texto?.trim()) await registrar("correcao", { refId: t.dataset.corrigir, texto: texto.trim() });
+  }
+});
+campoDia.onchange = carregar;
+carregar();
+</script>
+</body>
+</html>

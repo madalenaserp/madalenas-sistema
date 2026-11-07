@@ -30,4 +30,7 @@ export const pode = {
   marcarPresenca: (u) => ["dona", "lider"].includes(u?.papel),
   verPainel: (u) => ["dona", "gestor"].includes(u?.papel),
   gerirEquipe: (u) => u?.papel === "dona",
+  darOrdens: (u) => ["dona", "gestor"].includes(u?.papel),
+  registrarNoLivro: (u) => ["dona", "gestor", "lider"].includes(u?.papel),
+  darVisto: (u) => u?.papel === "dona",
 };

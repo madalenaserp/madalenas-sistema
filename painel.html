@@ -33,6 +33,13 @@ function bloco(titulo, itens, tipo) {
 
 async function mostrar() {
   const registros = await listar("presenca", "data", campoDia.value);
+  const livro = await listar("livro", "data", campoDia.value);
+  const ligado = (tipo, id) => livro.some((r) => r.tipo === tipo && r.refId === id);
+  const urgentes = livro.filter((r) => r.tipo === "ocorrencia" && r.urgente).map((r) => `${r.hora} · ${r.fato} <span class="suave">(${r.autor})</span>`);
+  const ocorr = livro.filter((r) => r.tipo === "ocorrencia" && !r.urgente).map((r) => `${r.codigo} · ${r.fato}`);
+  const ordensAbertas = livro.filter((r) => r.tipo === "ordem" && !ligado("feito", r.id))
+    .map((r) => `${r.texto} <span class="suave">(para ${r.para}${ligado("ciente", r.id) ? ", ciente" : ", ninguém ciente"})</span>`);
+  const fechou = livro.some((r) => r.tipo === "fechamento"), visto = livro.some((r) => r.tipo === "visto");
   const por = Object.fromEntries(registros.map((r) => [r.pessoa, r]));
   const obs = (r) => (r.obs ? ` <span class="suave">(${r.obs})</span>` : "");
   const faltas = registros.filter((r) => r.situacao === "faltou" || r.situacao === "atestado")
@@ -45,6 +52,9 @@ async function mostrar() {
     .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
   const folgas = registros.filter((r) => r.situacao === "folga").map((r) => r.pessoa);
   document.getElementById("resumo").innerHTML =
+    bloco("Ocorrências urgentes", urgentes, "alerta") +
+    bloco("Ordens ainda não feitas", ordensAbertas, "pendente") +
+    `<div class="cartao"><h2>Livro do dia</h2><p class="suave">${fechou ? "Dia fechado" : "Dia ainda não fechado"} · ${visto ? "com seu visto" : "sem seu visto"} · ${ocorr.length} outra(s) ocorrência(s). <a href="livro.html">Abrir o livro</a></p></div>` +
     bloco("Faltas", faltas, "alerta") +
     bloco("Apresentação fora do padrão", apresentacao, "alerta") +
     bloco("Presença não marcada", semMarcar, "pendente") +

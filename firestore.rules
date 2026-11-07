@@ -36,6 +36,18 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Livro de Ordens e Ocorrências: só se acrescenta. Correção é um registro novo.
+    match /livro/{id} {
+      allow read: if papel(["dona", "gestor", "lider"])
+        || (ativo() && resource.data.tipo in ["ordem", "ciente", "feito"]);
+      allow create: if ativo() && request.resource.data.autorUid == request.auth.uid && (
+           request.resource.data.tipo in ["ciente", "feito"]
+        || (request.resource.data.tipo == "ordem" && papel(["dona", "gestor"]))
+        || (request.resource.data.tipo in ["ocorrencia", "passagem", "fechamento", "correcao"] && papel(["dona", "gestor", "lider"]))
+        || (request.resource.data.tipo == "visto" && papel(["dona"])));
+      allow update, delete: if false;
+    }
+
     // Qualquer outra coisa: bloqueada.
     match /{caminho=**} { allow read, write: if false; }
   }

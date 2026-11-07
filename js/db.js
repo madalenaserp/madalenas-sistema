@@ -22,13 +22,24 @@ export async function salvarComHistorico(colecao, id, dados) {
   const hist = lerLocal(`${colecao}_historico`); hist[`${id}_${Date.now()}`] = { ...dados, docId: id }; gravarLocal(`${colecao}_historico`, hist);
 }
 
-// Lista os documentos em que campo == valor.
-export async function listar(colecao, campo, valor) {
+// Lista os documentos em que campo == valor (e, opcionalmente, campo2 está na lista valores2).
+export async function listar(colecao, campo, valor, campo2, valores2) {
   const f = await firebase();
   if (f) {
-    const q = f.fs.query(f.fs.collection(f.db, colecao), f.fs.where(campo, "==", valor));
+    const filtros = [f.fs.where(campo, "==", valor)];
+    if (campo2) filtros.push(f.fs.where(campo2, "in", valores2));
+    const q = f.fs.query(f.fs.collection(f.db, colecao), ...filtros);
     const snap = await f.fs.getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
-  return Object.entries(lerLocal(colecao)).filter(([, d]) => d[campo] === valor).map(([id, d]) => ({ id, ...d }));
+  return Object.entries(lerLocal(colecao))
+    .filter(([, d]) => d[campo] === valor && (!campo2 || valores2.includes(d[campo2])))
+    .map(([id, d]) => ({ id, ...d }));
+}
+
+// Acrescenta um registro novo (para livros em que nada se altera nem se apaga).
+export async function acrescentar(colecao, dados) {
+  const f = await firebase();
+  if (f) return f.fs.addDoc(f.fs.collection(f.db, colecao), { ...dados, gravadoEm: f.fs.serverTimestamp() });
+  const tudo = lerLocal(colecao); tudo[`${Date.now()}_${Math.random().toString(36).slice(2, 7)}`] = dados; gravarLocal(colecao, tudo);
 }
