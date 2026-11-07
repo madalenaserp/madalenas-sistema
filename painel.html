@@ -23,6 +23,7 @@ import { listar, listarEntre } from "./js/db.js";
 import { CHECKLISTS } from "./js/checklists.js";
 import { folgasNoDia } from "./js/escala.js";
 import { distribuir } from "./js/rodizio.js";
+import { chaveProduto } from "./js/produtos.js";
 
 if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
@@ -80,6 +81,15 @@ async function mostrar() {
   const perdasCanc = new Set(perdasBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const perdas = perdasBruto.filter((r) => r.tipo === "perda" && !perdasCanc.has(r.id));
   const perdasLixo = perdas.filter((r) => r.destino === "lixo").map((r) => `${r.produto}: ${String(r.quantidade).replace(".", ",")} ${r.unidade} <span class="suave">(${r.setor}, ${r.registradoPor})</span>`);
+  const prodBruto = await listar("producao", "data", campoDia.value);
+  const prodCanc = new Set(prodBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  const prod = prodBruto.filter((r) => r.tipo === "producao" && !prodCanc.has(r.id));
+  const feitoPor = {};
+  for (const r of prod) feitoPor[chaveProduto(r.produto, r.unidade)] = (feitoPor[chaveProduto(r.produto, r.unidade)] || 0) + (Number(r.quantidade) || 0);
+  const perdidoPor = {}, nomeDe = {};
+  for (const r of perdas) { const k = chaveProduto(r.produto, r.unidade); nomeDe[k] = `${r.produto} (${r.unidade})`; perdidoPor[k] = (perdidoPor[k] || 0) + (Number(r.quantidade) || 0); }
+  const muitaPerda = Object.entries(perdidoPor).filter(([k, v]) => feitoPor[k] && v / feitoPor[k] >= 0.1)
+    .map(([k, v]) => { return `${nomeDe[k]}: ${Math.round((v / feitoPor[k]) * 100)}% perdido <span class="suave">(${v} de ${feitoPor[k]})</span>`; });
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -121,6 +131,8 @@ async function mostrar() {
     bloco("Encomendas do dia", encDia, "pendente") +
     (encDia.length ? `<div class="cartao"><h2>Quem viu as encomendas de hoje</h2><p class="suave">${viram.length ? viram.join(" · ") : "Ninguém marcou que viu ainda."}</p></div>` : "") +
     bloco("Encomendas do dia seguinte", encAmanha, "pendente") +
+    bloco("Produtos com 10% ou mais de perda", muitaPerda, "alerta") +
+    `<div class="cartao"><h2>Produção do dia</h2><p class="suave">${prod.length} registro(s) de produção${prod.length ? "" : " (ninguém registrou ainda)"}. <a href="producao-dia.html">Ver feito x perdido</a></p></div>` +
     bloco("Perdas que foram para o lixo", perdasLixo, "alerta") +
     `<div class="cartao"><h2>Perdas e sobras</h2><p class="suave">${perdas.length} registro(s) hoje · ${perdasLixo.length} para o lixo. <a href="perdas.html">Ver fotos e resumo do mês</a></p></div>` +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +

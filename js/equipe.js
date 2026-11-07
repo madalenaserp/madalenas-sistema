@@ -43,6 +43,9 @@ export const pode = {
   // Notas das empresas: caixa lança; líderes conferem; gestão acompanha.
   notasEmpresas: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
   editarNotas: (u) => ["dona", "lider"].includes(u?.papel) || u?.setor === "Caixa",
+  // Produção: a equipe da produção e da confeitaria lança; a Daiane também; o Fábio só vê.
+  producao: (u) => ["dona", "gestor"].includes(u?.papel) || ["Produção", "Confeitaria"].includes(u?.setor),
+  lancarProducao: (u) => u?.papel === "dona" || (u?.papel !== "gestor" && ["Produção", "Confeitaria"].includes(u?.setor)),
   verConsumo: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
   registrarConsumo: (u) => ["dona", "lider"].includes(u?.papel) || u?.setor === "Caixa",
 };

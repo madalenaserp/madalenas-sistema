@@ -72,15 +72,13 @@
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
 import { acrescentar, listar, ler } from "./js/db.js";
+import { PRODUTOS, UNIDADES } from "./js/produtos.js";
 
 const eu = await exigirUsuario();
 const lanca = !pode.somenteLeitura(eu);          // o Fábio só vê
 const podeCancelar = pode.registrarNoLivro(eu);  // dona e líderes
 const veMes = pode.verPainel(eu);
 
-const PRODUTOS = ["Pão francês", "Pão de queijo", "Pão doce", "Pão de forma", "Bisnaguinha", "Coxinha", "Salgado frito", "Salgado assado",
-  "Bolo (fatia)", "Bolo inteiro", "Torta (fatia)", "Torta inteira", "Sonho", "Croissant", "Frios", "Leite", "Bebida", "Café coado"];
-const UNIDADES = ["unidade", "kg", "fatia", "bandeja"];
 const MOTIVOS = { validade: "Venceu / validade", estragado: "Mofo ou estragado", padrao: "Queimou / fora do padrão", caiu: "Caiu ou quebrou",
   sobra: "Sobrou no fim do dia", erro: "Erro de produção ou pedido", outro: "Outro" };
 const DESTINOS = { lixo: "Lixo", promocao: "Promoção amanhã", equipe: "Consumo da equipe", doacao: "Doação" };

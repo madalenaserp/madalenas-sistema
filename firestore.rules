@@ -89,6 +89,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Produção do dia: produção e confeitaria registram (e a dona); o gestor só lê; cancelar só a dona.
+    function daProducao() { return ativo() && perfil().setor in ["Produção", "Confeitaria"]; }
+    match /producao/{id} {
+      allow read: if papel(["dona", "gestor"]) || daProducao();
+      allow create: if (papel(["dona"]) || (edita() && daProducao())) && request.resource.data.registradoPorUid == request.auth.uid && (
+           request.resource.data.tipo == "producao"
+        || (request.resource.data.tipo == "cancelamento" && papel(["dona"])));
+      allow update, delete: if false;
+    }
+
     match /notas_fotos/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid

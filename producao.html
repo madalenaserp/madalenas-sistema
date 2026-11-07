@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Produção</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Produção</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="cartao"><p class="suave" style="margin:0">Área da panificadora e da confeitaria. Registre tudo o que sai do forno e tudo o que se perde: é assim que a gente descobre onde está o desperdício.</p></div>
+  <div id="secoes" style="display:flex;flex-direction:column;gap:8px"></div>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+
+const eu = await exigirUsuario();
+if (!pode.producao(eu)) location.href = "turno.html";
+
+// Cada seção da Produção é uma tela separada.
+const secoes = [
+  { titulo: "Produção do dia", desc: "O que saiu do forno, quanto e quem fez", link: "producao-dia.html" },
+  { titulo: "Perdas e sobras", desc: "O que queimou, ficou fora do padrão, venceu ou sobrou", link: "perdas.html" },
+  { titulo: "Encomendas", desc: "O que tem para fazer hoje e amanhã", link: "encomendas.html" },
+  { titulo: "Checklist da produção", desc: "Abertura e fechamento da panificadora e da confeitaria", emBreve: true },
+  { titulo: "Fichas técnicas", desc: "Receita, rendimento e custo de cada produto", emBreve: true },
+];
+const lista = document.getElementById("secoes");
+for (const s of secoes) {
+  if ("mostrar" in s && !s.mostrar) continue;
+  const a = document.createElement("a");
+  a.className = "botao";
+  a.href = s.link || "#";
+  if (s.emBreve) a.setAttribute("aria-disabled", "true");
+  a.innerHTML = `<b>${s.titulo}</b>${s.emBreve ? '<span class="selo pendente">em breve</span>' : ""}<br><span class="suave">${s.desc}</span>`;
+  lista.append(a);
+}
+</script>
+</body>
+</html>
