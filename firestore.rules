@@ -18,7 +18,11 @@ service cloud.firestore {
         || (logado() && request.auth.uid == uid
             && request.auth.token.email == "daiane@madalenas.app"
             && request.resource.data.papel == "dona");
-      allow update: if papel(["dona"]);
+      allow update: if papel(["dona"])
+        // a própria pessoa só pode marcar que já trocou a senha provisória
+        || (logado() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["trocarSenha"])
+            && request.resource.data.trocarSenha == false);
       allow delete: if false;
     }
 

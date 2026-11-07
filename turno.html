@@ -23,6 +23,7 @@ import { pode } from "./js/equipe.js";
 import { modoTeste } from "./js/db.js";
 
 const eu = await exigirUsuario();
+if (eu.trocarSenha) { location.href = "senha.html"; await new Promise(() => {}); } // primeiro acesso: escolher a própria senha
 document.getElementById("ola").textContent = `Olá, ${eu.nome}`;
 document.getElementById("data").textContent = `Hoje: ${dataBR(hoje())}`;
 document.getElementById("sair").onclick = sair;
@@ -51,6 +52,12 @@ for (const s of secoes) {
   if (s.emBreve) a.setAttribute("aria-disabled", "true");
   a.innerHTML = `<b>${s.titulo}</b>${s.emBreve ? '<span class="selo pendente">em breve</span>' : ""}<br><span class="suave">${s.desc}</span>`;
   lista.append(a);
+}
+if (!modoTeste) {
+  const t = document.createElement("a");
+  t.href = "senha.html"; t.className = "suave"; t.style.cssText = "text-align:center;margin-top:8px";
+  t.textContent = "Trocar minha senha";
+  lista.after(t);
 }
 </script>
 </body>

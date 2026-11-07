@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Minha senha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  form.cartao { display:flex; flex-direction:column; gap:10px; }
+  form input { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; }
+  .erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Minha senha</h1><a href="turno.html" id="voltar">Voltar</a></header>
+<main>
+  <form class="cartao" id="form">
+    <h2 id="titulo" style="margin:0">Trocar minha senha</h2>
+    <p class="suave" id="explica" style="margin:0">Escolha uma senha só sua, com pelo menos 6 letras ou números. Não conte para ninguém.</p>
+    <input type="password" id="nova" placeholder="Nova senha" autocomplete="new-password" minlength="6" required>
+    <input type="password" id="repete" placeholder="Repita a nova senha" autocomplete="new-password" minlength="6" required>
+    <p class="erro" id="erro"></p>
+    <button class="botao principal">Salvar minha senha</button>
+  </form>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, sair } from "./js/sessao.js";
+import { firebase } from "./js/firebase.js";
+
+const eu = await exigirUsuario();
+const f = await firebase();
+if (!f) location.href = "turno.html"; // modo teste não tem senha
+const primeira = !!eu.trocarSenha;
+if (primeira) {
+  document.getElementById("titulo").textContent = `Bem-vinda, ${eu.nome}!`;
+  document.getElementById("explica").textContent = "Antes de começar, escolha a sua senha (pelo menos 6 letras ou números). A senha que você recebeu era só provisória. Não conte a sua para ninguém.";
+  document.getElementById("voltar").textContent = "Sair";
+  document.getElementById("voltar").onclick = (e) => { e.preventDefault(); sair(); };
+}
+
+document.getElementById("form").onsubmit = async (e) => {
+  e.preventDefault();
+  const erro = document.getElementById("erro");
+  const nova = document.getElementById("nova").value, repete = document.getElementById("repete").value;
+  if (nova.length < 6) return (erro.textContent = "A senha precisa ter pelo menos 6 caracteres.");
+  if (nova !== repete) return (erro.textContent = "As duas senhas não são iguais.");
+  const botao = e.submitter; botao.disabled = true; erro.textContent = "";
+  try {
+    await f.auth.updatePassword(f.conta.currentUser, nova);
+    if (primeira) await f.fs.updateDoc(f.fs.doc(f.db, "usuarios", eu.uid), { trocarSenha: false });
+    alert("Senha salva! Da próxima vez, entre com ela.");
+    location.href = "turno.html";
+  } catch (err) {
+    erro.textContent = err.code === "auth/requires-recent-login"
+      ? "Por segurança, saia, entre de novo com a senha atual e troque logo em seguida."
+      : err.code === "auth/weak-password" ? "Senha fraca. Use pelo menos 6 caracteres."
+      : `Não consegui salvar (${err.code || err.message}).`;
+    botao.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
