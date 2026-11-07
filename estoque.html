@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Estoque</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .mov { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; gap:10px; }
+  .mov.cancelada { opacity:.5; }
+  .mov.cancelada .prod { text-decoration:line-through; }
+  .mov img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; flex-shrink:0; }
+  .mov .info { display:flex; flex-direction:column; gap:3px; flex:1; font-size:14px; }
+  .mov .prod { font-size:17px; font-weight:700; }
+  .mov button { align-self:flex-start; font-size:13px; padding:4px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--suave); cursor:pointer; }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha input[type=text], .folha input[inputmode] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes.tres { grid-template-columns:1fr 1fr 1fr; }
+  .opcoes button { padding:11px 6px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:14px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .camera { display:flex; align-items:center; gap:10px; border:1px dashed var(--linha); border-radius:10px; padding:10px; cursor:pointer; font-size:15px; }
+  .camera input { display:none; }
+  .camera img { width:64px; height:64px; object-fit:cover; border-radius:8px; }
+  .msg-erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  table.mes { width:100%; border-collapse:collapse; font-size:14px; }
+  table.mes th, table.mes td { text-align:left; padding:7px 4px; border-bottom:1px solid var(--linha); }
+  table.mes .n { text-align:right; white-space:nowrap; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
+  .abas.quatro { flex-wrap:wrap; }
+  .abas.quatro button { flex:1 1 40%; }
+  .ins { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--ok); border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:15px; }
+  .ins.baixo { border-left-color:var(--alerta); background:#fff5f4; }
+  .ins .q { font-weight:700; white-space:nowrap; text-align:right; }
+  .acoes-est { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .acoes-est button { padding:14px 8px; border-radius:12px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; text-align:left; }
+  .acoes-est button b { display:block; font-size:16px; margin-bottom:2px; }
+  .cont { display:grid; grid-template-columns:1fr 90px; gap:6px; align-items:center; font-size:15px; padding:4px 0; border-bottom:1px solid var(--linha); }
+  .cont input { font-size:16px; padding:8px; border:1px solid var(--linha); border-radius:8px; width:100%; box-sizing:border-box; }
+  select.sel { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; }
+  .cad { display:grid; grid-template-columns:1fr 92px 64px 26px; gap:4px; align-items:center; }
+  .cad input { font-size:14px; padding:7px 5px; border:1px solid var(--linha); border-radius:8px; width:100%; box-sizing:border-box; }
+  .cad button { border:none; background:none; font-size:18px; color:var(--suave); cursor:pointer; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Estoque</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="abas quatro" id="abas">
+    <button aria-pressed="true" data-aba="saldo">Saldo</button>
+    <button aria-pressed="false" data-aba="mov">Registrar</button>
+    <button aria-pressed="false" data-aba="hist">Histórico</button>
+    <button aria-pressed="false" data-aba="custo" id="aba-custo" hidden>Custos</button>
+    <button aria-pressed="false" data-aba="cad" id="aba-cad" hidden>Insumos</button>
+  </div>
+  <section id="sec"></section>
+</main>
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+<div class="zoom" id="zoom" hidden><img alt="Foto"></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listarEntre, ler, salvarComHistorico } from "./js/db.js";
+import { INSUMOS_PADRAO, LOCAIS } from "./js/insumos.js";
+
+const eu = await exigirUsuario();
+const lanca = !pode.somenteLeitura(eu);          // o Fábio só vê
+const podeCancelar = pode.registrarNoLivro(eu);  // dona e líderes
+const veCusto = pode.verPainel(eu);              // Daiane e Fábio
+const cadastra = eu.papel === "dona";
+if (veCusto) document.getElementById("aba-custo").hidden = false;
+if (cadastra) document.getElementById("aba-cad").hidden = false;
+const sec = document.getElementById("sec");
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
+const n = (v) => String(Math.round(v * 1000) / 1000).replace(".", ",");
+const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const agora = () => new Date().toTimeString().slice(0, 5);
+const localPadrao = eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora";
+const ACOES = {
+  entrada:       { nome: "Chegou compra", desc: "Mercadoria que chegou, com a nota", sinal: 1 },
+  uso:           { nome: "Levei para a produção", desc: "Saiu do estoque para usar", sinal: -1 },
+  transferencia: { nome: "Transferir", desc: "Da panificadora para a confeitaria ou o contrário", sinal: 0 },
+  perda:         { nome: "Perdi / estragou", desc: "Venceu, molhou, caiu, rasgou", sinal: -1 },
+  contagem:      { nome: "Contagem", desc: "Contar o que tem de verdade na prateleira", sinal: 0 },
+};
+
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1400, qualidade = 0.7, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 500000 && lado > 400);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
+
+/* ---------- Dados ---------- */
+let INSUMOS = INSUMOS_PADRAO;
+async function carregarInsumos() { const c = await ler("estoque_cadastro", "insumos").catch(() => null); if (c?.lista?.length) INSUMOS = c.lista; }
+const ins = (id) => INSUMOS.find((i) => i.id === id) || { id, nome: id, unidade: "", minimo: 0 };
+async function movimentos() {
+  const regs = (await listarEntre("estoque", "data", "2000-01-01", "9999-12-31")).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+  const canc = Object.fromEntries(regs.filter((r) => r.tipo === "cancelamento").map((r) => [r.refId, r]));
+  return regs.filter((r) => r.tipo === "mov").map((r) => ({ ...r, cancelamento: canc[r.id] }));
+}
+// Saldo por insumo e local: a última contagem vale como ponto de partida; depois soma entradas e tira saídas.
+function saldos(movs) {
+  const s = {};
+  const k = (id, l) => `${id}|${l}`;
+  for (const m of movs.filter((m) => !m.cancelamento)) {
+    if (m.acao === "contagem") s[k(m.insumoId, m.local)] = m.qtd;
+    else if (m.acao === "transferencia") { s[k(m.insumoId, m.de)] = (s[k(m.insumoId, m.de)] || 0) - m.qtd; s[k(m.insumoId, m.para)] = (s[k(m.insumoId, m.para)] || 0) + m.qtd; }
+    else s[k(m.insumoId, m.local)] = (s[k(m.insumoId, m.local)] || 0) + ACOES[m.acao].sinal * m.qtd;
+  }
+  const contados = new Set(movs.filter((m) => !m.cancelamento && m.acao === "contagem").map((m) => m.insumoId));
+  const f = (id, l) => (l ? s[k(id, l)] || 0 : LOCAIS.reduce((t, x) => t + (s[k(id, x)] || 0), 0));
+  f.contado = (id) => contados.has(id);
+  return f;
+}
+// Custo: média ponderada das compras dos últimos 90 dias (ou o último preço).
+function custos(movs) {
+  const lim = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  const c = {};
+  for (const m of movs.filter((m) => !m.cancelamento && m.acao === "entrada" && m.preco > 0)) {
+    const x = (c[m.insumoId] ||= { qtd: 0, total: 0, ultimo: 0, ultimaData: "" });
+    if (m.data >= lim) { x.qtd += m.qtd; x.total += m.qtd * m.preco; }
+    x.ultimo = m.preco; x.ultimaData = m.data;
+  }
+  return (id) => { const x = c[id]; if (!x) return null; return { medio: x.qtd ? x.total / x.qtd : x.ultimo, ultimo: x.ultimo, ultimaData: x.ultimaData }; };
+}
+
+/* ---------- Saldo ---------- */
+async function abaSaldo() {
+  const sal = saldos(await movimentos());
+  const baixo = (i) => sal.contado(i.id) && i.minimo > 0 && sal(i.id) < i.minimo;
+  const baixos = INSUMOS.filter(baixo);
+  const nunca = INSUMOS.filter((i) => !sal.contado(i.id)).length;
+  sec.innerHTML = `<div class="cartao"><p style="margin:0">${baixos.length ? `<span class="selo alerta" style="margin-left:0">${baixos.length} abaixo do mínimo</span>` : `<span class="selo ok" style="margin-left:0">Nada abaixo do mínimo</span>`}</p>
+      <p class="suave" style="margin:6px 0 0;font-size:13px">O saldo parte da última contagem.${nunca ? ` <b>${nunca} insumo(s) nunca foram contados</b>: conte (Registrar → Contagem) para o saldo valer.` : ""}</p></div>
+    <div id="lis" style="display:flex;flex-direction:column;gap:6px"></div>`;
+  const lis = sec.querySelector("#lis");
+  for (const i of [...INSUMOS].sort((a, b) => (baixo(a) ? 0 : sal.contado(a.id) ? 1 : 2) - (baixo(b) ? 0 : sal.contado(b.id) ? 1 : 2) || a.nome.localeCompare(b.nome))) {
+    const d = document.createElement("div");
+    d.className = "ins" + (baixo(i) ? " baixo" : "");
+    if (!sal.contado(i.id)) d.style.borderLeftColor = "var(--linha)";
+    d.innerHTML = `<span><b>${esc(i.nome)}</b><br><span class="suave" style="font-size:12px">${LOCAIS.map((l) => `${l}: ${n(sal(i.id, l))}`).join(" · ")} · mínimo ${n(i.minimo)}</span></span>
+      <span class="q">${sal.contado(i.id) ? n(sal(i.id)) : `<span class="suave" style="font-weight:400">não contado</span>`}<br><span class="suave" style="font-size:12px;font-weight:400">${esc(i.unidade)}</span></span>`;
+    lis.append(d);
+  }
+}
+
+/* ---------- Registrar ---------- */
+function abaMov() {
+  if (!lanca) { sec.innerHTML = `<p class="suave">Você só acompanha o estoque.</p>`; return; }
+  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}</div>`;
+  sec.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => (b.dataset.a === "contagem" ? contagem() : formulario(b.dataset.a))));
+}
+const fundo = document.getElementById("fundo");
+const folha = document.getElementById("folha");
+fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+const grupo = (id, lista, sel) => `<div class="opcoes" id="${id}">${lista.map((x) => `<button type="button" data-v="${esc(x)}" aria-pressed="${x === sel}">${esc(x)}</button>`).join("")}</div>`;
+const ligaGrupo = (id, fn) => { const g = folha.querySelector(id); g.onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); fn(v); }; };
+const selInsumo = () => `<select id="m-ins" class="sel"><option value="">Escolha o insumo</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}">${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}</select>`;
+
+function formulario(acao) {
+  const a = ACOES[acao];
+  const sel = { local: localPadrao, de: localPadrao, para: LOCAIS.find((l) => l !== localPadrao) };
+  let urlFoto = null;
+  folha.innerHTML = `<h2>${a.nome}</h2>
+    <label class="rot">Insumo</label>${selInsumo()}
+    <label class="rot" for="m-q">Quantidade <span id="m-un"></span></label><input id="m-q" inputmode="decimal" placeholder="0">
+    ${acao === "transferencia" ? `<label class="rot">De</label>${grupo("m-de", LOCAIS, sel.de)}<label class="rot">Para</label>${grupo("m-para", LOCAIS, sel.para)}` : `<label class="rot">Onde</label>${grupo("m-local", LOCAIS, sel.local)}`}
+    ${acao === "entrada" ? `<label class="rot" for="m-p">Preço de cada <span class="m-un2"></span> (R$)</label><input id="m-p" inputmode="decimal" placeholder="0,00">
+      <p id="m-tot" class="suave" style="margin:0"></p>
+      <label class="rot" for="m-f">Fornecedor</label><input type="text" id="m-f" autocomplete="off" placeholder="Ex.: Atacadão, Priori, distribuidor do ovo">
+      <label class="camera" id="m-cam">📷 <span>Foto da nota fiscal (obrigatória)</span><input type="file" accept="image/*" capture="environment"></label>` : ""}
+    <input type="text" id="m-o" placeholder="${acao === "perda" ? "O que aconteceu (obrigatório)" : "Observação (opcional)"}" autocomplete="off">
+    <p class="msg-erro" id="m-e"></p>
+    <button class="botao principal" id="m-ok">Salvar</button>
+    <button class="botao" id="m-x" style="text-align:center;border:none">Cancelar</button>`;
+  const insSel = folha.querySelector("#m-ins");
+  insSel.onchange = () => { const u = insSel.value ? ins(insSel.value).unidade : ""; folha.querySelector("#m-un").textContent = u ? `(${u})` : ""; folha.querySelectorAll(".m-un2").forEach((e) => (e.textContent = u)); };
+  if (acao === "transferencia") { ligaGrupo("#m-de", (v) => (sel.de = v)); ligaGrupo("#m-para", (v) => (sel.para = v)); } else ligaGrupo("#m-local", (v) => (sel.local = v));
+  if (acao === "entrada") {
+    const tot = () => { const q = numero(folha.querySelector("#m-q").value), p = numero(folha.querySelector("#m-p").value); folha.querySelector("#m-tot").textContent = q > 0 && p > 0 ? `Total: ${reais(q * p)}` : ""; };
+    folha.querySelector("#m-q").oninput = tot; folha.querySelector("#m-p").oninput = tot;
+    const cam = folha.querySelector("#m-cam");
+    cam.querySelector("input").onchange = async function trocar(e) {
+      const f = e.target.files[0]; if (!f) return;
+      cam.querySelector("span").textContent = "Preparando a foto…";
+      try { urlFoto = await reduzir(f); cam.innerHTML = `<img src="${urlFoto}" alt="Nota"><span>Foto pronta. Toque para trocar.</span><input type="file" accept="image/*" capture="environment">`; cam.querySelector("input").onchange = trocar; }
+      catch { cam.querySelector("span").textContent = "Não consegui ler a foto. Tente de novo."; }
+    };
+  }
+  folha.querySelector("#m-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#m-ok").onclick = async (e) => {
+    const erro = folha.querySelector("#m-e");
+    const insumoId = insSel.value, qtd = numero(folha.querySelector("#m-q").value), obs = folha.querySelector("#m-o").value.trim();
+    if (!insumoId) return (erro.textContent = "Escolha o insumo.");
+    if (!(qtd > 0)) return (erro.textContent = "Coloque a quantidade.");
+    if (acao === "transferencia" && sel.de === sel.para) return (erro.textContent = "De e Para não podem ser o mesmo lugar.");
+    let preco = null, fornecedor = null;
+    if (acao === "entrada") {
+      preco = numero(folha.querySelector("#m-p").value); fornecedor = folha.querySelector("#m-f").value.trim();
+      if (!(preco > 0)) return (erro.textContent = "Coloque o preço de cada unidade.");
+      if (!fornecedor) return (erro.textContent = "Escreva o fornecedor.");
+      if (!urlFoto) return (erro.textContent = "Tire a foto da nota fiscal.");
+    }
+    if (acao === "perda" && !obs) return (erro.textContent = "Explique o que aconteceu.");
+    e.target.disabled = true;
+    try {
+      const d = hoje();
+      const base = { data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+      const fotoId = urlFoto ? await acrescentar("estoque_fotos", { ...base, foto: urlFoto }) : null;
+      await acrescentar("estoque", { ...base, tipo: "mov", acao, insumoId, nome: ins(insumoId).nome, unidade: ins(insumoId).unidade, qtd,
+        local: acao === "transferencia" ? null : sel.local, de: acao === "transferencia" ? sel.de : null, para: acao === "transferencia" ? sel.para : null,
+        preco: preco ? Math.round(preco * 100) / 100 : null, fornecedor, obs, fotoId });
+      fundo.hidden = true; ir("hist");
+    } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+  };
+  fundo.hidden = false;
+}
+
+async function contagem() {
+  const sal = saldos(await movimentos());
+  let local = localPadrao;
+  const desenhar = () => {
+    folha.innerHTML = `<h2>Contagem</h2><p class="suave" style="margin:0">Conte o que tem de verdade na prateleira. Deixe em branco o que não contou.</p>
+      ${grupo("c-l", LOCAIS, local)}
+      <div>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<div class="cont"><span>${esc(i.nome)} <span class="suave" style="font-size:12px">(${esc(i.unidade)})</span></span><input inputmode="decimal" data-c="${esc(i.id)}"></div>`).join("")}</div>
+      <p class="msg-erro" id="c-e"></p>
+      <button class="botao principal" id="c-ok">Salvar contagem</button>
+      <button class="botao" id="c-x" style="text-align:center;border:none">Cancelar</button>`;
+    ligaGrupo("#c-l", (v) => { local = v; });
+    folha.querySelector("#c-x").onclick = () => { fundo.hidden = true; };
+    folha.querySelector("#c-ok").onclick = async (e) => {
+      const itens = [...folha.querySelectorAll("[data-c]")].filter((i) => i.value.trim() !== "");
+      if (!itens.length) return (folha.querySelector("#c-e").textContent = "Conte pelo menos um insumo.");
+      const ruim = itens.find((i) => !(numero(i.value) >= 0));
+      if (ruim) return (folha.querySelector("#c-e").textContent = `Número inválido em ${ins(ruim.dataset.c).nome}.`);
+      e.target.disabled = true;
+      try {
+        const d = hoje();
+        for (const i of itens) {
+          const id = i.dataset.c, qtd = numero(i.value), antes = sal(id, local);
+          await acrescentar("estoque", { tipo: "mov", acao: "contagem", insumoId: id, nome: ins(id).nome, unidade: ins(id).unidade, qtd, local,
+            esperado: Math.round(antes * 1000) / 1000, diferenca: Math.round((qtd - antes) * 1000) / 1000,
+            data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+        }
+        fundo.hidden = true; ir("hist");
+      } catch { folha.querySelector("#c-e").textContent = "Não consegui salvar tudo. Verifique a internet."; e.target.disabled = false; }
+    };
+  };
+  desenhar();
+  fundo.hidden = false;
+}
+
+/* ---------- Histórico ---------- */
+async function abaHist() {
+  sec.innerHTML = `<div class="cartao"><div class="campo" style="margin:0">Dia <input type="date" id="h-d" value="${hoje()}"></div></div><div id="h-l" style="display:flex;flex-direction:column;gap:8px"></div>`;
+  const mostrar = async () => {
+    const d = sec.querySelector("#h-d").value;
+    const movs = (await movimentos()).filter((m) => m.data === d).reverse();
+    const l = sec.querySelector("#h-l");
+    l.innerHTML = movs.length ? "" : `<p class="suave">Nada registrado neste dia.</p>`;
+    for (const m of movs) {
+      const div = document.createElement("div");
+      div.className = "mov" + (m.cancelamento ? " cancelada" : "");
+      const onde = m.acao === "transferencia" ? `${m.de} → ${m.para}` : m.local;
+      div.innerHTML = `${m.fotoId ? `<img data-foto="${esc(m.fotoId)}" alt="Nota">` : ""}<div class="info">
+        <span class="prod">${esc(ACOES[m.acao].nome)}: ${esc(m.nome)} · ${n(m.qtd)} ${esc(m.unidade)}</span>
+        <span>${esc(onde)}${m.preco ? ` · ${reais(m.preco)} cada = <b>${reais(m.preco * m.qtd)}</b> · ${esc(m.fornecedor)}` : ""}</span>
+        ${m.acao === "contagem" && m.diferenca ? `<span><span class="selo ${Math.abs(m.diferenca) > 0 ? "alerta" : "ok"}" style="margin-left:0">diferença ${m.diferenca > 0 ? "+" : ""}${n(m.diferenca)} (esperado ${n(m.esperado)})</span></span>` : ""}
+        ${m.obs ? `<span class="suave">${esc(m.obs)}</span>` : ""}
+        <span class="suave">${esc(m.registradoPor)} às ${esc(m.hora)}</span>
+        ${m.cancelamento ? `<span class="suave">Cancelado por ${esc(m.cancelamento.registradoPor)}: ${esc(m.cancelamento.motivo)}</span>` : ""}</div>`;
+      if (!m.cancelamento && podeCancelar && d === hoje()) {
+        const b = document.createElement("button"); b.textContent = "Cancelar";
+        b.onclick = async () => { const mo = prompt("Por que cancelar?"); if (!mo?.trim()) return;
+          await acrescentar("estoque", { tipo: "cancelamento", refId: m.id, motivo: mo.trim(), data: m.data, mes: m.mes, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() }).catch(() => alert("Não consegui salvar."));
+          mostrar(); };
+        div.querySelector(".info").append(b);
+      }
+      l.append(div);
+    }
+    l.querySelectorAll("img[data-foto]").forEach(async (img) => {
+      img.src = (await ler("estoque_fotos", img.dataset.foto))?.foto || "";
+      img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+    });
+  };
+  sec.querySelector("#h-d").onchange = mostrar;
+  mostrar();
+}
+
+/* ---------- Custos (Daiane e Fábio) ---------- */
+async function abaCusto() {
+  const movs = await movimentos();
+  const cu = custos(movs);
+  const mes = hoje().slice(0, 7);
+  const compras = movs.filter((m) => !m.cancelamento && m.acao === "entrada" && m.mes === mes);
+  const porForn = {};
+  for (const m of compras) porForn[m.fornecedor] = (porForn[m.fornecedor] || 0) + m.qtd * m.preco;
+  const perdas = movs.filter((m) => !m.cancelamento && m.acao === "perda" && m.mes === mes);
+  const difs = movs.filter((m) => !m.cancelamento && m.acao === "contagem" && m.mes === mes && m.diferenca < 0);
+  const valor = (m, q) => (cu(m.insumoId)?.medio || 0) * q;
+  sec.innerHTML = `<div class="cartao"><h2 style="margin:0 0 6px">Compras deste mês: ${reais(compras.reduce((s, m) => s + m.qtd * m.preco, 0))}</h2>
+      <table class="mes">${Object.entries(porForn).sort((a, b) => b[1] - a[1]).map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${reais(v)}</td></tr>`).join("") || `<tr><td class="suave">Nenhuma compra registrada.</td></tr>`}</table>
+      <h3 style="margin:14px 0 4px;font-size:15px">Perdido no estoque este mês: ${reais(perdas.reduce((s, m) => s + valor(m, m.qtd), 0))}</h3>
+      <h3 style="margin:8px 0 4px;font-size:15px;color:var(--alerta)">Sumiu na contagem este mês: ${reais(difs.reduce((s, m) => s + valor(m, -m.diferenca), 0))}</h3>
+      ${difs.length ? `<table class="mes">${difs.map((m) => `<tr><td>${dataBR(m.data).slice(0, 5)} · ${esc(m.nome)} (${esc(m.local)})</td><td class="n">${n(m.diferenca)} ${esc(m.unidade)}</td></tr>`).join("")}</table>` : ""}</div>
+    <div class="cartao"><h2 style="margin:0 0 6px">Custo de cada insumo</h2><p class="suave" style="margin:0 0 6px;font-size:13px">Média das compras dos últimos 90 dias. Vai servir para calcular o custo das fichas técnicas.</p>
+      <table class="mes"><tr><th>Insumo</th><th class="n">Médio</th><th class="n">Último</th></tr>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => { const c = cu(i.id);
+        return `<tr><td>${esc(i.nome)} <span class="suave">(${esc(i.unidade)})</span></td><td class="n">${c ? reais(c.medio) : "—"}</td><td class="n">${c ? `${reais(c.ultimo)}<br><span class="suave" style="font-size:11px">${dataBR(c.ultimaData)}</span>` : "—"}</td></tr>`; }).join("")}</table></div>`;
+}
+
+/* ---------- Insumos (só a Daiane) ---------- */
+function abaCad() {
+  let lista = INSUMOS.map((i) => ({ ...i }));
+  const desenhar = () => {
+    sec.innerHTML = `<div class="cartao"><p class="suave" style="margin:0 0 8px;font-size:13px">Nome, unidade em que se conta (kg, saco 25 kg, cartela...) e o mínimo que precisa ter. Abaixo do mínimo, aparece em vermelho no seu Painel.</p>
+      <div style="display:flex;flex-direction:column;gap:5px">${lista.map((i, k) => `<div class="cad" data-k="${k}"><input value="${esc(i.nome)}" data-f="nome" placeholder="Nome"><input value="${esc(i.unidade)}" data-f="unidade" placeholder="Unidade"><input value="${esc(n(i.minimo))}" data-f="minimo" inputmode="decimal" placeholder="Mín."><button data-tira="${k}" aria-label="Tirar">×</button></div>`).join("")}</div>
+      <button class="mais" id="i-mais" style="margin-top:8px;width:100%;border:1px dashed var(--linha);background:#fff;border-radius:10px;padding:10px">+ Novo insumo</button>
+      <p class="msg-erro" id="i-e"></p><button class="botao principal" id="i-ok" style="text-align:center;width:100%">Salvar lista</button></div>`;
+    sec.querySelectorAll(".cad").forEach((r) => r.querySelectorAll("input").forEach((inp) => (inp.oninput = () => { lista[r.dataset.k][inp.dataset.f] = inp.dataset.f === "minimo" ? inp.value : inp.value; })));
+    sec.querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { if (confirm(`Tirar ${lista[b.dataset.tira].nome} da lista? O histórico continua guardado.`)) { lista.splice(b.dataset.tira, 1); desenhar(); } }));
+    sec.querySelector("#i-mais").onclick = () => { lista.push({ id: "i" + Date.now().toString(36), nome: "", unidade: "kg", minimo: 0 }); desenhar(); sec.querySelector(".cad:last-child input").focus(); };
+    sec.querySelector("#i-ok").onclick = async (e) => {
+      const limpa = lista.map((i) => ({ id: i.id, nome: String(i.nome).trim(), unidade: String(i.unidade).trim(), minimo: numero(i.minimo) || 0 }));
+      if (limpa.some((i) => !i.nome || !i.unidade)) return (sec.querySelector("#i-e").textContent = "Todo insumo precisa de nome e unidade.");
+      e.target.disabled = true;
+      try { await salvarComHistorico("estoque_cadastro", "insumos", { lista: limpa, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() }); INSUMOS = limpa; sec.querySelector("#i-e").textContent = ""; alert("Lista salva."); }
+      catch { sec.querySelector("#i-e").textContent = "Não consegui salvar."; }
+      e.target.disabled = false;
+    };
+  };
+  desenhar();
+}
+
+const ABAS = { saldo: abaSaldo, mov: abaMov, hist: abaHist, custo: abaCusto, cad: abaCad };
+function ir(aba) { document.querySelectorAll("#abas button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba)); ABAS[aba](); }
+document.getElementById("abas").onclick = (e) => { const a = e.target.closest("button")?.dataset.aba; if (a) ir(a); };
+await carregarInsumos();
+ir(location.hash === "#registrar" && lanca ? "mov" : "saldo");
+</script>
+</body>
+</html>

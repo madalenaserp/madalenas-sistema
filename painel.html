@@ -19,10 +19,11 @@
 <script type="module">
 import { exigirUsuario, hoje } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
-import { listar, listarEntre } from "./js/db.js";
+import { listar, listarEntre, ler } from "./js/db.js";
 import { CHECKLISTS } from "./js/checklists.js";
 import { distribuir } from "./js/rodizio.js";
 import { chaveProduto } from "./js/produtos.js";
+import { INSUMOS_PADRAO, LOCAIS } from "./js/insumos.js";
 import { TAREFAS_COZINHA, COZINHAS } from "./js/cozinha.js";
 import { folgasNoDia, segundaDe, somarDias } from "./js/escala.js";
 
@@ -109,6 +110,24 @@ async function mostrar() {
   const cxSem = cx.filter((r) => r.tipoMov !== "reforco" && r.autorizadoPor === "Ninguém")
     .map((r) => `${CX[r.tipoMov]}: ${r.para} · ${(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} <span class="suave">(${r.registradoPor} às ${r.hora})</span>`);
   const cxSaiu = cx.filter((r) => r.tipoMov !== "reforco").reduce((s2, r) => s2 + r.valor, 0);
+  // Estoque: saldo (última contagem + movimentos), abaixo do mínimo, sumiço na contagem e compras do dia.
+  const insCad = (await ler("estoque_cadastro", "insumos").catch(() => null))?.lista || INSUMOS_PADRAO;
+  const estRegs = (await listarEntre("estoque", "data", "2000-01-01", campoDia.value)).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  const estCanc = new Set(estRegs.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  const est = estRegs.filter((r) => r.tipo === "mov" && !estCanc.has(r.id));
+  const sd = {};
+  for (const m of est) {
+    const k = (l) => `${m.insumoId}|${l}`;
+    if (m.acao === "contagem") sd[k(m.local)] = m.qtd;
+    else if (m.acao === "transferencia") { sd[k(m.de)] = (sd[k(m.de)] || 0) - m.qtd; sd[k(m.para)] = (sd[k(m.para)] || 0) + m.qtd; }
+    else sd[k(m.local)] = (sd[k(m.local)] || 0) + (m.acao === "entrada" ? 1 : -1) * m.qtd;
+  }
+  const temContagem = est.some((m) => m.acao === "contagem");
+  const contadosEst = new Set(est.filter((m) => m.acao === "contagem").map((m) => m.insumoId));
+  const estBaixo = temContagem ? insCad.filter((i) => contadosEst.has(i.id) && i.minimo > 0 && LOCAIS.reduce((t, l) => t + (sd[`${i.id}|${l}`] || 0), 0) < i.minimo)
+    .map((i) => `${i.nome}: ${String(Math.round(LOCAIS.reduce((t, l) => t + (sd[`${i.id}|${l}`] || 0), 0) * 100) / 100).replace(".", ",")} ${i.unidade} <span class="suave">(mínimo ${i.minimo})</span>`) : [];
+  const estDif = est.filter((m) => m.acao === "contagem" && m.data === campoDia.value && m.diferenca < 0).map((m) => `${m.nome} (${m.local}): faltou ${String(-m.diferenca).replace(".", ",")} ${m.unidade} <span class="suave">(contado por ${m.registradoPor})</span>`);
+  const estCompras = est.filter((m) => m.acao === "entrada" && m.data === campoDia.value);
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -156,6 +175,9 @@ async function mostrar() {
     `<div class="cartao"><h2>Limpeza da cozinha</h2><p class="suave">${cozQuem.length ? `Hoje fizeram: ${cozQuem.join(", ")}` : "Ninguém registrou limpeza hoje"}. <a href="cozinha.html">Ver fotos</a></p></div>` +
     bloco("Fichas técnicas esperando sua aprovação", fichasEsperando, "pendente") +
     `<div class="cartao"><h2>Fichas técnicas</h2><p class="suave">${fichasAprovadas} aprovada(s). <a href="fichas.html">Abrir</a></p></div>` +
+    bloco("Estoque abaixo do mínimo", estBaixo, "alerta") +
+    bloco("Sumiu na contagem do estoque", estDif, "alerta") +
+    `<div class="cartao"><h2>Estoque</h2><p class="suave">${temContagem ? "" : "Ainda não teve nenhuma contagem: peça para contarem tudo uma vez. "}${estCompras.length} compra(s) hoje · ${(estCompras.reduce((t, m) => t + m.qtd * m.preco, 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. <a href="estoque.html">Abrir</a></p></div>` +
     bloco("Perdas que foram para o lixo", perdasLixo, "alerta") +
     `<div class="cartao"><h2>Perdas e sobras</h2><p class="suave">${perdas.length} registro(s) hoje · ${perdasLixo.length} para o lixo. <a href="perdas.html">Ver fotos e resumo do mês</a></p></div>` +
     bloco("Saídas do caixa sem autorização", cxSem, "alerta") +

@@ -203,6 +203,32 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Estoque: toda a equipe ativa (menos o gestor) registra movimentos; cancelar só dona e líderes; lista de insumos só a dona.
+    match /estoque/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
+           (request.resource.data.tipo == "mov" && request.resource.data.acao in ["entrada", "uso", "transferencia", "perda", "contagem"]
+            && request.resource.data.qtd is number && request.resource.data.qtd >= 0)
+        || (request.resource.data.tipo == "cancelamento" && papel(["dona", "lider"])));
+      allow update, delete: if false;
+    }
+    match /estoque_fotos/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+    match /estoque_cadastro/{id} {
+      allow read: if ativo();
+      allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow delete: if false;
+    }
+    match /estoque_cadastro_historico/{id} {
+      allow read: if papel(["dona"]);
+      allow create: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     match /escala/{semana} {
       allow read: if ativo();
       allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;

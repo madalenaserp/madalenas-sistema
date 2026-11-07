@@ -39,6 +39,7 @@ const secoes = [
   { titulo: "Consumo da equipe", desc: "O que cada funcionário consumiu e como pagou", link: "consumo.html", mostrar: pode.verConsumo(eu) },
   { titulo: pode.verLivroCompleto(eu) ? "Rodízio do balcão" : "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização, com foto antes e depois", link: "tarefas.html", mostrar: pode.verLivroCompleto(eu) || eu.setor === "Balcão" },
   { titulo: "Produção", desc: "Produção do dia, perdas e encomendas da panificadora e da confeitaria", link: "producao.html", mostrar: pode.producao(eu) },
+  { titulo: "Estoque", desc: "Saldo, compras, contagem e transferência entre as unidades", link: "estoque.html" },
   { titulo: "Perdas e sobras", desc: "O que venceu, estragou, queimou ou sobrou, com foto", link: "perdas.html" },
   { titulo: "Checklists", desc: "Abertura, rondas e fechamento do salão e do caixa", link: "checklists.html" },
   { titulo: "Notas das empresas", desc: "Foto da nota assinada de cada empresa", link: "notas.html", mostrar: pode.notasEmpresas(eu) },
