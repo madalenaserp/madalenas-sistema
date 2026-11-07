@@ -53,6 +53,7 @@
       <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
       <p id="resumo" style="margin:8px 0 0"></p>
     </div>
+    <div class="aviso" id="limite">Limite do caixa: <b>R$ 600,00</b> na gaveta. Passou disso, faça a sangria e registre aqui.</div>
     <button class="botao principal" id="novo">+ Registrar saída ou entrada</button>
     <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
   </section>
@@ -89,6 +90,7 @@ const TIPOS = {
   outro:      { nome: "Outra saída", desc: "Qualquer outra coisa (explique)", sinal: -1, campo: "O que foi", texto: true },
 };
 const AUTORIZOU = ["Daiane", "Fábio", "Ninguém"];
+const LIMITE_GAVETA = 600; // Daiane, 07/11/2026: com mais de R$ 600 na gaveta, faz sangria.
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const agora = () => new Date().toTimeString().slice(0, 5);
@@ -137,6 +139,7 @@ async function mostrar() {
   document.getElementById("resumo").innerHTML = `<b>${dataBR(d)}</b> · saíram <b>${reais(saidas)}</b>${entradas ? ` · entraram ${reais(entradas)}` : ""}`
     + (nSem ? `<br><span class="selo alerta" style="margin-left:0">${nSem} saída(s) sem autorização</span>` : "");
   document.getElementById("novo").hidden = !lanca || d !== hoje();
+  document.getElementById("limite").hidden = !lanca || d !== hoje();
   const lista = document.getElementById("lista");
   lista.innerHTML = itens.length ? "" : `<p class="suave">Nada registrado neste dia.</p>`;
   for (const r of itens) {
