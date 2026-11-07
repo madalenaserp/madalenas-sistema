@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Limpeza da cozinha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .tarefa { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--laranja); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+  .tarefa.feita { border-left-color:var(--ok); background:#f3faf4; }
+  .tarefa .topo { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .tarefa .texto { font-size:17px; font-weight:600; }
+  .fotos { display:flex; gap:10px; }
+  .fotos figure { margin:0; display:flex; flex-direction:column; gap:2px; font-size:12px; color:var(--suave); text-align:center; }
+  .fotos img { width:110px; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; }
+  .acao { display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:16px; padding:12px 16px; border-radius:10px; background:var(--laranja); color:#fff; font-weight:600; cursor:pointer; border:none; }
+  .acao.verde { background:var(--ok); }
+  .acao input { display:none; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .selo { white-space:nowrap; }
+  .pessoa-titulo { margin:8px 0 0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--suave); font-size:14px; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Limpeza da cozinha</h1><a href="producao.html">Voltar</a></header>
+<main>
+  <div class="cartao">
+    <div class="campo" style="margin:0" id="campo-dia" hidden>Dia <input type="date" id="dia"></div>
+    <div class="abas" id="onde" style="margin:8px 0"></div>
+    <h2 id="titulo" style="margin:0"></h2>
+    <p class="suave" id="resumo" style="margin:6px 0 0"></p>
+  </div>
+  <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+</main>
+<div class="zoom" id="zoom" hidden><img alt="Foto"></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listarEntre, ler } from "./js/db.js";
+import { TAREFAS_COZINHA, COZINHAS } from "./js/cozinha.js";
+import { segundaDe, somarDias } from "./js/escala.js";
+
+const eu = await exigirUsuario();
+if (!pode.producao(eu)) location.href = "turno.html";
+const faz = pode.lancarProducao(eu);                 // produção, confeitaria e a Daiane; o Fábio só vê
+const veOutrosDias = pode.verPainel(eu);
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+if (veOutrosDias) document.getElementById("campo-dia").hidden = false;
+let onde = eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora";
+const abas = document.getElementById("onde");
+abas.innerHTML = COZINHAS.map((c) => `<button data-v="${c}" aria-pressed="${c === onde}">${c}</button>`).join("");
+abas.onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; onde = v; abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === onde)); mostrar(); };
+
+// Fotos reduzidas no aparelho e guardadas à parte (cozinha_fotos).
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1200, qualidade = 0.65, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 500000 && lado > 400);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+const cacheFotos = {};
+const foto = (id) => (cacheFotos[id] ??= ler("cozinha_fotos", id).then((d) => d?.foto || ""));
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
+
+async function mostrar() {
+  const d = campoDia.value;
+  const ehHoje = d === hoje();
+  const seg = segundaDe(d);
+  // Semanais olham a semana toda até o dia escolhido; diárias olham só o dia.
+  const regs = (await listarEntre("cozinha", "data", seg, somarDias(seg, 6))).filter((r) => r.onde === onde && r.data <= d);
+  const itens = TAREFAS_COZINHA.map((t) => {
+    const meus = regs.filter((r) => r.tarefa === t.id && (t.freq === "semanal" || r.data === d)).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+    // Uma tarefa feita = o último "antes" e o "depois" seguinte, ou um "depois"/"feito".
+    const depois = meus.filter((r) => r.tipo === "depois" || r.tipo === "feito").at(-1);
+    const antes = meus.filter((r) => r.tipo === "antes" && (!depois || r.criadoEm <= depois.criadoEm)).at(-1) || (depois ? null : meus.filter((r) => r.tipo === "antes").at(-1));
+    const concluida = t.fotos === "antes_depois" ? !!(antes && depois) : !!depois;
+    return { tarefa: t, antes, depois: depois?.tipo === "depois" ? depois : null, feito: depois?.tipo === "feito" ? depois : null, concluida };
+  });
+  const feitas = itens.filter((x) => x.concluida).length;
+  document.getElementById("titulo").textContent = `${onde} · ${dataBR(d)}`;
+  document.getElementById("resumo").innerHTML = `${feitas} de ${itens.length} feita(s)` + (feitas === itens.length ? ` · <span class="selo ok">tudo feito</span>` : "")
+    + `<br><span style="font-size:13px">Quem fizer a tarefa registra com o próprio nome. As semanais valem para a semana toda.</span>`;
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+  for (const freq of ["diaria", "semanal"]) {
+    const t = document.createElement("p"); t.className = "pessoa-titulo"; t.textContent = freq === "diaria" ? "Todo dia" : "Uma vez por semana"; lista.append(t);
+    for (const x of itens.filter((x) => x.tarefa.freq === freq)) lista.append(cartao(x, ehHoje));
+  }
+}
+
+function cartao(x, ehHoje) {
+  const div = document.createElement("div");
+  div.className = "tarefa" + (x.concluida ? " feita" : "");
+  const quem = (r) => (r ? `${esc(r.registradoPor)}${r.data !== campoDia.value ? ` (${dataBR(r.data).slice(0, 5)})` : ""} às ${esc(r.hora)}` : "");
+  const vazio = `<div style="width:110px;height:110px;border:1px dashed var(--linha);border-radius:8px;display:flex;align-items:center;justify-content:center">sem foto</div>`;
+  div.innerHTML = `<div class="topo"><span class="texto">${esc(x.tarefa.texto)}</span>
+      <span class="selo ${x.concluida ? "ok" : "pendente"}">${x.concluida ? "feita" : "a fazer"}</span></div>
+    ${x.tarefa.fotos === "uma" ? (x.depois ? `<div class="fotos"><figure><img data-foto="${esc(x.depois.fotoId)}" alt="Foto">${quem(x.depois)}</figure></div>` : "")
+      : x.tarefa.fotos ? (x.antes || x.depois ? `<div class="fotos">
+        <figure>${x.antes ? `<img data-foto="${esc(x.antes.fotoId)}" alt="Antes">` : vazio}Antes ${quem(x.antes)}</figure>
+        <figure>${x.depois ? `<img data-foto="${esc(x.depois.fotoId)}" alt="Depois">` : vazio}Depois ${quem(x.depois)}</figure></div>` : "")
+      : x.feito ? `<span class="suave">Feito por ${quem(x.feito)}</span>` : ""}`;
+  div.querySelectorAll("img[data-foto]").forEach(async (img) => {
+    img.src = await foto(img.dataset.foto);
+    img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+  });
+  if (ehHoje && faz && !x.concluida) {
+    if (x.tarefa.fotos) {
+      const etapa = x.tarefa.fotos === "uma" || x.antes ? "depois" : "antes";
+      const b = document.createElement("label");
+      b.className = "acao" + (etapa === "depois" ? " verde" : "");
+      b.innerHTML = `📷 ${x.tarefa.fotos === "uma" ? "Fiz: tirar foto" : etapa === "antes" ? "Vou fazer: foto de antes" : "Terminei: foto de depois"}<input type="file" accept="image/*" capture="environment">`;
+      b.querySelector("input").onchange = (e) => e.target.files[0] && enviarFoto(x, etapa, e.target.files[0], b);
+      div.append(b);
+    } else {
+      const b = document.createElement("button");
+      b.className = "acao verde"; b.textContent = "✓ Fiz";
+      b.onclick = async () => { b.disabled = true; await registrar(x, { tipo: "feito" }); };
+      div.append(b);
+    }
+  }
+  return div;
+}
+
+async function registrar(x, dados) {
+  try {
+    const d = hoje();
+    await acrescentar("cozinha", { ...dados, tarefa: x.tarefa.id, texto: x.tarefa.texto, onde, data: d, mes: d.slice(0, 7),
+      hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+  } catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
+  mostrar();
+}
+
+async function enviarFoto(x, etapa, arquivo, botao) {
+  botao.style.pointerEvents = "none"; botao.firstChild.textContent = "Enviando… ";
+  try {
+    const url = await reduzir(arquivo);
+    const fotoId = await acrescentar("cozinha_fotos", { tarefa: x.tarefa.id, etapa, onde, data: hoje(), foto: url,
+      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+    cacheFotos[fotoId] = Promise.resolve(url);
+    await registrar(x, { tipo: etapa, fotoId });
+  } catch { alert("Não consegui enviar a foto. Verifique a internet e tente de novo."); mostrar(); }
+}
+
+campoDia.onchange = mostrar;
+mostrar();
+</script>
+</body>
+</html>

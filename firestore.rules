@@ -99,6 +99,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Limpeza da cozinha: quem faz registra com o próprio nome e foto. Só se acrescenta.
+    match /cozinha/{id} {
+      allow read: if papel(["dona", "gestor"]) || daProducao();
+      allow create: if (papel(["dona"]) || (edita() && daProducao())) && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.tipo in ["antes", "depois", "feito"];
+      allow update, delete: if false;
+    }
+    match /cozinha_fotos/{id} {
+      allow read: if papel(["dona", "gestor"]) || daProducao();
+      allow create: if (papel(["dona"]) || (edita() && daProducao())) && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+
     match /notas_fotos/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid

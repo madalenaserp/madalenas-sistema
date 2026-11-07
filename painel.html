@@ -21,9 +21,10 @@ import { exigirUsuario, hoje } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { listar, listarEntre } from "./js/db.js";
 import { CHECKLISTS } from "./js/checklists.js";
-import { folgasNoDia } from "./js/escala.js";
 import { distribuir } from "./js/rodizio.js";
 import { chaveProduto } from "./js/produtos.js";
+import { TAREFAS_COZINHA, COZINHAS } from "./js/cozinha.js";
+import { folgasNoDia, segundaDe, somarDias } from "./js/escala.js";
 
 if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
@@ -90,6 +91,12 @@ async function mostrar() {
   for (const r of perdas) { const k = chaveProduto(r.produto, r.unidade); nomeDe[k] = `${r.produto} (${r.unidade})`; perdidoPor[k] = (perdidoPor[k] || 0) + (Number(r.quantidade) || 0); }
   const muitaPerda = Object.entries(perdidoPor).filter(([k, v]) => feitoPor[k] && v / feitoPor[k] >= 0.1)
     .map(([k, v]) => { return `${nomeDe[k]}: ${Math.round((v / feitoPor[k]) * 100)}% perdido <span class="suave">(${v} de ${feitoPor[k]})</span>`; });
+  const segCoz = segundaDe(campoDia.value);
+  const coz = (await listarEntre("cozinha", "data", segCoz, somarDias(segCoz, 6))).filter((r) => r.data <= campoDia.value);
+  const cozFeita = (t, onde) => { const m = coz.filter((r) => r.tarefa === t.id && r.onde === onde && (t.freq === "semanal" || r.data === campoDia.value));
+    return t.fotos === "antes_depois" ? m.some((r) => r.tipo === "antes") && m.some((r) => r.tipo === "depois") : m.some((r) => r.tipo === "depois" || r.tipo === "feito"); };
+  const cozAbertas = COZINHAS.flatMap((o) => TAREFAS_COZINHA.filter((t) => !cozFeita(t, o)).map((t) => `${o}: ${t.texto}${t.freq === "semanal" ? ' <span class="suave">(semanal)</span>' : ""}`));
+  const cozQuem = [...new Set(coz.filter((r) => r.data === campoDia.value && r.tipo !== "antes").map((r) => r.registradoPor))];
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -133,6 +140,8 @@ async function mostrar() {
     bloco("Encomendas do dia seguinte", encAmanha, "pendente") +
     bloco("Produtos com 10% ou mais de perda", muitaPerda, "alerta") +
     `<div class="cartao"><h2>Produção do dia</h2><p class="suave">${prod.length} registro(s) de produção${prod.length ? "" : " (ninguém registrou ainda)"}. <a href="producao-dia.html">Ver feito x perdido</a></p></div>` +
+    bloco("Limpeza da cozinha não feita", cozAbertas, "pendente") +
+    `<div class="cartao"><h2>Limpeza da cozinha</h2><p class="suave">${cozQuem.length ? `Hoje fizeram: ${cozQuem.join(", ")}` : "Ninguém registrou limpeza hoje"}. <a href="cozinha.html">Ver fotos</a></p></div>` +
     bloco("Perdas que foram para o lixo", perdasLixo, "alerta") +
     `<div class="cartao"><h2>Perdas e sobras</h2><p class="suave">${perdas.length} registro(s) hoje · ${perdasLixo.length} para o lixo. <a href="perdas.html">Ver fotos e resumo do mês</a></p></div>` +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +
