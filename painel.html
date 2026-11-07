@@ -97,6 +97,11 @@ async function mostrar() {
     return t.fotos === "antes_depois" ? m.some((r) => r.tipo === "antes") && m.some((r) => r.tipo === "depois") : m.some((r) => r.tipo === "depois" || r.tipo === "feito"); };
   const cozAbertas = COZINHAS.flatMap((o) => TAREFAS_COZINHA.filter((t) => !cozFeita(t, o)).map((t) => `${o}: ${t.texto}${t.freq === "semanal" ? ' <span class="suave">(semanal)</span>' : ""}`));
   const cozQuem = [...new Set(coz.filter((r) => r.data === campoDia.value && r.tipo !== "antes").map((r) => r.registradoPor))];
+  const fichasRegs = (await listarEntre("fichas", "data", "2000-01-01", "9999-12-31")).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  const fichaAtual = {};
+  for (const r of fichasRegs.filter((r) => r.tipo === "ficha")) fichaAtual[r.produto] = r;
+  const fichasEsperando = Object.values(fichaAtual).filter((f) => !fichasRegs.some((r) => r.refId === f.id)).map((f) => `${f.produto} <span class="suave">(${f.registradoPor})</span>`);
+  const fichasAprovadas = Object.values(fichaAtual).filter((f) => fichasRegs.filter((r) => r.refId === f.id).at(-1)?.tipo === "aprovacao").length;
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -142,6 +147,8 @@ async function mostrar() {
     `<div class="cartao"><h2>Produção do dia</h2><p class="suave">${prod.length} registro(s) de produção${prod.length ? "" : " (ninguém registrou ainda)"}. <a href="producao-dia.html">Ver feito x perdido</a></p></div>` +
     bloco("Limpeza da cozinha não feita", cozAbertas, "pendente") +
     `<div class="cartao"><h2>Limpeza da cozinha</h2><p class="suave">${cozQuem.length ? `Hoje fizeram: ${cozQuem.join(", ")}` : "Ninguém registrou limpeza hoje"}. <a href="cozinha.html">Ver fotos</a></p></div>` +
+    bloco("Fichas técnicas esperando sua aprovação", fichasEsperando, "pendente") +
+    `<div class="cartao"><h2>Fichas técnicas</h2><p class="suave">${fichasAprovadas} aprovada(s). <a href="fichas.html">Abrir</a></p></div>` +
     bloco("Perdas que foram para o lixo", perdasLixo, "alerta") +
     `<div class="cartao"><h2>Perdas e sobras</h2><p class="suave">${perdas.length} registro(s) hoje · ${perdasLixo.length} para o lixo. <a href="perdas.html">Ver fotos e resumo do mês</a></p></div>` +
     bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +

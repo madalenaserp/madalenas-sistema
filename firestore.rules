@@ -113,6 +113,21 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Fichas técnicas: a produção preenche (cada envio é uma versão nova); só a dona aprova ou pede correção.
+    match /fichas/{id} {
+      allow read: if papel(["dona", "gestor"]) || daProducao();
+      allow create: if request.resource.data.registradoPorUid == request.auth.uid && (
+           (request.resource.data.tipo == "ficha" && (papel(["dona"]) || (edita() && daProducao())))
+        || (request.resource.data.tipo in ["aprovacao", "correcao"] && papel(["dona"])));
+      allow update, delete: if false;
+    }
+    match /fichas_fotos/{id} {
+      allow read: if papel(["dona", "gestor"]) || daProducao();
+      allow create: if (papel(["dona"]) || (edita() && daProducao())) && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+
     match /notas_fotos/{id} {
       allow read: if caixaOuLider();
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid

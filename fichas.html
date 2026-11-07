@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Fichas técnicas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .item { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; font-size:16px; text-align:left; width:100%; }
+  .item.esperando { border-left-color:var(--laranja); }
+  .item.aprovada { border-left-color:var(--ok); }
+  .item.correcao { border-left-color:var(--alerta); }
+  .selo { white-space:nowrap; }
+  .passo { display:flex; flex-direction:column; gap:12px; }
+  .passo h2 { margin:0; font-size:21px; line-height:1.25; }
+  .passo .ajuda { margin:0; color:var(--suave); font-size:14px; }
+  .passo input, .passo textarea, .passo select { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; font-family:inherit; }
+  .barra { height:6px; background:var(--linha); border-radius:3px; overflow:hidden; }
+  .barra div { height:100%; background:var(--laranja); }
+  .opcoes { display:grid; grid-template-columns:1fr; gap:8px; }
+  .opcoes button { padding:14px 10px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:16px; cursor:pointer; text-align:left; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .ing { display:grid; grid-template-columns:1fr 78px 78px 34px; gap:6px; align-items:center; }
+  .ing input, .ing select { padding:9px 6px; font-size:15px; }
+  .ing button { border:none; background:none; font-size:20px; color:var(--suave); cursor:pointer; padding:0; }
+  .mais { border:1px dashed var(--linha); background:#fff; border-radius:10px; padding:10px; font-size:15px; cursor:pointer; }
+  .navega { display:grid; grid-template-columns:1fr 2fr; gap:8px; }
+  .msg-erro { color:var(--alerta); font-size:15px; margin:0; min-height:1.2em; font-weight:600; }
+  .camera { display:flex; flex-direction:column; align-items:center; gap:8px; border:2px dashed var(--linha); border-radius:12px; padding:16px; cursor:pointer; font-size:16px; text-align:center; }
+  .camera input { display:none; }
+  .camera img { max-width:100%; max-height:260px; border-radius:8px; }
+  .ficha dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0; font-size:15px; }
+  .ficha dt { color:var(--suave); }
+  .ficha dd { margin:0; font-weight:600; }
+  .ficha table { width:100%; border-collapse:collapse; font-size:15px; }
+  .ficha td { padding:6px 4px; border-bottom:1px solid var(--linha); }
+  .ficha td.n { text-align:right; white-space:nowrap; }
+  .ficha h3 { margin:14px 0 4px; font-size:16px; }
+  .ficha .preparo { white-space:pre-wrap; font-size:15px; margin:0; }
+  .ficha img.pronto { width:100%; max-height:280px; object-fit:cover; border-radius:10px; }
+  .etapa { border:1px solid var(--linha); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:8px; background:#fff; }
+  .etapa .cab { display:flex; justify-content:space-between; align-items:center; font-weight:700; }
+  .etapa .cab button { border:none; background:none; font-size:14px; color:var(--suave); cursor:pointer; }
+  .etapa textarea { min-height:70px; }
+  .etapa .fotinho { display:flex; align-items:center; gap:10px; border:1px dashed var(--linha); border-radius:8px; padding:8px; cursor:pointer; font-size:15px; }
+  .etapa .fotinho input { display:none; }
+  .etapa .fotinho img { width:70px; height:70px; object-fit:cover; border-radius:6px; }
+  .passos-ficha { display:flex; flex-direction:column; gap:10px; }
+  .passos-ficha .p { display:grid; grid-template-columns:110px 1fr; gap:10px; align-items:start; }
+  .passos-ficha img { width:110px; height:110px; object-fit:cover; border-radius:8px; background:#eee; }
+  @media print {
+    @page { size:A4; margin:12mm; }
+    header, #acoes, .naoimprime { display:none !important; }
+    body { background:#fff; }
+    main { padding:0; max-width:none; }
+    .cartao { border:none; box-shadow:none; padding:0; }
+    .ficha img.pronto { max-height:200px; width:auto; }
+    .passos-ficha .p { break-inside:avoid; grid-template-columns:90px 1fr; }
+    .passos-ficha img { width:90px; height:90px; }
+    .so-impressao { display:block !important; }
+  }
+  .so-impressao { display:none; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Fichas técnicas</h1><a href="producao.html" id="voltar">Voltar</a></header>
+<main id="tela"></main>
+<datalist id="ingredientes"></datalist>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listarEntre, ler } from "./js/db.js";
+import { PRODUTOS_PRODUCAO, PESADAS } from "./js/produtos.js";
+
+const eu = await exigirUsuario();
+if (!pode.producao(eu)) location.href = "turno.html";
+const preenche = pode.lancarProducao(eu);   // produção, confeitaria e a Daiane; o Fábio só vê
+const aprova = eu.papel === "dona";
+const tela = document.getElementById("tela");
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const num = (t) => Number(String(t ?? "").replace(",", "."));
+const br = (v) => String(Math.round(v * 1000) / 1000).replace(".", ",");
+const agora = () => new Date().toTimeString().slice(0, 5);
+const UN_ING = ["g", "kg", "ml", "L", "unidade"];
+document.getElementById("ingredientes").innerHTML = ["Farinha de trigo", "Água", "Sal", "Açúcar", "Fermento biológico seco", "Fermento biológico fresco",
+  "Melhorador", "Manteiga", "Margarina", "Gordura vegetal", "Óleo", "Ovos", "Leite", "Leite em pó", "Leite condensado", "Creme de leite",
+  "Coco ralado", "Fubá", "Goiabada", "Doce de leite", "Nutella", "Queijo muçarela", "Presunto", "Calabresa", "Catupiry", "Cebola", "Alho",
+  "Essência de baunilha", "Chocolate em pó", "Banana", "Canela"].map((i) => `<option value="${i}">`).join("");
+
+// Foto reduzida no aparelho (~60 KB), guardada à parte em fichas_fotos.
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      let lado = 1200, qualidade = 0.65, url;
+      do {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        url = c.toDataURL("image/jpeg", qualidade);
+        lado -= 200; qualidade -= 0.05;
+      } while (url.length > 500000 && lado > 400);
+      URL.revokeObjectURL(img.src);
+      ok(url);
+    };
+    img.onerror = falha;
+    img.src = URL.createObjectURL(arquivo);
+  });
+}
+
+/* ---------- Situação de cada produto ---------- */
+// Cada envio é uma versão nova (nada se apaga). Vale a última versão; a Daiane aprova ou pede correção.
+async function situacao() {
+  const regs = (await listarEntre("fichas", "data", "2000-01-01", "9999-12-31")).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+  const por = {};
+  for (const p of PRODUTOS_PRODUCAO) {
+    const versoes = regs.filter((r) => r.tipo === "ficha" && r.produto === p);
+    const atual = versoes.at(-1);
+    const parecer = atual && regs.filter((r) => r.refId === atual.id && ["aprovacao", "correcao"].includes(r.tipo)).at(-1);
+    por[p] = { atual, versao: versoes.length, parecer, estado: !atual ? "sem" : parecer?.tipo === "aprovacao" ? "aprovada" : parecer?.tipo === "correcao" ? "correcao" : "esperando" };
+  }
+  return por;
+}
+const ROTULO = { sem: ["Sem ficha", "pendente"], esperando: ["Esperando a Daiane", "pendente"], aprovada: ["Aprovada", "ok"], correcao: ["Corrigir", "alerta"] };
+
+async function lista() {
+  document.getElementById("voltar").href = "producao.html"; document.getElementById("voltar").onclick = null;
+  const por = await situacao();
+  const n = (e) => Object.values(por).filter((s) => s.estado === e).length;
+  tela.innerHTML = `<div class="cartao"><p style="margin:0"><b>${n("aprovada")} de ${PRODUTOS_PRODUCAO.length}</b> fichas aprovadas
+      ${n("esperando") ? ` · <span class="selo pendente" style="margin-left:0">${n("esperando")} esperando ${aprova ? "você" : "a Daiane"}</span>` : ""}
+      ${n("correcao") ? ` · <span class="selo alerta" style="margin-left:0">${n("correcao")} para corrigir</span>` : ""}</p>
+    <p class="suave" style="margin:6px 0 0">Toque no produto. ${preenche ? "As perguntas vêm uma por vez e só dá para seguir com a resposta completa." : ""}</p></div>
+    <div id="itens" style="display:flex;flex-direction:column;gap:8px"></div>`;
+  const ordem = { correcao: 0, esperando: aprova ? 1 : 2, sem: aprova ? 2 : 1, aprovada: 3 };
+  for (const p of [...PRODUTOS_PRODUCAO].sort((a, b) => ordem[por[a].estado] - ordem[por[b].estado])) {
+    const s = por[p];
+    const b = document.createElement("button");
+    b.className = `item ${s.estado}`;
+    b.innerHTML = `<span>${esc(p)}${s.atual ? `<br><span class="suave" style="font-size:13px">por ${esc(s.atual.registradoPor)} em ${dataBR(s.atual.data)}${s.versao > 1 ? ` · versão ${s.versao}` : ""}</span>` : ""}</span>
+      <span class="selo ${ROTULO[s.estado][1]}">${ROTULO[s.estado][0]}</span>`;
+    b.onclick = () => (s.atual ? ver(p, s) : preenche ? perguntar(p) : alert("Este produto ainda não tem ficha."));
+    document.getElementById("itens").append(b);
+  }
+}
+
+/* ---------- Ver uma ficha ---------- */
+async function ver(p, s) {
+  voltarPara(lista);
+  const f = s.atual;
+  const custo = f.ingredientes.map((i) => `<tr><td>${esc(i.nome)}</td><td class="n">${esc(br(i.qtd))} ${esc(i.un)}</td></tr>`).join("");
+  tela.innerHTML = `<div class="cartao ficha">
+      <p class="naoimprime" style="margin:0 0 4px"><span class="selo ${ROTULO[s.estado][1]}" style="margin-left:0">${ROTULO[s.estado][0]}</span></p>
+      <p class="so-impressao" style="margin:0 0 4px;font-weight:700">Madalena's Coffee Shop · Ficha técnica</p><h2 style="margin:0 0 8px">${esc(p)}</h2>
+      <img class="pronto" id="foto" alt="Produto pronto" hidden>
+      <h3>Massa (receita base)</h3><table>${custo}</table>
+      ${f.temRecheio ? `<h3>Recheio / cobertura</h3><table>${f.recheio.map((i) => `<tr><td>${esc(i.nome)}</td><td class="n">${esc(br(i.qtd))} ${esc(i.un)}</td></tr>`).join("")}</table>` : ""}
+      <h3>Divisão e rendimento</h3>
+      <dl>${f.divide === "divisora" ? `<dt>Pesada</dt><dd>${br(f.pesada)} kg em ${f.partes} partes (≈ ${Math.round((f.pesada * 1000) / f.partes)} g cada)</dd>` : `<dt>Peso de cada</dt><dd>${br(f.pesoUnidade)} g</dd>`}
+        <dt>A receita rende</dt><dd>${f.rendimento} unidades</dd></dl>
+      <h3>Tempos e forno</h3>
+      <dl><dt>Mistura (sova)</dt><dd>${f.mistura} min</dd><dt>Fermentação</dt><dd>${f.fermentacao} min</dd>
+        <dt>Forno</dt><dd>${f.fornoTemp} °C por ${f.fornoTempo} min</dd></dl>
+      <h3>Modo de preparo</h3>${f.passos ? `<div class="passos-ficha">${f.passos.map((x, k) => `<div class="p"><img data-foto="${esc(x.fotoId)}" alt="Passo ${k + 1}"><p class="preparo"><b>${k + 1}.</b> ${esc(x.texto)}</p></div>`).join("")}</div>` : `<p class="preparo">${esc(f.preparo)}</p>`}
+      <p class="suave" style="margin:12px 0 0;font-size:13px">Preenchida por ${esc(f.registradoPor)} em ${dataBR(f.data)} às ${esc(f.hora)}${s.versao > 1 ? ` · versão ${s.versao}` : ""}</p>
+      ${s.parecer ? `<p style="margin:8px 0 0">${s.parecer.tipo === "aprovacao" ? "✓ Aprovada" : "✗ Pedido de correção"} por ${esc(s.parecer.registradoPor)}${s.parecer.texto ? `: <b>${esc(s.parecer.texto)}</b>` : ""}</p>` : ""}
+    </div><div id="acoes" style="display:flex;flex-direction:column;gap:8px"></div>`;
+  ler("fichas_fotos", f.fotoId).then((d) => { if (d?.foto) { const i = document.getElementById("foto"); i.src = d.foto; i.hidden = false; } });
+  tela.querySelectorAll("img[data-foto]").forEach(async (img) => { img.src = (await ler("fichas_fotos", img.dataset.foto))?.foto || ""; });
+  const acoes = document.getElementById("acoes");
+  const botao = (t, cls, fn) => { const b = document.createElement("button"); b.className = `botao ${cls}`; b.style.textAlign = "center"; b.textContent = t; b.onclick = fn; acoes.append(b); };
+  botao("🖨 Imprimir ficha", "", async () => {
+    // Espera as fotos carregarem antes de imprimir.
+    await Promise.all([...tela.querySelectorAll("img")].filter((i) => !i.hidden).map((i) => i.complete && i.src ? 0 : new Promise((r) => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
+    window.print();
+  });
+  if (aprova && s.estado === "esperando") {
+    botao("✓ Aprovar esta ficha", "principal", () => parecer(f, "aprovacao", ""));
+    botao("Pedir correção", "", () => { const t = prompt("O que precisa corrigir?"); if (t?.trim()) parecer(f, "correcao", t.trim()); });
+  }
+  if (preenche) botao(s.estado === "correcao" ? "Corrigir a ficha" : "Fazer uma nova versão", s.estado === "correcao" ? "principal" : "", () => perguntar(p, f));
+}
+async function parecer(f, tipo, texto) {
+  try {
+    await acrescentar("fichas", { tipo, refId: f.id, produto: f.produto, texto, data: hoje(), hora: agora(),
+      registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+  } catch { return alert("Não consegui salvar. Verifique a internet."); }
+  lista();
+}
+function voltarPara(fn) {
+  const v = document.getElementById("voltar");
+  v.href = "#"; v.onclick = (e) => { e.preventDefault(); fn(); };
+}
+
+/* ---------- Perguntas, uma por vez ---------- */
+function perguntar(produto, anterior) {
+  const chave = `madalenas.ficha.${produto}`;
+  let f;
+  try { f = JSON.parse(localStorage.getItem(chave)); } catch {}
+  f ||= anterior ? { ...structuredClone(anterior), foto: null,
+      passos: anterior.passos ? anterior.passos.map((x) => ({ texto: x.texto, foto: null, fotoId: x.fotoId })) : [{ texto: anterior.preparo || "", foto: null }] } : {
+    ingredientes: [{ nome: "", qtd: "", un: "kg" }, { nome: "", qtd: "", un: "g" }], recheio: [{ nome: "", qtd: "", un: "g" }],
+    divide: null, pesada: PESADAS[produto] > 0.5 ? br(PESADAS[produto]) : "", partes: "", pesoUnidade: PESADAS[produto] && PESADAS[produto] <= 0.5 ? br(PESADAS[produto] * 1000) : "",
+    rendimento: "", mistura: "", fermentacao: "", fornoTemp: "", fornoTempo: "", temRecheio: null, foto: null, fotoId: null,
+    passos: [{ texto: "", foto: null }, { texto: "", foto: null }, { texto: "", foto: null }] };
+  const guarda = () => {
+    try { localStorage.setItem(chave, JSON.stringify(f)); }
+    catch { try { localStorage.setItem(chave, JSON.stringify({ ...f, foto: null, passos: f.passos.map((x) => ({ ...x, foto: null })) })); } catch {} }
+  };
+  const linhasOk = (l) => l.every((i) => i.nome.trim() && num(i.qtd) > 0);
+  const tabelaIng = (campo) => `<div id="ings" style="display:flex;flex-direction:column;gap:6px">${f[campo].map((i, k) => `<div class="ing" data-k="${k}">
+      <input list="ingredientes" placeholder="Ingrediente" value="${esc(i.nome)}" data-c="nome">
+      <input inputmode="decimal" placeholder="Qtd" value="${esc(i.qtd)}" data-c="qtd">
+      <select data-c="un">${UN_ING.map((u) => `<option ${u === i.un ? "selected" : ""}>${u}</option>`).join("")}</select>
+      <button type="button" aria-label="Tirar" data-tira="${k}">×</button></div>`).join("")}</div>
+    <button type="button" class="mais" id="mais">+ Mais um ingrediente</button>`;
+  const ligaIng = (campo, redesenha) => {
+    tela.querySelectorAll(".ing").forEach((l) => l.querySelectorAll("[data-c]").forEach((el) => { el.oninput = el.onchange = () => { f[campo][l.dataset.k][el.dataset.c] = el.value; guarda(); }; }));
+    tela.querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { if (f[campo].length > 1) { f[campo].splice(b.dataset.tira, 1); guarda(); redesenha(); } }));
+    tela.querySelector("#mais").onclick = () => { f[campo].push({ nome: "", qtd: "", un: "g" }); guarda(); redesenha(); tela.querySelector(".ing:last-child input").focus(); };
+  };
+  const campoNum = (id, rot, unid, ajuda) => `<label class="ajuda" for="${id}">${rot}</label><div style="display:flex;gap:8px;align-items:center"><input id="${id}" inputmode="decimal" value="${esc(f[id])}"><b>${unid}</b></div>${ajuda ? `<p class="ajuda">${ajuda}</p>` : ""}`;
+  const ligaNum = (...ids) => ids.forEach((id) => (tela.querySelector(`#${id}`).oninput = (e) => { f[id] = e.target.value; guarda(); }));
+  const escolha = (campo, ops) => `<div class="opcoes">${ops.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${String(f[campo]) === v}">${t}</button>`).join("")}</div>`;
+  const ligaEscolha = (campo, conv = (v) => v, redesenha) => tela.querySelectorAll(".opcoes button").forEach((b) => (b.onclick = () => { f[campo] = conv(b.dataset.v); guarda(); redesenha(); }));
+
+  const passos = [
+    { titulo: "Quais ingredientes vão na massa, e quanto de cada?", ajuda: "A receita inteira, do jeito que vocês fazem hoje. Uma linha para cada ingrediente, com a quantidade e a unidade.",
+      corpo: () => tabelaIng("ingredientes"), liga: (r) => ligaIng("ingredientes", r),
+      valida: () => f.ingredientes.length < 2 ? "Coloque pelo menos 2 ingredientes." : !linhasOk(f.ingredientes) ? "Tem linha sem ingrediente ou sem quantidade. Preencha ou toque no × para tirar." : "" },
+    { titulo: "Tem recheio ou cobertura?", corpo: () => escolha("temRecheio", [["true", "Sim, tem recheio ou cobertura"], ["false", "Não, é só a massa"]]),
+      liga: (r) => ligaEscolha("temRecheio", (v) => v === "true", r), valida: () => (f.temRecheio == null ? "Escolha sim ou não." : "") },
+    { titulo: "Quais ingredientes vão no recheio ou cobertura?", ajuda: "Quantidade para a receita inteira (todas as unidades).", pula: () => !f.temRecheio,
+      corpo: () => tabelaIng("recheio"), liga: (r) => ligaIng("recheio", r),
+      valida: () => !linhasOk(f.recheio) ? "Tem linha sem ingrediente ou sem quantidade. Preencha ou toque no × para tirar." : "" },
+    { titulo: "Como a massa é dividida?", corpo: () => escolha("divide", [["divisora", "Na divisora (uma pesada vira várias partes)"], ["unidade", "Pesando um por um"]]),
+      liga: (r) => ligaEscolha("divide", (v) => v, r), valida: () => (!f.divide ? "Escolha uma das opções." : "") },
+    { titulo: "Quanto pesa cada pesada e em quantas partes a divisora corta?", pula: () => f.divide !== "divisora",
+      corpo: () => campoNum("pesada", "Peso da pesada", "kg", PESADAS[produto] > 0.5 ? `Na lista do Daniel está ${br(PESADAS[produto])} kg. Confira.` : "") + campoNum("partes", "Quantas partes", "partes"),
+      liga: () => ligaNum("pesada", "partes"), valida: () => !(num(f.pesada) > 0) ? "Coloque o peso da pesada." : !(num(f.partes) >= 1) ? "Coloque em quantas partes divide." : "" },
+    { titulo: "Quanto pesa cada pão antes de ir ao forno?", pula: () => f.divide !== "unidade",
+      corpo: () => campoNum("pesoUnidade", "Peso de cada", "gramas", PESADAS[produto] && PESADAS[produto] <= 0.5 ? `Na lista do Daniel está ${br(PESADAS[produto] * 1000)} g. Confira.` : ""),
+      liga: () => ligaNum("pesoUnidade"), valida: () => (!(num(f.pesoUnidade) > 0) ? "Coloque o peso em gramas." : "") },
+    { titulo: "Quantas unidades a receita inteira rende?", ajuda: "Contando o produto pronto, do jeito que vai para a vitrine.",
+      corpo: () => campoNum("rendimento", "Rendimento", "unidades"), liga: () => ligaNum("rendimento"), valida: () => (!(num(f.rendimento) >= 1) ? "Coloque quantas unidades rende." : "") },
+    { titulo: "Quanto tempo de mistura e de fermentação?", corpo: () => campoNum("mistura", "Mistura / sova", "min") + campoNum("fermentacao", "Fermentação (descanso)", "min", "Se não fermenta, coloque 0."),
+      liga: () => ligaNum("mistura", "fermentacao"), valida: () => !(num(f.mistura) > 0) ? "Coloque o tempo de mistura." : !(num(f.fermentacao) >= 0) || f.fermentacao === "" ? "Coloque o tempo de fermentação (0 se não tiver)." : "" },
+    { titulo: "Qual a temperatura e o tempo de forno?", corpo: () => campoNum("fornoTemp", "Temperatura", "°C") + campoNum("fornoTempo", "Tempo", "min"),
+      liga: () => ligaNum("fornoTemp", "fornoTempo"), valida: () => !(num(f.fornoTemp) >= 50) ? "Coloque a temperatura do forno." : !(num(f.fornoTempo) > 0) ? "Coloque o tempo de forno." : "" },
+    { titulo: "Como faz, passo a passo?", ajuda: "Um passo de cada vez, como se fosse ensinar alguém que nunca fez. Cada passo tem a sua foto, tirada na hora de fazer.",
+      corpo: () => `<div style="display:flex;flex-direction:column;gap:8px">${f.passos.map((x, k) => `<div class="etapa" data-k="${k}">
+          <div class="cab"><span>Passo ${k + 1}</span>${f.passos.length > 3 ? `<button type="button" data-tira="${k}">Tirar passo</button>` : ""}</div>
+          <textarea placeholder="${k === 0 ? "Ex.: Coloque a farinha, o sal e o açúcar na masseira e misture 1 minuto." : "O que fazer neste passo"}">${esc(x.texto)}</textarea>
+          <label class="fotinho">${x.foto || x.fotoId ? `${x.foto ? `<img src="${x.foto}" alt="Foto">` : "✓"} <span>Foto pronta. Toque para trocar.</span>` : `📷 <span>Foto deste passo</span>`}<input type="file" accept="image/*" capture="environment"></label>
+        </div>`).join("")}</div><button type="button" class="mais" id="mais-passo">+ Mais um passo</button>`,
+      liga: (r) => {
+        tela.querySelectorAll(".etapa").forEach((el) => {
+          const k = el.dataset.k;
+          el.querySelector("textarea").oninput = (e) => { f.passos[k].texto = e.target.value; guarda(); };
+          el.querySelector("input[type=file]").onchange = async (e) => {
+            const a = e.target.files[0]; if (!a) return;
+            el.querySelector(".fotinho span").textContent = "Preparando a foto…";
+            try { f.passos[k].foto = await reduzir(a); f.passos[k].fotoId = null; guarda(); } catch { alert("Não consegui ler a foto. Tente de novo."); }
+            r();
+          };
+        });
+        tela.querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { f.passos.splice(b.dataset.tira, 1); guarda(); r(); }));
+        tela.querySelector("#mais-passo").onclick = () => { f.passos.push({ texto: "", foto: null }); guarda(); r(); };
+      },
+      valida: () => {
+        if (f.passos.length < 3) return "Coloque pelo menos 3 passos.";
+        const semTexto = f.passos.findIndex((x) => x.texto.trim().length < 10);
+        if (semTexto >= 0) return `Explique melhor o passo ${semTexto + 1} (ou toque em "Tirar passo").`;
+        const semFoto = f.passos.findIndex((x) => !x.foto && !x.fotoId);
+        if (semFoto >= 0) return `Falta a foto do passo ${semFoto + 1}.`;
+        return "";
+      } },
+    { titulo: "Tire uma foto do produto pronto", ajuda: "Do jeito que ele tem que ficar na vitrine. É o padrão que todo mundo vai seguir.",
+      corpo: () => `<label class="camera" id="cam">${f.foto || f.fotoId ? `${f.foto ? `<img src="${f.foto}" alt="Foto">` : "✓"}<span>Foto pronta. Toque para trocar.</span>` : `<span style="font-size:40px">📷</span><span>Tirar foto</span>`}<input type="file" accept="image/*" capture="environment"></label>`,
+      liga: (r) => (tela.querySelector("#cam input").onchange = async (e) => {
+        const a = e.target.files[0]; if (!a) return;
+        tela.querySelector("#cam span:last-of-type").textContent = "Preparando a foto…";
+        try { f.foto = await reduzir(a); f.fotoId = null; guarda(); } catch { alert("Não consegui ler a foto. Tente de novo."); }
+        r();
+      }), valida: () => (!f.foto && !f.fotoId ? "A foto é obrigatória." : "") },
+  ];
+  const visiveis = () => passos.filter((p) => !p.pula?.());
+  let i = 0;
+  voltarPara(() => { if (confirm("Sair agora? O que você já respondeu fica guardado neste celular.")) lista(); });
+
+  function desenhar() {
+    const vs = visiveis();
+    if (i >= vs.length) return revisar();
+    const p = vs[i];
+    tela.innerHTML = `<div class="cartao passo">
+        <div class="barra"><div style="width:${Math.round((i / vs.length) * 100)}%"></div></div>
+        <p class="ajuda" style="margin:0"><b>${esc(produto)}</b> · pergunta ${i + 1} de ${vs.length}</p>
+        ${anterior ? `<p class="ajuda" style="margin:0">Nova versão: as respostas da anterior já vêm preenchidas. Confira e corrija.</p>` : ""}
+        <h2>${p.titulo}</h2>${p.ajuda ? `<p class="ajuda">${p.ajuda}</p>` : ""}
+        ${p.corpo()}
+        <p class="msg-erro" id="erro"></p>
+        <div class="navega"><button class="botao" id="ant" style="text-align:center" ${i === 0 ? "disabled" : ""}>Voltar</button>
+          <button class="botao principal" id="prox" style="text-align:center">Próxima</button></div></div>`;
+    p.liga(desenhar);
+    tela.querySelector("#ant").onclick = () => { i--; desenhar(); };
+    tela.querySelector("#prox").onclick = () => {
+      const erro = p.valida();
+      if (erro) { tela.querySelector("#erro").textContent = erro; return; }
+      i++; desenhar(); window.scrollTo(0, 0);
+    };
+  }
+  function revisar() {
+    const ing = (l) => l.map((x) => `${esc(x.nome)}: ${esc(br(num(x.qtd)))} ${esc(x.un)}`).join("<br>");
+    tela.innerHTML = `<div class="cartao passo ficha">
+        <div class="barra"><div style="width:100%"></div></div>
+        <h2>Confira antes de enviar</h2><p class="ajuda">${esc(produto)}. Se algo estiver errado, toque em Voltar.</p>
+        <dl><dt>Massa</dt><dd>${ing(f.ingredientes)}</dd>
+          ${f.temRecheio ? `<dt>Recheio</dt><dd>${ing(f.recheio)}</dd>` : ""}
+          <dt>Divisão</dt><dd>${f.divide === "divisora" ? `${br(num(f.pesada))} kg em ${num(f.partes)} partes` : `${br(num(f.pesoUnidade))} g cada`}</dd>
+          <dt>Rende</dt><dd>${num(f.rendimento)} unidades</dd>
+          <dt>Tempos</dt><dd>mistura ${num(f.mistura)} min · fermentação ${num(f.fermentacao)} min</dd>
+          <dt>Forno</dt><dd>${num(f.fornoTemp)} °C por ${num(f.fornoTempo)} min</dd></dl>
+        <div class="passos-ficha">${f.passos.map((x, k) => `<div class="p">${x.foto ? `<img src="${x.foto}" alt="">` : `<img data-foto="${esc(x.fotoId)}" alt="">`}<p class="preparo"><b>${k + 1}.</b> ${esc(x.texto)}</p></div>`).join("")}</div>
+        ${f.foto ? `<img src="${f.foto}" class="pronto" alt="Foto">` : `<img data-foto="${esc(f.fotoId)}" class="pronto" alt="Foto">`}
+        <p class="msg-erro" id="erro"></p>
+        <div class="navega"><button class="botao" id="ant" style="text-align:center">Voltar</button>
+          <button class="botao principal" id="enviar" style="text-align:center">Enviar para a Daiane</button></div></div>`;
+    tela.querySelectorAll("img[data-foto]").forEach(async (img) => { img.src = (await ler("fichas_fotos", img.dataset.foto))?.foto || ""; });
+    tela.querySelector("#ant").onclick = () => { i = visiveis().length - 1; desenhar(); };
+    tela.querySelector("#enviar").onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        const d = hoje();
+        const base = { produto, data: d, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+        const fotoId = f.foto ? await acrescentar("fichas_fotos", { ...base, foto: f.foto }) : f.fotoId;
+        const passos = [];
+        for (const x of f.passos) passos.push({ texto: x.texto.trim(), fotoId: x.foto ? await acrescentar("fichas_fotos", { ...base, foto: x.foto }) : x.fotoId });
+        const limpa = (l) => l.map((x) => ({ nome: x.nome.trim(), qtd: num(x.qtd), un: x.un }));
+        await acrescentar("fichas", { ...base, tipo: "ficha", ingredientes: limpa(f.ingredientes), temRecheio: f.temRecheio, recheio: f.temRecheio ? limpa(f.recheio) : [],
+          divide: f.divide, pesada: f.divide === "divisora" ? num(f.pesada) : null, partes: f.divide === "divisora" ? num(f.partes) : null,
+          pesoUnidade: f.divide === "unidade" ? num(f.pesoUnidade) : null, rendimento: num(f.rendimento), mistura: num(f.mistura), fermentacao: num(f.fermentacao),
+          fornoTemp: num(f.fornoTemp), fornoTempo: num(f.fornoTempo), passos, fotoId });
+        try { localStorage.removeItem(chave); } catch {}
+        alert("Ficha enviada! A Daiane vai conferir.");
+        lista();
+      } catch { tela.querySelector("#erro").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+    };
+  }
+  desenhar();
+}
+
+lista();
+</script>
+</body>
+</html>
