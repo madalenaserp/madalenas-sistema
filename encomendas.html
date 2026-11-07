@@ -36,6 +36,24 @@
   .opcoes button { padding:12px 8px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; }
   .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
   .erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  /* Impressão em impressora térmica (bobina 80 mm; também serve na 58 mm). */
+  #impressao { display:none; }
+  @media print {
+    @page { size:80mm auto; margin:0; }
+    body { background:#fff !important; }
+    body > *:not(#impressao) { display:none !important; }
+    #impressao { display:block; width:72mm; margin:0 auto; padding:2mm 0 6mm; font-family:Arial, sans-serif; color:#000; font-size:12pt; line-height:1.25; }
+    #impressao .cupom { page-break-after:always; break-after:page; }
+    #impressao .cupom:last-child { page-break-after:auto; break-after:auto; }
+    #impressao h1 { font-size:15pt; text-align:center; margin:0; }
+    #impressao .centro { text-align:center; }
+    #impressao .grande { font-size:15pt; font-weight:700; }
+    #impressao hr { border:none; border-top:1px dashed #000; margin:2mm 0; }
+    #impressao p { margin:1mm 0; }
+    #impressao .pedido { font-size:14pt; font-weight:700; white-space:pre-wrap; }
+  }
+  .barra-impr { display:flex; justify-content:flex-end; }
+  .barra-impr button { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--linha); background:var(--cartao); cursor:pointer; }
 </style>
 </head>
 <body>
@@ -48,9 +66,11 @@
   </div>
   <div class="cartao" id="resumo"></div>
   <button class="botao principal" id="nova">+ Anotar encomenda</button>
+  <div class="barra-impr"><button id="imprimir-lista">🖨 Imprimir todas desta aba</button></div>
   <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
 </main>
 
+<div id="impressao"></div>
 <div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
 
 <script type="module" src="js/marca.js"></script>
@@ -114,6 +134,7 @@ async function mostrar() {
   const [de, ate] = periodo();
   const itens = montar(await listarEntre("encomendas", "dataEntrega", de, ate));
   const ativas = itens.filter((e) => e.status !== "cancelada");
+  ultimaLista = ativas.filter((e) => e.status !== "entregue");
   const abertas = ativas.filter((e) => e.status !== "entregue");
   const semConferir = ativas.filter((e) => { const m = momentoConferencia(e); return m && e.status !== "entregue" && !jaConferida(e, m); });
   const titulo = aba === "hoje" ? `Hoje, ${dataBR(de)}` : aba === "amanha" ? `Amanhã, ${dataBR(de)}` : `De ${dataBR(de)} a ${dataBR(ate)}`;
@@ -159,6 +180,7 @@ function cartao(e) {
     const m = momentoConferencia(e);
     if (m && !jaConferida(e, m)) acoes.append(botao(`Conferi (${m === "vespera" ? "véspera" : "abertura"})`, "conferir", () => registrar(e, { tipo: "conferida", momento: m })));
     acoes.append(botao(PROXIMA[e.status], "avancar", () => registrar(e, { tipo: "status", para: ETAPAS[ETAPAS.indexOf(e.status) + 1] })));
+    acoes.append(botao("🖨 Imprimir", "", () => imprimir([e])));
     if (podeCancelar) acoes.append(botao("Cancelar", "", () => {
       const motivo = prompt(`Por que cancelar a encomenda de ${e.cliente}?`);
       if (motivo?.trim()) registrar(e, { tipo: "status", para: "cancelada", motivo: motivo.trim() });
@@ -170,8 +192,30 @@ function cartao(e) {
 function botao(texto, classe, acao) {
   const b = document.createElement("button");
   b.textContent = texto; b.className = classe;
-  b.onclick = async () => { b.disabled = true; await acao(); };
+  b.onclick = async () => { b.disabled = true; await acao(); b.disabled = false; };
   return b;
+}
+
+// Um cupom por encomenda, no tamanho da bobina da impressora térmica.
+let ultimaLista = [];
+function cupom(e) {
+  const falta = (Number(e.valor) || 0) - (Number(e.sinal) || 0);
+  return `<div class="cupom">
+    <h1>MADALENA'S</h1><p class="centro">ENCOMENDA · ${esc(e.unidade || "").toUpperCase()}</p><hr>
+    <p class="grande">${diaSemana(e.dataEntrega)}, ${dataBR(e.dataEntrega)} às ${esc(e.horaEntrega || "")}</p>
+    <p>${e.retirada === "entrega" ? "<b>ENTREGAR NO ENDEREÇO</b>" : "Cliente retira na loja"}</p><hr>
+    <p class="grande">${esc(e.cliente)}</p>${e.telefone ? `<p>Tel: ${esc(e.telefone)}</p>` : ""}<hr>
+    <p class="pedido">${esc(e.pedido)}</p>
+    ${e.obs ? `<p>Obs: ${esc(e.obs)}</p>` : ""}<hr>
+    ${e.valor ? `<p>Total: ${reais(e.valor)}</p><p>Sinal: ${reais(e.sinal)}</p><p class="grande">${falta > 0 ? `Falta: ${reais(falta)}` : "PAGO"}</p><hr>` : ""}
+    <p>Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}</p>
+    <p>Impresso em ${dataBR(hoje())} ${agora()} por ${esc(eu.nome)}</p>
+  </div>`;
+}
+function imprimir(lista) {
+  if (!lista.length) return alert("Nenhuma encomenda para imprimir nesta aba.");
+  document.getElementById("impressao").innerHTML = lista.map(cupom).join("");
+  window.print();
 }
 
 async function registrar(e, dados) {
@@ -260,6 +304,7 @@ const abas = document.getElementById("abas");
 const marcarAba = () => abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
 abas.onclick = (ev) => { const v = ev.target.closest("button")?.dataset.aba; if (!v) return; aba = v; marcarAba(); mostrar(); };
 document.getElementById("nova").onclick = abrirFolha;
+document.getElementById("imprimir-lista").onclick = () => imprimir(ultimaLista);
 mostrar();
 </script>
 </body>
