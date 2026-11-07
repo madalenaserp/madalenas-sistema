@@ -20,6 +20,7 @@
 import { exigirUsuario, hoje } from "./js/sessao.js";
 import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
 import { listar, listarEntre } from "./js/db.js";
+import { CHECKLISTS } from "./js/checklists.js";
 
 if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
@@ -53,6 +54,19 @@ async function mostrar() {
   const notas = notasBruto.filter((r) => r.tipo === "nota" && !notaUlt(r.id, "cancelado")).map((r) => ({ ...r, conf: notaUlt(r.id, "conferido") }));
   const notasAtencao = notas.filter((n) => !n.conf || !n.conf.ok)
     .map((n) => `${n.empresa}: ${n.conf ? `<b>problema</b> (${n.conf.detalhe || ({ sem_via: "faltou a via na pasta", sem_assinatura: "via sem assinatura", fora_guappo: "não está no Guappo" })[n.conf.problema] || n.conf.problema})` : "foto enviada, falta conferir"}`);
+  const cks = await listar("checklists", "data", campoDia.value);
+  const ckFeitos = [], ckPendentes = [];
+  for (const l of CHECKLISTS) {
+    const meus = cks.filter((c) => c.lista === l.id);
+    if (l.repetivel) { (meus.length ? ckFeitos : ckPendentes).push(`${l.titulo}: ${meus.length} ronda(s)`); continue; }
+    for (const t of l.porTurno ? ["Manhã", "Tarde"] : [null]) {
+      const f = meus.find((c) => !t || c.turno === t);
+      const nome = `${l.titulo}${t ? ` (${t})` : ""}`;
+      if (f) ckFeitos.push(`${nome}: ${f.registradoPor} às ${f.hora}`); else ckPendentes.push(nome);
+    }
+  }
+  const ckProblemas = cks.flatMap((c) => c.respostas.filter((r) => !r.ok).map((r) =>
+    `${c.titulo}${c.turno ? ` (${c.turno})` : ""}: ${r.texto}${r.valor != null ? ` = ${r.valor}` : ""} <span class="suave">(${r.obs}; ${c.registradoPor})</span>`));
   const consumoBruto = await listar("consumo", "data", campoDia.value);
   const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
@@ -83,6 +97,9 @@ async function mostrar() {
     bloco("Ocorrências urgentes", urgentes, "alerta") +
     bloco("Ordens ainda não feitas", ordensAbertas, "pendente") +
     `<div class="cartao"><h2>Livro do dia</h2><p class="suave">${fechou ? "Dia fechado" : "Dia ainda não fechado"} · ${visto ? "com seu visto" : "sem seu visto"} · ${ocorr.length} outra(s) ocorrência(s). <a href="livro.html">Abrir o livro</a></p></div>` +
+    bloco("Checklists com problema", ckProblemas, "alerta") +
+    bloco("Checklists não feitos", ckPendentes, "pendente") +
+    bloco("Checklists feitos", ckFeitos, "ok") +
     bloco("Notas das empresas com pendência", notasAtencao, "alerta") +
     `<div class="cartao"><h2>Notas das empresas</h2><p class="suave">${new Set(notas.map((n) => n.empresa)).size} empresa(s) com nota · ${notas.filter((n) => n.conf?.ok).length} conferida(s) e certa(s). <a href="notas.html">Abrir</a></p></div>` +
     bloco("Encomendas do dia", encDia, "pendente") +

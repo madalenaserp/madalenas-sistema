@@ -74,6 +74,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Checklists: cada preenchimento é um registro novo. Os do caixa só caixa, líderes e gestão.
+    match /checklists/{id} {
+      allow read: if ativo();
+      allow create: if ativo() && request.resource.data.registradoPorUid == request.auth.uid
+        && (!(request.resource.data.lista in ["caixa_abertura", "caixa_fechamento"]) || caixaOuLider());
+      allow update, delete: if false;
+    }
+
     // Encomendas de clientes: toda a equipe anota, confere e avança a etapa. Só se acrescenta.
     // Cancelar só dona, gestor e líderes.
     match /encomendas/{id} {

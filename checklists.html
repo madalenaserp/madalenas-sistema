@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Checklists</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .lista-ck { display:flex; flex-direction:column; gap:8px; }
+  .ck { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--laranja); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; cursor:pointer; text-align:left; font-size:16px; color:var(--tinta); width:100%; }
+  .ck .estados { display:flex; gap:6px; flex-wrap:wrap; }
+  .ck .estados .selo { margin-left:0; }
+  .setor-titulo { margin:8px 0 0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--suave); font-size:14px; }
+  .barra { height:8px; border-radius:99px; background:#eee; overflow:hidden; }
+  .barra > div { height:100%; background:var(--ok); width:0; transition:width .2s; }
+  .secao-titulo { margin:10px 0 0; font-weight:700; font-size:15px; color:var(--marca); }
+  .item { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .item.feito { border-color:#b9dcc0; background:#f3faf4; }
+  .item.ruim { border-color:#f0b8b2; background:#fdf2f1; }
+  .item .linha1 { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+  .item .texto { font-size:16px; flex:1; }
+  .item .sim-nao { display:flex; gap:6px; flex-shrink:0; }
+  .item .sim-nao button { width:48px; height:44px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:20px; cursor:pointer; }
+  .item .sim-nao button.sim[aria-pressed="true"] { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .item .sim-nao button.nao[aria-pressed="true"] { background:var(--alerta); color:#fff; border-color:var(--alerta); }
+  .item input { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .item input.valor { width:110px; flex-shrink:0; text-align:right; }
+  .rodape { position:sticky; bottom:0; background:var(--fundo, #f6ece0); padding:10px 0 calc(10px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:6px; }
+  .msg-erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  .turnos { display:flex; gap:6px; }
+  .turnos button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .turnos button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  ul.respostas { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; font-size:15px; }
+  ul.respostas .ruim { color:var(--alerta); font-weight:600; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1 id="titulo">Checklists</h1><a href="turno.html" id="voltar">Voltar</a></header>
+<main id="tela"></main>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listar } from "./js/db.js";
+import { CHECKLISTS, itensDe } from "./js/checklists.js";
+
+const eu = await exigirUsuario();
+const permitido = (l) => l.quem === "todos" || pode.notasEmpresas(eu); // "caixa": caixa, líderes e gestão
+const minhas = CHECKLISTS.filter(permitido);
+const tela = document.getElementById("tela");
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+const turnoAgora = () => (new Date().getHours() < 13 ? "Manhã" : "Tarde");
+const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const numero = (t) => (String(t).trim() === "" ? null : Number(String(t).replace(/\./g, "").replace(",", ".")));
+
+let feitos = [];
+
+/* ---------- Lista dos checklists do dia ---------- */
+async function inicio() {
+  document.getElementById("titulo").textContent = "Checklists";
+  document.getElementById("voltar").href = "turno.html";
+  feitos = await listar("checklists", "data", hoje());
+  let html = `<div class="cartao"><h2 style="margin:0">Hoje, ${dataBR(hoje())}</h2><p class="suave" style="margin:6px 0 0">Toque no checklist para preencher.</p></div><div class="lista-ck">`;
+  let setor = "";
+  for (const l of minhas) {
+    if (l.setor !== setor) { setor = l.setor; html += `<p class="setor-titulo">${esc(setor)}</p>`; }
+    const meus = feitos.filter((f) => f.lista === l.id);
+    const estado = (f) => `<span class="selo ${f.problemas ? "alerta" : "ok"}">${f.turno ? `${f.turno}: ` : ""}feito por ${esc(f.registradoPor)} às ${esc(f.hora)}${f.problemas ? ` · ${f.problemas} problema(s)` : ""}</span>`;
+    let estados;
+    if (l.repetivel) estados = meus.length ? `<span class="selo ok">${meus.length} ronda(s) · última às ${esc(meus.map((f) => f.hora).sort().at(-1))}</span>${meus.some((f) => f.problemas) ? `<span class="selo alerta">${meus.filter((f) => f.problemas).length} com correção</span>` : ""}` : `<span class="selo pendente">nenhuma ronda ainda</span>`;
+    else if (l.porTurno) estados = ["Manhã", "Tarde"].map((t) => { const f = meus.find((x) => x.turno === t); return f ? estado(f) : `<span class="selo pendente">${t}: pendente</span>`; }).join("");
+    else estados = meus.length ? meus.map(estado).join("") : `<span class="selo pendente">pendente</span>`;
+    html += `<button class="ck" data-id="${l.id}"><b>${esc(l.titulo)}</b><span class="suave" style="font-size:14px">${itensDe(l).length} itens</span><span class="estados">${estados}</span></button>`;
+  }
+  tela.innerHTML = html + `</div>`;
+  tela.querySelectorAll(".ck").forEach((b) => (b.onclick = () => { location.hash = b.dataset.id; }));
+}
+
+/* ---------- Preencher um checklist ---------- */
+function abrir(id) {
+  const l = minhas.find((x) => x.id === id);
+  if (!l) { location.hash = ""; return; }
+  document.getElementById("titulo").textContent = l.titulo;
+  document.getElementById("voltar").href = "checklists.html";
+  let turno = l.porTurno ? turnoAgora() : null;
+  const itens = itensDe(l);
+  const chaveRascunho = () => `madalenas.rascunho.${l.id}.${hoje()}.${turno || ""}`;
+  let respostas = {};
+  const carregarRascunho = () => { try { respostas = JSON.parse(localStorage.getItem(chaveRascunho()) || "{}"); } catch { respostas = {}; } };
+  const guardar = () => { try { localStorage.setItem(chaveRascunho(), JSON.stringify(respostas)); } catch {} };
+
+  // Um item de valor vira "problema" quando foge do esperado (fundo de troco) ou a diferença passa de R$ 10.
+  function avaliar(it, r) {
+    if (it.tipo === "check") return r?.ok;
+    if (r?.valor == null || Number.isNaN(r.valor)) return undefined;
+    if (it.esperado != null) return Math.abs(r.valor - it.esperado) < 0.01;
+    if (it.diferenca) return Math.abs(r.valor) <= 10;
+    return true;
+  }
+
+  function desenhar() {
+    const ja = l.porTurno ? feitos.find((f) => f.lista === l.id && f.turno === turno) : (!l.repetivel && feitos.find((f) => f.lista === l.id));
+    let html = l.ajuda ? `<p class="suave" style="margin:0">${esc(l.ajuda)}</p>` : "";
+    if (l.porTurno) html += `<div class="turnos">${["Manhã", "Tarde"].map((t) => `<button data-turno="${t}" aria-pressed="${t === turno}">${t}</button>`).join("")}</div>`;
+    if (ja) {
+      tela.innerHTML = html + `<div class="cartao"><h2 style="margin:0">Já feito${turno ? ` (${turno})` : ""}</h2>
+        <p class="suave">Por ${esc(ja.registradoPor)} às ${esc(ja.hora)}${ja.problemas ? ` · <b style="color:var(--alerta)">${ja.problemas} problema(s)</b>` : ""}</p>
+        <ul class="respostas">${ja.respostas.map((r) => `<li class="${r.ok ? "" : "ruim"}">${r.ok ? "✓" : "✗"} ${esc(r.texto)}${r.valor != null ? `: <b>${r.dinheiro ? reais(r.valor) : esc(r.valor)}</b>` : ""}${r.obs ? ` <span class="suave">(${esc(r.obs)})</span>` : ""}</li>`).join("")}</ul></div>`;
+      ligarTurnos();
+      return;
+    }
+    let secao = "";
+    for (const it of itens) {
+      if (it.secao !== secao && l.secoes.length > 1) { secao = it.secao; html += `<p class="secao-titulo">${esc(secao)}</p>`; }
+      const r = respostas[it.n] || {};
+      const ok = avaliar(it, r);
+      const precisaObs = ok === false;
+      html += `<div class="item ${ok === true ? "feito" : ok === false ? "ruim" : ""}" data-n="${it.n}">
+        <div class="linha1"><span class="texto">${esc(it.texto)}${it.esperado != null ? ` <span class="suave">(deve ser ${reais(it.esperado)})</span>` : ""}</span>
+        ${it.tipo === "check"
+          ? `<span class="sim-nao"><button class="sim" aria-label="Feito" aria-pressed="${r.ok === true}">✓</button><button class="nao" aria-label="Não está certo" aria-pressed="${r.ok === false}">✗</button></span>`
+          : `<input class="valor" inputmode="decimal" placeholder="${it.tipo === "dinheiro" ? "R$" : "valor"}" value="${r.valor ?? ""}">`}</div>
+        ${precisaObs ? `<input class="obs" placeholder="${it.diferenca ? "Motivo da diferença" : "O que está errado e o que foi feito?"}" value="${esc(r.obs || "")}">` : ""}
+      </div>`;
+    }
+    const feitosN = itens.filter((it) => avaliar(it, respostas[it.n]) !== undefined).length;
+    html += `<div class="rodape"><div class="barra"><div style="width:${Math.round((feitosN / itens.length) * 100)}%"></div></div>
+      <span class="suave" style="font-size:14px">${feitosN} de ${itens.length} itens</span>
+      <p class="msg-erro" id="erro"></p><button class="botao principal" id="concluir">Concluir${l.repetivel ? " ronda" : " checklist"}</button></div>`;
+    tela.innerHTML = html;
+    ligarTurnos();
+
+    tela.querySelectorAll(".item").forEach((div) => {
+      const n = Number(div.dataset.n), it = itens[n];
+      div.querySelector(".sim")?.addEventListener("click", () => { respostas[n] = { ...respostas[n], ok: true, obs: "" }; guardar(); desenhar(); });
+      div.querySelector(".nao")?.addEventListener("click", () => { respostas[n] = { ...respostas[n], ok: false }; guardar(); desenhar(); div.isConnected || tela.querySelector(`.item[data-n="${n}"] .obs`)?.focus(); });
+      const v = div.querySelector(".valor");
+      if (v) v.addEventListener("change", () => { respostas[n] = { ...respostas[n], valor: numero(v.value) }; guardar(); desenhar(); });
+      const o = div.querySelector(".obs");
+      if (o) o.addEventListener("input", () => { respostas[n] = { ...respostas[n], obs: o.value }; guardar(); });
+    });
+    document.getElementById("concluir").onclick = concluir;
+  }
+
+  function ligarTurnos() {
+    tela.querySelectorAll(".turnos button").forEach((b) => (b.onclick = () => { turno = b.dataset.turno; carregarRascunho(); desenhar(); }));
+  }
+
+  async function concluir(e) {
+    const erro = document.getElementById("erro");
+    const faltando = itens.filter((it) => avaliar(it, respostas[it.n]) === undefined);
+    if (faltando.length) return (erro.textContent = `Faltam ${faltando.length} item(ns). O primeiro: "${faltando[0].texto}".`);
+    const semObs = itens.find((it) => avaliar(it, respostas[it.n]) === false && !respostas[it.n]?.obs?.trim());
+    if (semObs) return (erro.textContent = `Explique o problema em: "${semObs.texto}".`);
+    const lista = itens.map((it) => {
+      const r = respostas[it.n] || {};
+      return { n: it.n, texto: it.texto, ok: avaliar(it, r), ...(it.tipo !== "check" ? { valor: r.valor, dinheiro: it.tipo === "dinheiro" } : {}), obs: (r.obs || "").trim() };
+    });
+    e.target.disabled = true;
+    try {
+      const d = hoje();
+      await acrescentar("checklists", { lista: l.id, titulo: l.titulo, setor: l.setor, data: d, mes: d.slice(0, 7), turno, hora: agora(),
+        respostas: lista, problemas: lista.filter((r) => !r.ok).length,
+        registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      try { localStorage.removeItem(chaveRascunho()); } catch {}
+      location.hash = "";
+    } catch {
+      erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo.";
+      e.target.disabled = false;
+    }
+  }
+
+  carregarRascunho();
+  desenhar();
+}
+
+async function rota() {
+  const id = location.hash.slice(1);
+  if (id) { if (!feitos.length) feitos = await listar("checklists", "data", hoje()); abrir(id); }
+  else inicio();
+  scrollTo(0, 0);
+}
+addEventListener("hashchange", rota);
+rota();
+</script>
+</body>
+</html>
