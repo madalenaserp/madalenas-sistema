@@ -294,7 +294,7 @@ async function lerNota() {
       let texto = "", fornLido = "";
       const ia = await import("./js/ia.js");
       if (ia.iaDisponivel) {
-        prog.textContent = "Lendo a nota… (uns 10 segundos)";
+        prog.textContent = "Lendo a nota… pode levar até 1 minuto, não feche a tela";
         try { const r = await ia.lerNotaIA(await reduzir(f, 2400, 3000000), INSUMOS); itens = r.itens; fornLido = r.fornecedor; texto = itens.map((i) => `${i.descricao}: ${i.qtd} x ${i.preco}`).join("\n"); }
         catch (err) { console.error(err); itens = null; prog.textContent = "A leitura inteligente não respondeu. Tentando o leitor simples…"; }
       }
@@ -369,7 +369,7 @@ async function contagem() {
       const msg = folha.querySelector("#c-ia");
       const ia = await import("./js/ia.js");
       if (!ia.iaDisponivel) return (msg.textContent = "A contagem pela foto só funciona no sistema de verdade (com a inteligência do Google ligada).");
-      msg.textContent = "Olhando a foto… (uns 10 segundos)";
+      msg.textContent = "Olhando a foto… pode levar até 1 minuto, não feche a tela";
       try {
         const achados = await ia.contarFotoIA(await reduzir(f, 2000, 3000000), INSUMOS);
         if (!achados.length) return (msg.textContent = "Não reconheci nenhum insumo da lista nesta foto. Tente mais perto e com mais luz.");

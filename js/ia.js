@@ -1,10 +1,12 @@
 // Inteligência do Google (Gemini, pelo Firebase AI Logic) para ler notas e contar itens pela foto.
 // Usa uma cópia separada do Firebase (versão nova), sem mexer no login/banco do resto do sistema.
 // Precisa: AI Logic ativado no console do Firebase com "Gemini Developer API".
-import { firebaseConfig } from "./config.js";
+import * as cfg from "./config.js";
+const { firebaseConfig } = cfg;
+const appCheck = cfg.appCheck || null; // { tipo: "enterprise" | "v3", chave: "..." } em config.js
 
 const V = "https://www.gstatic.com/firebasejs/12.0.0";
-const MODELOS = ["gemini-flash-latest", "gemini-2.5-flash"];
+const MODELOS = ["gemini-3.8-flash", "gemini-flash-latest"]; // o primeiro que responder
 let base = null;
 
 export const iaDisponivel = !!firebaseConfig;
@@ -13,16 +15,23 @@ async function gerar(partes) {
   base ??= (async () => {
     const { initializeApp } = await import(`${V}/firebase-app.js`);
     const ai = await import(`${V}/firebase-ai.js`);
-    return { ai, motor: ai.getAI(initializeApp(firebaseConfig, "ia"), { backend: new ai.GoogleAIBackend() }) };
+    const app = initializeApp(firebaseConfig, "ia");
+    // App Check: só o nosso site pode usar a IA (a chave do site não é segredo).
+    if (appCheck?.chave) {
+      const ac = await import(`${V}/firebase-app-check.js`);
+      const Prov = appCheck.tipo === "v3" ? ac.ReCaptchaV3Provider : ac.ReCaptchaEnterpriseProvider;
+      ac.initializeAppCheck(app, { provider: new Prov(appCheck.chave), isTokenAutoRefreshEnabled: true });
+    }
+    return { ai, motor: ai.getAI(app, { backend: new ai.GoogleAIBackend() }) };
   })();
   const { ai, motor } = await base;
   let ultimoErro;
   for (const nome of MODELOS) {
     try {
-      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: { responseMimeType: "application/json", temperature: 0 } });
+      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: { responseMimeType: "application/json", temperature: 0 } }, { timeout: 150000 });
       const r = await m.generateContent(partes);
       return JSON.parse(r.response.text());
-    } catch (e) { ultimoErro = e; if (!/not found|404|not supported/i.test(String(e?.message))) break; }
+    } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); }
   }
   throw ultimoErro;
 }
