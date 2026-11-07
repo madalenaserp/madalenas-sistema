@@ -19,16 +19,20 @@ export function logo(tamanho = "grande") {
 
 for (const el of document.querySelectorAll("[data-logo]")) el.innerHTML = logo(el.dataset.logo || "grande");
 
-// "Seu dia + saboroso", como na estampa da camisa: raios e "+" em laranja, risco laranja.
+// "Seu dia + saboroso", copiado da estampa da camisa: letra cursiva grossa creme,
+// "+" e tracinhos retos em laranja, risco laranja com a pontinha virada para cima.
 export function slogan() {
-  return `<div class="slogan2" role="img" aria-label="Seu dia mais saboroso">
-    <svg class="raios-esq" viewBox="0 0 30 30" aria-hidden="true"><g stroke="#e2732b" stroke-width="3" stroke-linecap="round">
-      <path d="M22 6 L26 1"/><path d="M14 12 L5 8"/><path d="M16 21 L6 22"/></g></svg>
-    <div class="l1">Seu dia <span class="mais">+</span></div>
-    <svg class="raios-dir" viewBox="0 0 24 30" aria-hidden="true"><g stroke="#e2732b" stroke-width="3" stroke-linecap="round">
-      <path d="M4 6 L9 1"/><path d="M8 16 L18 20"/></g></svg>
-    <div class="l2">saboroso</div>
-    <svg class="risco" viewBox="0 0 220 26" aria-hidden="true"><path d="M6 20 C 60 10, 140 2, 214 6 C 150 8, 70 16, 10 24 Z" fill="#e2732b"/></svg>
-  </div>`;
+  return `<svg class="slogan2" viewBox="0 0 500 300" role="img" aria-label="Seu dia mais saboroso">
+    <g transform="rotate(-4 250 150)">
+      <g stroke="#e2732b" stroke-width="7" stroke-linecap="round">
+        <path d="M52 40 L66 56"/><path d="M28 92 L54 96"/><path d="M38 132 L58 120"/>
+        <path d="M458 36 L474 26"/><path d="M462 102 L478 112"/>
+      </g>
+      <text x="70" y="128" font-family="'Lobster Two', cursive" font-style="italic" font-weight="700" font-size="104" fill="#f6ece0">Seu dia</text>
+      <path d="M434 44 V96 M408 70 H460" stroke="#e2732b" stroke-width="12" stroke-linecap="round"/>
+      <text x="64" y="222" font-family="'Lobster Two', cursive" font-style="italic" font-weight="700" font-size="104" fill="#f6ece0">saboroso</text>
+      <path d="M72 270 C 170 258, 290 246, 390 242 C 406 241, 414 232, 408 220 C 428 228, 428 258, 396 262 C 290 268, 180 280, 76 284 C 64 284, 62 272, 72 270 Z" fill="#e2732b"/>
+    </g>
+  </svg>`;
 }
 for (const el of document.querySelectorAll("[data-slogan]")) el.innerHTML = slogan();
