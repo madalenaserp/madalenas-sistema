@@ -19,7 +19,7 @@ export function logo(tamanho = "grande") {
 
 for (const el of document.querySelectorAll("[data-logo]")) el.innerHTML = logo(el.dataset.logo || "grande");
 
-// "Seu dia + saboroso", como na estampa da camisa: raios e "+" em laranja, trigos verdes dos lados, risco laranja.
+// "Seu dia + saboroso", como na estampa da camisa: raios e "+" em laranja, risco laranja.
 export function slogan() {
   return `<div class="slogan2" role="img" aria-label="Seu dia mais saboroso">
     <svg class="raios-esq" viewBox="0 0 30 30" aria-hidden="true"><g stroke="#e2732b" stroke-width="3" stroke-linecap="round">
@@ -29,7 +29,6 @@ export function slogan() {
       <path d="M4 6 L9 1"/><path d="M8 16 L18 20"/></g></svg>
     <div class="l2">saboroso</div>
     <svg class="risco" viewBox="0 0 220 26" aria-hidden="true"><path d="M6 20 C 60 10, 140 2, 214 6 C 150 8, 70 16, 10 24 Z" fill="#e2732b"/></svg>
-    <span class="trigo-esq">${TRIGO}</span><span class="trigo-dir">${TRIGO}</span>
   </div>`;
 }
 for (const el of document.querySelectorAll("[data-slogan]")) el.innerHTML = slogan();
