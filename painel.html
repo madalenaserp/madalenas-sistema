@@ -34,6 +34,15 @@ function bloco(titulo, itens, tipo) {
 async function mostrar() {
   const registros = await listar("presenca", "data", campoDia.value);
   const livro = await listar("livro", "data", campoDia.value);
+  const consumoBruto = await listar("consumo", "data", campoDia.value);
+  const cancelados = new Set(consumoBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  const consumo = consumoBruto.filter((r) => r.tipo === "consumo" && !cancelados.has(r.id));
+  const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const pagou = (r) => r.pagamento === "dinheiro" || r.pagamento === "pix";
+  const autorizado = (r) => r.autorizadoPor && r.autorizadoPor !== "Ninguém";
+  const consumoSemAut = consumo.filter((r) => !pagou(r) && !autorizado(r))
+    .map((r) => `${r.pessoa}: ${r.itens} · ${reais(r.valor)} <span class="suave">(${r.pagamento === "descontar" ? "descontar" : "não pagou"}, lançado por ${r.registradoPor})</span>`);
+  const consumoTotal = consumo.reduce((s, r) => s + (Number(r.valor) || 0), 0);
   const ligado = (tipo, id) => livro.some((r) => r.tipo === tipo && r.refId === id);
   const urgentes = livro.filter((r) => r.tipo === "ocorrencia" && r.urgente).map((r) => `${r.hora} · ${r.fato} <span class="suave">(${r.autor})</span>`);
   const ocorr = livro.filter((r) => r.tipo === "ocorrencia" && !r.urgente).map((r) => `${r.codigo} · ${r.fato}`);
@@ -55,6 +64,8 @@ async function mostrar() {
     bloco("Ocorrências urgentes", urgentes, "alerta") +
     bloco("Ordens ainda não feitas", ordensAbertas, "pendente") +
     `<div class="cartao"><h2>Livro do dia</h2><p class="suave">${fechou ? "Dia fechado" : "Dia ainda não fechado"} · ${visto ? "com seu visto" : "sem seu visto"} · ${ocorr.length} outra(s) ocorrência(s). <a href="livro.html">Abrir o livro</a></p></div>` +
+    bloco("Consumo sem pagamento e sem autorização", consumoSemAut, "alerta") +
+    `<div class="cartao"><h2>Consumo da equipe</h2><p class="suave">${consumo.length} registro(s) · total ${reais(consumoTotal)}${cancelados.size ? ` · ${cancelados.size} cancelado(s)` : ""}. <a href="consumo.html">Ver tudo</a></p></div>` +
     bloco("Faltas", faltas, "alerta") +
     bloco("Apresentação fora do padrão", apresentacao, "alerta") +
     bloco("Presença não marcada", semMarcar, "pendente") +

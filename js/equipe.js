@@ -33,4 +33,6 @@ export const pode = {
   darOrdens: (u) => ["dona", "gestor"].includes(u?.papel),
   registrarNoLivro: (u) => ["dona", "gestor", "lider"].includes(u?.papel),
   darVisto: (u) => u?.papel === "dona",
+  // Consumo da equipe: quem está no caixa registra; líderes e gestão também.
+  registrarConsumo: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || u?.setor === "Caixa",
 };

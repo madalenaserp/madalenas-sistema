@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Consumo da equipe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .registro { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+  .registro .topo { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .registro.cancelado { opacity:.55; }
+  .registro.cancelado .itens { text-decoration:line-through; }
+  .registro button { align-self:flex-start; font-size:13px; padding:4px 10px; border-radius:8px; border:1px solid var(--linha); background:var(--cartao); color:var(--suave); cursor:pointer; }
+  .valor { font-weight:700; white-space:nowrap; }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .fundo-folha[hidden] { display:none; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha select, .folha input[type=text], .folha input[inputmode] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes button { padding:12px 8px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  table.mes { width:100%; border-collapse:collapse; font-size:14px; }
+  table.mes th, table.mes td { text-align:left; padding:8px 4px; border-bottom:1px solid var(--linha); }
+  table.mes td.n, table.mes th.n { text-align:right; white-space:nowrap; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Consumo da equipe</h1><a href="turno.html">Voltar</a></header>
+<main>
+  <div class="abas" id="abas" hidden>
+    <button aria-pressed="true" data-aba="dia">Dia</button>
+    <button aria-pressed="false" data-aba="mes">Mês por pessoa</button>
+  </div>
+
+  <section id="aba-dia" style="display:flex;flex-direction:column;gap:10px">
+    <div class="cartao">
+      <div class="campo" style="margin:0">Dia <input type="date" id="dia"></div>
+      <p class="suave" id="totais" style="margin:8px 0 0"></p>
+    </div>
+    <button class="botao principal" id="novo">+ Registrar consumo</button>
+    <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+
+  <section id="aba-mes" hidden>
+    <div class="cartao">
+      <div class="campo" style="margin:0">Mês <input type="month" id="mes"></div>
+      <div id="tabela" style="margin-top:8px"></div>
+    </div>
+  </section>
+</main>
+
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { EQUIPE_DO_TURNO, pode } from "./js/equipe.js";
+import { acrescentar, listar } from "./js/db.js";
+
+const eu = await exigirUsuario();
+if (!pode.registrarConsumo(eu)) location.href = "turno.html";
+const veMes = pode.verPainel(eu);
+
+const PAGAMENTO = {
+  dinheiro: "Dinheiro",
+  pix: "Pix",
+  descontar: "Descontar do salário",
+  nao_pagou: "Não pagou",
+};
+const AUTORIZOU = ["Daiane", "Fábio", "Ninguém"];
+const precisaAutorizacao = (p) => p === "descontar" || p === "nao_pagou";
+const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const agora = () => new Date().toTimeString().slice(0, 5);
+
+// Situação de um consumo: o que a Daiane precisa olhar fica em vermelho.
+function situacao(r) {
+  if (r.pagamento === "dinheiro" || r.pagamento === "pix") return ["ok", `Pagou no ${PAGAMENTO[r.pagamento].toLowerCase()}`];
+  if (r.autorizadoPor && r.autorizadoPor !== "Ninguém")
+    return ["pendente", `${PAGAMENTO[r.pagamento]} · autorizado por ${r.autorizadoPor}`];
+  return ["alerta", `${PAGAMENTO[r.pagamento]} · sem autorização`];
+}
+
+// Lê os registros e aplica os cancelamentos (que são registros novos, nada se apaga).
+function montar(registros) {
+  const cancel = Object.fromEntries(registros.filter((r) => r.tipo === "cancelamento").map((r) => [r.refId, r]));
+  return registros.filter((r) => r.tipo === "consumo")
+    .map((r) => ({ ...r, cancelamento: cancel[r.id] }))
+    .sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
+}
+
+/* ---------- Aba Dia ---------- */
+const campoDia = document.getElementById("dia");
+campoDia.value = hoje();
+
+async function mostrarDia() {
+  const d = campoDia.value;
+  const itens = montar(await listar("consumo", "data", d));
+  const validos = itens.filter((r) => !r.cancelamento);
+  const total = validos.reduce((s, r) => s + (Number(r.valor) || 0), 0);
+  const semAut = validos.filter((r) => situacao(r)[0] === "alerta").length;
+  document.getElementById("totais").innerHTML =
+    `${dataBR(d)} · ${validos.length} registro(s) · total ${reais(total)}` +
+    (semAut ? ` · <span class="selo alerta">${semAut} sem pagamento/autorização</span>` : "");
+  document.getElementById("novo").hidden = d !== hoje();
+
+  const lista = document.getElementById("lista");
+  lista.innerHTML = itens.length ? "" : `<p class="suave">Nenhum consumo registrado neste dia.</p>`;
+  for (const r of itens.reverse()) {
+    const [tipo, texto] = situacao(r);
+    const div = document.createElement("div");
+    div.className = "registro" + (r.cancelamento ? " cancelado" : "");
+    div.innerHTML = `
+      <div class="topo"><span><b>${esc(r.pessoa)}</b> <span class="suave">· ${esc(r.hora)}</span></span><span class="valor">${reais(r.valor)}</span></div>
+      <div class="itens">${esc(r.itens)}</div>
+      <div>${r.cancelamento
+        ? `<span class="selo pendente">Cancelado por ${esc(r.cancelamento.registradoPor)}: ${esc(r.cancelamento.motivo)}</span>`
+        : `<span class="selo ${tipo}" style="margin-left:0">${esc(texto)}</span>`}</div>
+      ${r.obs ? `<div class="suave">${esc(r.obs)}</div>` : ""}
+      <div class="suave" style="font-size:13px">Registrado por ${esc(r.registradoPor)}</div>`;
+    if (!r.cancelamento && d === hoje()) {
+      const b = document.createElement("button");
+      b.textContent = "Cancelar (lançado errado)";
+      b.onclick = () => cancelar(r);
+      div.append(b);
+    }
+    lista.append(div);
+  }
+}
+
+async function cancelar(r) {
+  const motivo = prompt(`Por que cancelar o consumo de ${r.pessoa} (${reais(r.valor)})?`);
+  if (!motivo?.trim()) return;
+  try {
+    await acrescentar("consumo", { tipo: "cancelamento", refId: r.id, motivo: motivo.trim(), data: r.data, mes: r.mes,
+      hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+    mostrarDia();
+  } catch { alert("Não consegui cancelar. Verifique a internet e tente de novo."); }
+}
+
+/* ---------- Folha de registro ---------- */
+const fundo = document.getElementById("fundo");
+const folha = document.getElementById("folha");
+fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+
+function abrirFolha() {
+  let pagamento = null, autorizou = null;
+  let setor = "";
+  const opcoesPessoa = EQUIPE_DO_TURNO.map((p) => {
+    const grupo = p.setor !== setor ? `${setor ? "</optgroup>" : ""}<optgroup label="${p.setor}">` : "";
+    setor = p.setor;
+    return `${grupo}<option>${esc(p.nome)}</option>`;
+  }).join("") + "</optgroup>";
+  folha.innerHTML = `
+    <h2>Registrar consumo</h2>
+    <label class="rot" for="f-pessoa">Quem consumiu</label>
+    <select id="f-pessoa"><option value="">Escolha…</option>${opcoesPessoa}</select>
+    <label class="rot" for="f-itens">O que consumiu</label>
+    <input type="text" id="f-itens" placeholder="Ex.: 1 café com leite e 1 pão na chapa">
+    <label class="rot" for="f-valor">Valor (R$)</label>
+    <input inputmode="decimal" id="f-valor" placeholder="0,00">
+    <label class="rot">Pagamento</label>
+    <div class="opcoes" id="f-pag">${Object.entries(PAGAMENTO).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
+    <div id="f-aut-bloco" hidden style="display:flex;flex-direction:column;gap:6px">
+      <label class="rot">Quem autorizou?</label>
+      <div class="opcoes" id="f-aut" style="grid-template-columns:1fr 1fr 1fr">${AUTORIZOU.map((n) => `<button type="button" data-v="${n}" aria-pressed="false">${n}</button>`).join("")}</div>
+    </div>
+    <input type="text" id="f-obs" placeholder="Observação (opcional)">
+    <p class="erro" id="f-erro"></p>
+    <button class="botao principal" id="f-salvar">Salvar</button>
+    <button class="botao" id="f-cancelar" style="text-align:center;border:none">Cancelar</button>`;
+  const autBloco = folha.querySelector("#f-aut-bloco");
+  autBloco.hidden = true;
+  const marcar = (grupo, valor) => grupo.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === valor));
+  folha.querySelector("#f-pag").onclick = (e) => {
+    const v = e.target.closest("button")?.dataset.v; if (!v) return;
+    pagamento = v; marcar(e.currentTarget, v);
+    autBloco.hidden = !precisaAutorizacao(v);
+    if (autBloco.hidden) autorizou = null;
+  };
+  folha.querySelector("#f-aut").onclick = (e) => {
+    const v = e.target.closest("button")?.dataset.v; if (!v) return;
+    autorizou = v; marcar(e.currentTarget, v);
+  };
+  folha.querySelector("#f-cancelar").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#f-salvar").onclick = async (e) => {
+    const erro = folha.querySelector("#f-erro");
+    const pessoaNome = folha.querySelector("#f-pessoa").value;
+    const itens = folha.querySelector("#f-itens").value.trim();
+    const valor = Number(folha.querySelector("#f-valor").value.replace(/\./g, "").replace(",", "."));
+    if (!pessoaNome) return (erro.textContent = "Escolha quem consumiu.");
+    if (!itens) return (erro.textContent = "Escreva o que foi consumido.");
+    if (!(valor > 0)) return (erro.textContent = "Coloque o valor.");
+    if (!pagamento) return (erro.textContent = "Escolha como foi o pagamento.");
+    if (precisaAutorizacao(pagamento) && !autorizou) return (erro.textContent = "Diga quem autorizou (ou Ninguém).");
+    const p = EQUIPE_DO_TURNO.find((x) => x.nome === pessoaNome);
+    const d = hoje();
+    e.target.disabled = true;
+    try {
+      await acrescentar("consumo", {
+        tipo: "consumo", data: d, mes: d.slice(0, 7), hora: agora(),
+        pessoa: p.nome, setor: p.setor, itens, valor: Math.round(valor * 100) / 100,
+        pagamento, autorizadoPor: precisaAutorizacao(pagamento) ? autorizou : null,
+        obs: folha.querySelector("#f-obs").value.trim(),
+        registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(),
+      });
+      fundo.hidden = true;
+      campoDia.value = d;
+      mostrarDia();
+    } catch {
+      erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo.";
+      e.target.disabled = false;
+    }
+  };
+  fundo.hidden = false;
+}
+document.getElementById("novo").onclick = abrirFolha;
+campoDia.onchange = mostrarDia;
+
+/* ---------- Aba Mês (Daiane e Fábio) ---------- */
+const campoMes = document.getElementById("mes");
+campoMes.value = hoje().slice(0, 7);
+
+async function mostrarMes() {
+  const itens = montar(await listar("consumo", "mes", campoMes.value)).filter((r) => !r.cancelamento);
+  const por = {};
+  for (const r of itens) {
+    const t = (por[r.pessoa] ||= { total: 0, pago: 0, descontar: 0, semAut: 0 });
+    const v = Number(r.valor) || 0;
+    t.total += v;
+    if (r.pagamento === "dinheiro" || r.pagamento === "pix") t.pago += v;
+    else if (situacao(r)[0] === "alerta") t.semAut += v;
+    else if (r.pagamento === "descontar") t.descontar += v;
+  }
+  const linhas = Object.entries(por).sort((a, b) => b[1].total - a[1].total);
+  document.getElementById("tabela").innerHTML = linhas.length ? `
+    <table class="mes">
+      <tr><th>Pessoa</th><th class="n">Total</th><th class="n">Pago</th><th class="n">Descontar</th><th class="n">Sem autoriz.</th></tr>
+      ${linhas.map(([n, t]) => `<tr><td>${esc(n)}</td><td class="n">${reais(t.total)}</td><td class="n">${reais(t.pago)}</td>
+        <td class="n">${reais(t.descontar)}</td><td class="n" style="${t.semAut ? "color:var(--alerta);font-weight:700" : ""}">${reais(t.semAut)}</td></tr>`).join("")}
+    </table>
+    <p class="suave" style="font-size:13px">"Descontar" conta só o que teve autorização. "Sem autoriz." é o que ficou sem pagar e sem ninguém autorizar.</p>`
+    : `<p class="suave">Nenhum consumo neste mês.</p>`;
+}
+campoMes.onchange = mostrarMes;
+
+if (veMes) {
+  const abas = document.getElementById("abas");
+  abas.hidden = false;
+  abas.onclick = (e) => {
+    const aba = e.target.closest("button")?.dataset.aba; if (!aba) return;
+    abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
+    document.getElementById("aba-dia").hidden = aba !== "dia";
+    document.getElementById("aba-mes").hidden = aba !== "mes";
+    if (aba === "mes") mostrarMes();
+  };
+}
+mostrarDia();
+</script>
+</body>
+</html>

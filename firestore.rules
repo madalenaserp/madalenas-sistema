@@ -48,6 +48,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Consumo da equipe: caixa, líderes e gestão registram. Só se acrescenta; cancelamento é um registro novo.
+    function caixaOuLider() { return papel(["dona", "gestor", "lider"]) || (ativo() && perfil().setor == "Caixa"); }
+    match /consumo/{id} {
+      allow read: if caixaOuLider();
+      allow create: if caixaOuLider()
+        && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.tipo in ["consumo", "cancelamento"];
+      allow update, delete: if false;
+    }
+
     // Qualquer outra coisa: bloqueada.
     match /{caminho=**} { allow read, write: if false; }
   }
