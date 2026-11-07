@@ -109,6 +109,8 @@ async function mostrar() {
   const CX = { sangria: "Sangria", vale: "Vale", feriado: "Feriado pago", diarista: "Diarista", compra: "Compra", fornecedor: "Fornecedor", reforco: "Reforço de troco", outro: "Outra saída" };
   const cxSem = cx.filter((r) => r.tipoMov !== "reforco" && r.autorizadoPor === "Ninguém")
     .map((r) => `${CX[r.tipoMov]}: ${r.para} · ${(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} <span class="suave">(${r.registradoPor} às ${r.hora})</span>`);
+  const sangDia = cx.filter((r) => r.tipoMov === "sangria").reduce((s2, r) => s2 + r.valor, 0);
+  if (sangDia > 600.001) cxSem.unshift(`<b>Sangrias do dia passaram de R$ 600,00: ${sangDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b>`);
   const cxSaiu = cx.filter((r) => r.tipoMov !== "reforco").reduce((s2, r) => s2 + r.valor, 0);
   // Estoque: saldo (última contagem + movimentos), abaixo do mínimo, sumiço na contagem e compras do dia.
   const insCad = (await ler("estoque_cadastro", "insumos").catch(() => null))?.lista || INSUMOS_PADRAO;
