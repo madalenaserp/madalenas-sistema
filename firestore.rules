@@ -134,7 +134,9 @@ service cloud.firestore {
     match /caixa/{id} {
       allow read: if caixaBalcao();
       allow create: if caixaBalcaoEdita() && request.resource.data.registradoPorUid == request.auth.uid && (
-           (request.resource.data.tipo == "movimento" && request.resource.data.valor is number && request.resource.data.valor > 0)
+           (request.resource.data.tipo == "movimento" && request.resource.data.valor is number && request.resource.data.valor > 0
+            // Compra e fornecedor: só com autorização da Daiane ou do Fábio.
+            && (!(request.resource.data.tipoMov in ["compra", "fornecedor"]) || request.resource.data.autorizadoPor in ["Daiane", "Fábio"]))
         || (request.resource.data.tipo == "cancelamento" && papel(["dona", "lider"])));
       allow update, delete: if false;
     }

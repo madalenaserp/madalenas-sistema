@@ -84,8 +84,8 @@ const TIPOS = {
   sangria:    { nome: "Sangria", desc: "Dinheiro retirado do caixa e entregue", sinal: -1, campo: "Entregue para", opcoes: ["Daiane", "Fábio", "Cofre"] },
   vale:       { nome: "Vale de funcionário", desc: "Adiantamento para alguém da equipe", sinal: -1, campo: "Funcionário", pessoas: true },
   diarista:   { nome: "Diarista / ajudante", desc: "Pagamento de quem não é fixo", sinal: -1, campo: "Nome de quem recebeu", texto: true, servico: true },
-  compra:     { nome: "Compra", desc: "Algo comprado com dinheiro do caixa", sinal: -1, campo: "O que comprou e onde", texto: true, foto: true },
-  fornecedor: { nome: "Pagamento de fornecedor", desc: "Farinha, ovos, queijo, salgados, gás...", sinal: -1, campo: "Fornecedor", opcoes: ["Farinha", "Ovos", "Queijo Priori", "Salgados", "Gás", "Outro"], foto: true },
+  compra:     { nome: "Compra", desc: "Algo comprado com dinheiro do caixa", sinal: -1, campo: "O que comprou e onde", texto: true, foto: true, exigeAut: true },
+  fornecedor: { nome: "Pagamento de fornecedor", desc: "Farinha, ovos, queijo, salgados, gás...", sinal: -1, campo: "Fornecedor", opcoes: ["Farinha", "Ovos", "Queijo Priori", "Salgados", "Gás", "Outro"], foto: true, exigeAut: true },
   reforco:    { nome: "Reforço de troco", desc: "Dinheiro que entrou no caixa (não é venda)", sinal: 1, campo: "Quem trouxe", opcoes: ["Daiane", "Fábio", "Cofre"] },
   outro:      { nome: "Outra saída", desc: "Qualquer outra coisa (explique)", sinal: -1, campo: "O que foi", texto: true },
 };
@@ -197,7 +197,7 @@ function formulario(tipoMov) {
     <label class="rot" for="f-valor">Valor (R$)</label><input id="f-valor" inputmode="decimal" placeholder="0,00">
     <label class="rot">${esc(t.campo)}</label>${campoPara}
     ${t.servico ? `<label class="rot" for="f-serv">Que serviço fez</label><input type="text" id="f-serv" autocomplete="off" placeholder="Ex.: ajudou na produção das 6h às 12h">` : ""}
-    ${t.sinal < 0 ? `<label class="rot">Quem autorizou</label>${grupo("f-aut", AUTORIZOU, "tres")}` : ""}
+    ${t.sinal < 0 ? `<label class="rot">Quem autorizou</label>${t.exigeAut ? grupo("f-aut", ["Daiane", "Fábio"]) + `<p class="suave" style="margin:0;font-size:13px">Não existe compra sem autorização. Sem a Daiane ou o Fábio autorizar, não compre.</p>` : grupo("f-aut", AUTORIZOU, "tres")}` : ""}
     ${t.foto ? `<label class="camera" id="f-cam">📷 <span>Foto do comprovante ou nota (obrigatória)</span><input type="file" accept="image/*" capture="environment"></label>` : ""}
     <input type="text" id="f-obs" placeholder="${tipoMov === "outro" ? "Explique (obrigatório)" : "Observação (opcional)"}" autocomplete="off">
     <p class="msg-erro" id="f-erro"></p>
@@ -223,7 +223,7 @@ function formulario(tipoMov) {
     if (!(valor > 0)) return (erro.textContent = "Coloque o valor.");
     if (!para) return (erro.textContent = `Preencha: ${t.campo.toLowerCase()}.`);
     if (t.servico && !servico) return (erro.textContent = "Escreva que serviço a pessoa fez.");
-    if (t.sinal < 0 && !sel.autorizadoPor) return (erro.textContent = "Marque quem autorizou (ou Ninguém).");
+    if (t.sinal < 0 && !sel.autorizadoPor) return (erro.textContent = t.exigeAut ? "Marque quem autorizou. Sem autorização, não pode comprar." : "Marque quem autorizou (ou Ninguém).");
     if (t.foto && !urlFoto) return (erro.textContent = "Tire a foto do comprovante.");
     if (tipoMov === "outro" && !obs) return (erro.textContent = "Explique o que foi.");
     e.target.disabled = true;
