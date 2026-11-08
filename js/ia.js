@@ -11,7 +11,7 @@ let base = null;
 
 export const iaDisponivel = !!firebaseConfig;
 
-async function gerar(partes) {
+async function gerar(partes, json = true) {
   base ??= (async () => {
     const { initializeApp } = await import(`${V}/firebase-app.js`);
     const ai = await import(`${V}/firebase-ai.js`);
@@ -28,9 +28,9 @@ async function gerar(partes) {
   let ultimoErro;
   for (const nome of MODELOS) {
     try {
-      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: { responseMimeType: "application/json", temperature: 0 } }, { timeout: 150000 });
+      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: json ? { responseMimeType: "application/json", temperature: 0 } : { temperature: 0.9 } }, { timeout: 150000 });
       const r = await m.generateContent(partes);
-      return JSON.parse(r.response.text());
+      return json ? JSON.parse(r.response.text()) : r.response.text();
     } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); }
   }
   throw ultimoErro;
@@ -62,4 +62,18 @@ ${lista(insumos)}
 Devolva só JSON: {"itens": [{"insumoId": "", "qtd": 0, "obs": ""}]}`]);
   const ids = new Set(insumos.map((i) => i.id));
   return (r.itens || []).filter((i) => ids.has(i.insumoId) && Number(i.qtd) >= 0).map((i) => ({ insumoId: i.insumoId, qtd: Number(i.qtd), obs: String(i.obs || "") }));
+}
+
+// Resumo do dia da "Aurora" para a Daiane, a partir do que está no painel.
+export async function resumoAurora(textoPainel, dataBR) {
+  return gerar([`Você é a Aurora, assistente da Daiane, dona da padaria e confeitaria Madalena's Coffee Shop (São Gonçalo/RJ).
+Fale com ela como "Patroa", em português do Brasil, com carinho, direto e curto (lê no celular).
+Abaixo está o painel do sistema do dia ${dataBR}. Escreva:
+1) Uma frase curta e diferente a cada vez para animar a patroa (sem clichê de autoajuda exagerado).
+2) "🔴 O que está errado hoje": só problemas reais (faltas, saídas sem autorização, perdas no lixo, sumiço no estoque, notas sem valor, pagamentos atrasados etc.).
+3) "🟡 O que está em aberto": pendências que a equipe ainda não fez.
+4) "✅ O que você precisa fazer": ações dela (aprovar fichas, dar visto, cobrar empresa, falar com alguém...).
+Use listas com "- ". Não invente nada que não esteja no painel; se uma parte estiver vazia, diga numa linha que está tudo certo ali. No máximo 15 linhas no total.
+PAINEL:
+${textoPainel}`], false);
 }

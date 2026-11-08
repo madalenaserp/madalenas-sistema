@@ -13,6 +13,7 @@
 <header><div data-logo="pequeno"></div><h1>Painel da Daiane</h1><a href="turno.html">Voltar</a></header>
 <main>
   <div class="cartao campo" style="margin:0">Dia <input type="date" id="dia"></div>
+  <div id="aurora" class="cartao" style="border-left:4px solid var(--laranja, #e2742c)"></div>
   <div id="resumo" style="display:flex;flex-direction:column;gap:10px"></div>
 </main>
 <script type="module" src="js/marca.js"></script>
@@ -27,7 +28,8 @@ import { INSUMOS_PADRAO, LOCAIS } from "./js/insumos.js";
 import { TAREFAS_COZINHA, COZINHAS } from "./js/cozinha.js";
 import { folgasNoDia, segundaDe, somarDias } from "./js/escala.js";
 
-if (!pode.verPainel(await exigirUsuario())) location.href = "turno.html";
+const eu = await exigirUsuario();
+if (!pode.verPainel(eu)) location.href = "turno.html";
 const campoDia = document.getElementById("dia");
 campoDia.value = hoje();
 
@@ -211,8 +213,40 @@ async function mostrar() {
     bloco("De folga", folgas, "ok") +
     bloco("Folga na escala (sem presença marcada)", folgasEsc.filter((n) => !por[n]), "ok");
 }
-campoDia.onchange = mostrar;
-mostrar();
+// Aurora: a IA lê o painel e escreve o resumo do dia para a Daiane (guarda por 30 minutos neste celular).
+const caixaAurora = document.getElementById("aurora");
+const escH = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function formatar(t) {
+  let html = "", lista = false;
+  for (const linha of escH(t).split("\n")) {
+    const l = linha.trim().replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    if (/^[-*•] /.test(l)) { if (!lista) { html += `<ul class="lista">`; lista = true; } html += `<li>${l.slice(2)}</li>`; continue; }
+    if (lista) { html += "</ul>"; lista = false; }
+    if (l) html += `<p style="margin:6px 0">${l.replace(/^#+\s*/, "")}</p>`;
+  }
+  return html + (lista ? "</ul>" : "");
+}
+async function aurora(forcar = false) {
+  if (eu.papel !== "dona") { caixaAurora.hidden = true; return; }
+  const dia = campoDia.value, chave = `aurora_${dia}`;
+  let guardado = null; try { guardado = JSON.parse(localStorage.getItem(chave)); } catch {}
+  const topo = (extra) => `<h2 style="display:flex;justify-content:space-between;align-items:center">✨ Resumo da Aurora <button type="button" id="aur-x" class="botao" style="font-size:13px;padding:4px 10px;width:auto">Atualizar</button></h2>${extra}`;
+  const ligar = () => { const b = caixaAurora.querySelector("#aur-x"); if (b) b.onclick = () => aurora(true); };
+  if (!forcar && guardado && Date.now() - guardado.em < 30 * 60 * 1000) { caixaAurora.innerHTML = topo(formatar(guardado.texto) + `<p class="suave" style="font-size:12px;margin:4px 0 0">Feito às ${new Date(guardado.em).toTimeString().slice(0, 5)}</p>`); ligar(); return; }
+  const ia = await import("./js/ia.js");
+  if (!ia.iaDisponivel) { caixaAurora.innerHTML = topo(`<p class="suave">A Aurora só funciona no sistema de verdade.</p>`); ligar(); return; }
+  caixaAurora.innerHTML = topo(`<p class="suave">A Aurora está lendo o seu dia… (até 1 minuto)</p>`); ligar();
+  const texto = [...document.querySelectorAll("#resumo .cartao")].map((c) => c.innerText.replace(/\s*\n\s*/g, " | ").trim())
+    .filter((t) => !/Nada aqui\.?$/.test(t)).join("\n");
+  try {
+    const r = await ia.resumoAurora(texto, dia.split("-").reverse().join("/"));
+    try { localStorage.setItem(chave, JSON.stringify({ texto: r, em: Date.now() })); } catch {}
+    caixaAurora.innerHTML = topo(formatar(r)); ligar();
+  } catch (e) { console.error(e); caixaAurora.innerHTML = topo(`<p class="suave">A Aurora não conseguiu responder agora. Toque em Atualizar daqui a pouco.</p>`); ligar(); }
+}
+campoDia.onchange = async () => { await mostrar(); aurora(); };
+await mostrar();
+aurora();
 </script>
 </body>
 </html>
