@@ -147,7 +147,7 @@ fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
 document.getElementById("novo").onclick = () => {
   const sel = { categoria: null };
   folha.innerHTML = `<h2>Lançar na folha de ${campoMes.value.split("-").reverse().join("/")}</h2>
-    <label class="rot" for="l-p">Pessoa</label><select id="l-p" class="campo-sel"><option value="">Escolha</option>${(window._pessoas || []).map((p) => `<option>${esc(p.nome)}</option>`).join("")}</select>
+    <label class="rot" for="l-p">Pessoa</label><select id="l-p" class="campo-sel"><option value="">Escolha</option>${EQUIPE_DO_TURNO.map((p) => `<option>${esc(p.nome)}</option>`).join("")}</select>
     <label class="rot">O que é</label><div class="opcoes" id="l-c">${Object.entries(CAT).map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="false">${t}</button>`).join("")}</div>
     <label class="rot" for="l-v" id="l-rot">Valor (R$)</label><input id="l-v" inputmode="decimal">
     <input type="text" id="l-o" placeholder="Observação (opcional)" autocomplete="off">
