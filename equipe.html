@@ -57,8 +57,12 @@ async function carregar() {
   selPessoa.innerHTML = `<option value="">Escolha a pessoa…</option>` +
     EQUIPE.filter((p) => !comLogin.has(p.nome)).map((p) => `<option>${p.nome}</option>`).join("");
   const lista = document.getElementById("lista");
-  lista.innerHTML = usuarios.length ? "" : `<p class="suave">Nenhum ainda.</p>`;
-  for (const u of usuarios.sort((a, b) => a.nome.localeCompare(b.nome))) {
+  const ativos = usuarios.filter((u) => u.ativo !== false), desativados = usuarios.filter((u) => u.ativo === false);
+  lista.innerHTML = ativos.length ? "" : `<p class="suave">Nenhum ainda.</p>`;
+  // Desativados ficam escondidos (o histórico de quem foi desativado não se apaga).
+  const caixaDesat = document.createElement("details");
+  caixaDesat.innerHTML = `<summary class="suave" style="font-size:13px">Logins desativados (${desativados.length})</summary>`;
+  for (const u of [...ativos, ...desativados].sort((a, b) => a.nome.localeCompare(b.nome))) {
     const linha = document.createElement("div");
     linha.className = "pessoa";
     linha.innerHTML = `<span><b>${u.nome}</b> <span class="suave">· ${u.usuario} · ${ROTULO[u.papel] || u.papel}${u.ativo === false ? " · desativado" : ""}${u.trocarSenha ? " · vai escolher a senha no próximo acesso" : ""}</span></span>`;
@@ -66,6 +70,7 @@ async function carregar() {
       const b = document.createElement("button");
       b.textContent = u.ativo === false ? "Reativar" : "Desativar";
       b.onclick = async () => {
+        if (u.ativo !== false && !confirm(`Desativar o login "${u.usuario}" de ${u.nome}? Ele para de funcionar na hora.`)) return;
         await f.fs.updateDoc(f.fs.doc(f.db, "usuarios", u.uid), { ativo: u.ativo === false });
         carregar();
       };
@@ -78,8 +83,9 @@ async function carregar() {
         linha.append(t);
       }
     }
-    lista.append(linha);
+    (u.ativo === false ? caixaDesat : lista).append(linha);
   }
+  if (desativados.length) lista.append(caixaDesat);
 }
 
 selPessoa.onchange = () => {
