@@ -1,6 +1,6 @@
 // Rodízio de tarefas do balcão. Cada dia as tarefas são distribuídas entre quem trabalha no balcão
 // (pula quem está de folga na escala) e no dia seguinte a distribuição gira uma posição.
-// Para mudar a lista, mude só aqui. fotos: "antes_depois" pede foto antes e depois; "uma" pede uma foto; null não pede foto.
+// Para mudar a lista, mude só aqui. dias: só aparece nesses dias da semana (0=domingo, 1=segunda ... 6=sábado). fotos: "antes_depois" pede foto antes e depois; "uma" pede uma foto; null não pede foto.
 import { EQUIPE } from "./equipe.js";
 import { folgasNoDia } from "./escala.js";
 
@@ -15,7 +15,13 @@ export const TAREFAS_BALCAO = [
   { id: "contar_estoque", texto: "Contar o estoque", fotos: null },
   { id: "mercadorias_expostas", texto: "Verificar mercadorias expostas (qualidade, identificação e preço)", fotos: null },
   { id: "maquininhas", texto: "Verificar se as maquininhas estão carregadas", fotos: "uma" },
+  // Limpezas da semana (Daiane, 08/11/2026): um dia fixo para cada.
+  { id: "lixeiras", texto: "Lavar todas as lixeiras", fotos: "antes_depois", dias: [1] },
+  { id: "varanda", texto: "Lavar a varanda", fotos: "antes_depois", dias: [3] },
+  { id: "paredes_fora", texto: "Lavar as paredes de fora", fotos: "antes_depois", dias: [5] },
 ];
+const NOMES_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+export const diasDaTarefa = (t) => (t.dias ? t.dias.map((d) => NOMES_DIAS[d]).join(" e ") : "");
 
 export const PESSOAS_BALCAO = EQUIPE.filter((p) => p.setor === "Balcão").map((p) => p.nome);
 
@@ -26,5 +32,6 @@ export async function distribuir(dia) {
   const folgas = await folgasNoDia(dia);
   const trabalham = PESSOAS_BALCAO.filter((n) => !folgas.includes(n));
   const giro = diasDesde(dia);
-  return TAREFAS_BALCAO.map((t, i) => ({ tarefa: t, pessoa: trabalham.length ? trabalham[(i + giro) % trabalham.length] : "" }));
+  const [a, m, d] = dia.split("-").map(Number), semana = new Date(a, m - 1, d).getDay();
+  return TAREFAS_BALCAO.filter((t) => !t.dias || t.dias.includes(semana)).map((t, i) => ({ tarefa: t, pessoa: trabalham.length ? trabalham[(i + giro) % trabalham.length] : "" }));
 }
