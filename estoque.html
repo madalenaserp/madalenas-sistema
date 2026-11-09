@@ -296,9 +296,9 @@ async function lerNota() {
       let texto = "", fornLido = "";
       const ia = await import("./js/ia.js");
       if (ia.iaDisponivel) {
-        prog.textContent = "Lendo a nota… pode levar até 1 minuto, não feche a tela";
-        try { const r = await ia.lerNotaIA(await reduzir(f, 2400, 3000000), INSUMOS); itens = r.itens; fornLido = r.fornecedor; texto = itens.map((i) => `${i.descricao}: ${i.qtd} x ${i.preco}`).join("\n"); }
-        catch (err) { console.error(err); itens = null; prog.textContent = "A leitura inteligente não respondeu. Tentando o leitor simples…"; }
+        const parar = relogio(prog, "Lendo a nota (até 1 minuto e meio, não feche a tela)…");
+        try { const r = await ia.lerNotaIA(await reduzir(f, 2000, 2000000), INSUMOS).finally(parar); itens = r.itens; fornLido = r.fornecedor; texto = itens.map((i) => `${i.descricao}: ${i.qtd} x ${i.preco}`).join("\n"); }
+        catch (err) { console.error(err); itens = null; prog.textContent = `A leitura inteligente não respondeu ${motivoIA(ia, err)}. Tentando o leitor simples…`; }
       }
       if (!ia.iaDisponivel || itens === null) {
         const { lerTexto, separarItens } = await import("./js/lernota.js");
@@ -345,6 +345,10 @@ async function lerNota() {
   }
 }
 
+// Mostra os segundos passando enquanto a IA trabalha (para ninguém achar que travou).
+function relogio(el, texto) { const t0 = Date.now(); el.textContent = `${texto} 0s`; const id = setInterval(() => (el.textContent = `${texto} ${Math.round((Date.now() - t0) / 1000)}s`), 1000); return () => clearInterval(id); }
+const motivoIA = (ia, err) => `(${ia.etapa ? `parou em: ${ia.etapa}; ` : ""}${String(err?.message || err).slice(0, 80)})`;
+
 async function contagem() {
   const sal = saldos(await movimentos());
   let local = localPadrao;
@@ -371,9 +375,9 @@ async function contagem() {
       const msg = folha.querySelector("#c-ia");
       const ia = await import("./js/ia.js");
       if (!ia.iaDisponivel) return (msg.textContent = "A contagem pela foto só funciona no sistema de verdade (com a inteligência do Google ligada).");
-      msg.textContent = "Olhando a foto… pode levar até 1 minuto, não feche a tela";
+      const parar = relogio(msg, "Olhando a foto (até 1 minuto e meio, não feche a tela)…");
       try {
-        const achados = await ia.contarFotoIA(await reduzir(f, 2000, 3000000), INSUMOS);
+        const achados = await ia.contarFotoIA(await reduzir(f, 1600, 1500000), INSUMOS).finally(parar);
         if (!achados.length) return (msg.textContent = "Não reconheci nenhum insumo da lista nesta foto. Tente mais perto e com mais luz.");
         for (const a of achados) {
           const campo = folha.querySelector(`[data-c="${a.insumoId}"]`), ob = folha.querySelector(`[data-obs="${a.insumoId}"]`);
@@ -383,7 +387,7 @@ async function contagem() {
           ob.hidden = false; ob.textContent = `📷 sugerido pela foto${atual ? " (somado)" : ""}: ${a.obs || n(a.qtd)}. Confira!`;
         }
         msg.innerHTML = `Preenchi <b>${achados.length}</b> item(ns) em amarelo. <b>Confira e corrija</b>: a foto não mostra o que está atrás. Pode tirar outra foto de outra prateleira que eu somo.`;
-      } catch (err) { console.error(err); msg.textContent = "A contagem pela foto não respondeu agora. Conte pela lista."; }
+      } catch (err) { console.error(err); parar(); msg.textContent = `A contagem pela foto não funcionou agora ${motivoIA(ia, err)}. Pode contar pela lista abaixo normalmente.`; }
     };
     folha.querySelector("#c-x").onclick = () => { fundo.hidden = true; };
     folha.querySelector("#c-ok").onclick = async (e) => {

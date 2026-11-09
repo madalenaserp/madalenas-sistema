@@ -6,34 +6,48 @@ const { firebaseConfig } = cfg;
 const appCheck = cfg.appCheck || null; // { tipo: "enterprise" | "v3", chave: "..." } em config.js
 
 const V = "https://www.gstatic.com/firebasejs/12.0.0";
-const MODELOS = ["gemini-3.8-flash", "gemini-flash-latest"]; // o primeiro que responder
+const MODELOS = ["gemini-3.8-flash", "gemini-flash-latest"]; // o segundo só se o primeiro não existir mais
+const LIMITE = 100000; // tempo máximo de espera (ms); depois disso desiste e avisa
 let base = null;
+export let etapa = ""; // onde parou (aparece na mensagem de erro, para achar o problema)
 
 export const iaDisponivel = !!firebaseConfig;
 
+const comLimite = (promessa, ms, oque) => Promise.race([promessa, new Promise((_, falha) => setTimeout(() => falha(new Error(`demorou demais (${oque})`)), ms))]);
+
 async function gerar(partes, json = true) {
+  etapa = "carregando";
   base ??= (async () => {
     const { initializeApp } = await import(`${V}/firebase-app.js`);
     const ai = await import(`${V}/firebase-ai.js`);
     const app = initializeApp(firebaseConfig, "ia");
     // App Check: só o nosso site pode usar a IA (a chave do site não é segredo).
+    let ac = null;
     if (appCheck?.chave) {
-      const ac = await import(`${V}/firebase-app-check.js`);
+      ac = await import(`${V}/firebase-app-check.js`);
       const Prov = appCheck.tipo === "v3" ? ac.ReCaptchaV3Provider : ac.ReCaptchaEnterpriseProvider;
-      ac.initializeAppCheck(app, { provider: new Prov(appCheck.chave), isTokenAutoRefreshEnabled: true });
+      ac = { mod: ac, inst: ac.initializeAppCheck(app, { provider: new Prov(appCheck.chave), isTokenAutoRefreshEnabled: true }) };
     }
-    return { ai, motor: ai.getAI(app, { backend: new ai.GoogleAIBackend() }) };
-  })();
-  const { ai, motor } = await base;
+    return { ai, ac, motor: ai.getAI(app, { backend: new ai.GoogleAIBackend() }) };
+  })().catch((e) => { base = null; throw e; });
+  const { ai, ac, motor } = await comLimite(base, 20000, "carregar");
+  if (ac) { etapa = "proteção"; await comLimite(ac.mod.getToken(ac.inst), 20000, "proteção do site"); }
   let ultimoErro;
+  const inicio = Date.now();
   for (const nome of MODELOS) {
+    etapa = "lendo";
     try {
-      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: json ? { responseMimeType: "application/json", temperature: 0 } : { temperature: 0.9 } }, { timeout: 150000 });
-      const r = await m.generateContent(partes);
+      const resta = LIMITE - (Date.now() - inicio);
+      if (resta < 5000) break;
+      const conf = json ? { responseMimeType: "application/json", temperature: 0 } : { temperature: 0.9 };
+      conf.thinkingConfig = { thinkingLevel: "low" }; // responde mais rápido
+      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: conf }, { timeout: resta });
+      const r = await comLimite(m.generateContent(partes), resta, "resposta");
+      etapa = "";
       return json ? JSON.parse(r.response.text()) : r.response.text();
-    } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); }
+    } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); if (!/not found|404|no longer available/i.test(String(e?.message))) break; }
   }
-  throw ultimoErro;
+  throw ultimoErro || new Error("demorou demais");
 }
 
 const imagem = (dataUrl) => ({ inlineData: { mimeType: dataUrl.slice(5, dataUrl.indexOf(";")), data: dataUrl.split(",")[1] } });
