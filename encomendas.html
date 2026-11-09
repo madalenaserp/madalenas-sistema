@@ -80,8 +80,8 @@ import { pode } from "./js/equipe.js";
 import { acrescentar, listarEntre } from "./js/db.js";
 
 const eu = await exigirUsuario();
-const podeCancelar = pode.registrarNoLivro(eu); // dona e líderes
 const leitura = pode.somenteLeitura(eu); // o Fábio só vê
+const podeCancelar = !leitura; // Daiane, 09/11: toda a equipe pode cancelar, com o motivo (fica registrado quem cancelou)
 
 const ETAPAS = ["anotada", "producao", "pronta", "entregue"];
 const ROTULO = { anotada: "Anotada", producao: "Em produção", pronta: "Pronta", entregue: "Entregue", cancelada: "Cancelada" };
