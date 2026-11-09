@@ -92,7 +92,7 @@ const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency
 const agora = () => new Date().toTimeString().slice(0, 5);
 const localPadrao = eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora";
 const ACOES = {
-  entrada:       { nome: "Chegou compra", desc: "Mercadoria que chegou, com a nota", sinal: 1 },
+  entrada:       { nome: "📷 Chegou compra", desc: "Tire a foto da nota: o sistema preenche e você confere", sinal: 1 },
   uso:           { nome: "Levei para a produção", desc: "Saiu do estoque para usar", sinal: -1 },
   transferencia: { nome: "Transferir", desc: "Da panificadora para a confeitaria ou o contrário", sinal: 0 },
   perda:         { nome: "Perdi / estragou", desc: "Venceu, molhou, caiu, rasgou", sinal: -1 },
@@ -195,9 +195,9 @@ async function abaSaldo() {
 /* ---------- Registrar ---------- */
 function abaMov() {
   if (!lanca) { sec.innerHTML = `<p class="suave">Você só acompanha o estoque.</p>`; return; }
-  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}
-    <button data-a="ler" style="border-style:dashed"><b>📄 Ler nota pela foto</b><span class="suave">Teste: o sistema tenta preencher a compra sozinho</span></button></div>`;
-  sec.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => (b.dataset.a === "contagem" ? contagem() : b.dataset.a === "ler" ? lerNota() : formulario(b.dataset.a))));
+  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}</div>`;
+  // "Chegou compra" começa pela foto da nota (uma foto só); dá para preencher à mão se a leitura não der certo.
+  sec.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => (b.dataset.a === "contagem" ? contagem() : b.dataset.a === "entrada" ? lerNota() : formulario(b.dataset.a))));
 }
 const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
@@ -206,10 +206,10 @@ const grupo = (id, lista, sel) => `<div class="opcoes" id="${id}">${lista.map((x
 const ligaGrupo = (id, fn) => { const g = folha.querySelector(id); g.onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); fn(v); }; };
 const selInsumo = () => `<select id="m-ins" class="sel"><option value="">Escolha o insumo</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}">${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}</select>`;
 
-function formulario(acao) {
+function formulario(acao, fotoPronta = null) {
   const a = ACOES[acao];
   const sel = { local: localPadrao, de: localPadrao, para: LOCAIS.find((l) => l !== localPadrao) };
-  let urlFoto = null;
+  let urlFoto = fotoPronta;
   folha.innerHTML = `<h2>${a.nome}</h2>
     ${campoCodigo("m-cod")}
     <label class="rot">Insumo</label>${selInsumo()}
@@ -218,7 +218,7 @@ function formulario(acao) {
     ${acao === "entrada" ? `<label class="rot" for="m-p">Preço de cada <span class="m-un2"></span> (R$)</label><input id="m-p" inputmode="decimal" placeholder="0,00">
       <p id="m-tot" class="suave" style="margin:0"></p>
       <label class="rot" for="m-f">Fornecedor</label><input type="text" id="m-f" autocomplete="off" placeholder="Ex.: Atacadão, Priori, distribuidor do ovo">
-      <label class="camera" id="m-cam">📷 <span>Foto da nota fiscal (obrigatória)</span><input type="file" accept="image/*" capture="environment"></label>` : ""}
+      <label class="camera" id="m-cam">${fotoPronta ? `<img src="${fotoPronta}" alt="Nota"><span>Foto da nota pronta. Toque para trocar.</span>` : `📷 <span>Foto da nota fiscal (obrigatória)</span>`}<input type="file" accept="image/*" capture="environment"></label>` : ""}
     <input type="text" id="m-o" placeholder="${acao === "perda" ? "O que aconteceu (obrigatório)" : "Observação (opcional)"}" autocomplete="off">
     <p class="msg-erro" id="m-e"></p>
     <button class="botao principal" id="m-ok">Salvar</button>
@@ -277,13 +277,15 @@ function formulario(acao) {
 // Ler a nota pela foto (teste): lê o texto no celular, separa os itens e a pessoa confere tudo antes de salvar.
 async function lerNota() {
   let urlFoto = null, itens = [], local = localPadrao;
-  folha.innerHTML = `<h2>📄 Ler nota pela foto</h2>
+  folha.innerHTML = `<h2>Chegou compra</h2>
     <p class="suave" style="margin:0;font-size:13px">Tire a foto com boa luz, pegando a nota inteira. O sistema preenche e você <b>confere cada item</b> antes de salvar.</p>
     <label class="camera" id="l-cam">📷 <span>Tirar foto da nota</span><input type="file" accept="image/*" capture="environment"></label>
     <p id="l-prog" class="suave" style="margin:0"></p><div id="l-itens"></div>
     <p class="msg-erro" id="l-e"></p>
+    <button class="botao" id="l-mao" style="text-align:center">Preencher à mão (um item)</button>
     <button class="botao" id="l-x" style="text-align:center;border:none">Cancelar</button>`;
   folha.querySelector("#l-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#l-mao").onclick = () => formulario("entrada", urlFoto);
   fundo.hidden = false;
   folha.querySelector("#l-cam input").onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
@@ -303,10 +305,10 @@ async function lerNota() {
         texto = await lerTexto(urlFoto, (st, p) => { prog.textContent = st === "recognizing text" ? `Lendo a nota… ${Math.round(p * 100)}%` : "Preparando o leitor…"; });
         itens = separarItens(texto, INSUMOS);
       }
-      prog.innerHTML = itens.length ? `Achei <b>${itens.length}</b> item(ns). <b>Confira cada um</b> antes de salvar.` : `Não consegui achar os itens nesta foto. Tente outra foto mais reta e com mais luz, ou use "Chegou compra".`;
+      prog.innerHTML = itens.length ? `Achei <b>${itens.length}</b> item(ns). <b>Confira cada um</b> antes de salvar.` : `Não consegui achar os itens nesta foto. Tente outra foto mais reta e com mais luz, ou toque em "Preencher à mão".`;
       desenharItens(texto);
       if (fornLido && folha.querySelector("#l-forn")) folha.querySelector("#l-forn").value = fornLido;
-    } catch (err) { prog.textContent = "O leitor não funcionou neste celular. Use \"Chegou compra\"."; console.error(err); }
+    } catch (err) { prog.textContent = "O leitor não funcionou agora. Toque em \"Preencher à mão\"."; console.error(err); }
   };
   const opcoesIns = (sel) => `<option value="">— não é do estoque —</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}`;
   function desenharItens(texto) {

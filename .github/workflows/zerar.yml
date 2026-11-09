@@ -1,0 +1,27 @@
+# Ação MANUAL para apagar dados de teste. Só roda quando alguém dispara na aba Actions (ou o Claude, a pedido da Daiane).
+name: Zerar dados de teste
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "dia_a_dia | hoje | tudo_menos_logins"
+        required: true
+      dia:
+        description: "AAAA-MM-DD (só para o modo hoje)"
+        required: false
+jobs:
+  zerar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Apagar
+        env:
+          CHAVE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          MODO: ${{ inputs.modo }}
+          DIA: ${{ inputs.dia }}
+        run: |
+          printf '%s' "$CHAVE" > "$RUNNER_TEMP/chave.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/chave.json"
+          cd scripts && npm init -y >/dev/null && npm i firebase-admin@12 --silent && node zerar.mjs

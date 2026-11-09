@@ -16,7 +16,7 @@ export const CHECKLISTS = [
       ["Equipamentos", [
         "Maquininhas de cartão carregadas e funcionando; carregadores organizados",
         "Sistema de vendas funcionando e bobinas disponíveis",
-        "Televisão funcionando e limpa (sem aplicar produto direto na tela)",
+        { texto: "Limpar a televisão (pano seco ou próprio, sem produto direto na tela) e deixar funcionando", foto: true },
         { texto: "Máquina de café e equipamentos de lanche limpos e em condições de uso", foto: true },
         { texto: "Temperatura da vitrine refrigerada (°C)", tipo: "numero", foto: true },
         { texto: "Temperatura da geladeira de bebidas (°C)", tipo: "numero", foto: true },
@@ -72,7 +72,7 @@ export const CHECKLISTS = [
         { texto: "Maquininhas carregando para o dia seguinte (luz ou ícone de carga aceso)", foto: true },
         { texto: "Quantas maquininhas ficaram carregando", tipo: "numero" },
         "Equipamentos guardados nos locais definidos",
-        "Televisão limpa com material apropriado e desligada",
+        { texto: "Limpar a televisão (pano seco ou próprio, sem produto direto na tela) e desligar", foto: true },
       ]],
       ["Encomendas", [
         "Encomendas de hoje conferidas; as pendentes anotadas no Livro",
