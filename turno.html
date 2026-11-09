@@ -33,19 +33,15 @@ if (modoTeste) document.getElementById("teste").innerHTML =
 
 // Cada seção é uma tela separada. As que ainda não existem aparecem como "em breve".
 const secoes = [
-  { titulo: "Presença e apresentação", desc: "Quem veio, faltou, folga, uniforme e sapato", link: "presenca.html", mostrar: pode.marcarPresenca(eu) },
-  { titulo: "Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
-  { titulo: "Saídas do caixa", desc: "Sangria, vale, diarista, compra e fornecedor, com quem autorizou", link: "caixa.html", mostrar: pode.verCaixa(eu) },
-  { titulo: "Consumo da equipe", desc: "O que cada funcionário consumiu e como pagou", link: "consumo.html", mostrar: pode.verConsumo(eu) },
-  { titulo: pode.verLivroCompleto(eu) ? "Rodízio do balcão" : "Minhas tarefas de hoje", desc: "Rodízio de limpeza e organização, com foto antes e depois", link: "tarefas.html", mostrar: pode.verLivroCompleto(eu) || eu.setor === "Balcão" },
-  { titulo: "Produção", desc: "Produção do dia, perdas e encomendas da panificadora e da confeitaria", link: "producao.html", mostrar: pode.producao(eu) },
-  { titulo: "Estoque", desc: "Saldo, compras, contagem e transferência entre as unidades", link: "estoque.html" },
-  { titulo: "Perdas e sobras", desc: "O que venceu, estragou, queimou ou sobrou, com foto", link: "perdas.html" },
-  { titulo: "Checklists", desc: "Abertura, rondas e fechamento do salão e do caixa", link: "checklists.html" },
-  { titulo: "Empresas", desc: "Pedido do WhatsApp, separação, nota assinada com valor, cobrança e pagamento", link: "notas.html", mostrar: pode.notasEmpresas(eu) },
-  { titulo: "Encomendas", desc: "Anotar, conferir e acompanhar até a entrega", link: "encomendas.html" },
-  { titulo: "Minha escala", desc: "Seus dias de trabalho e folga", link: "escala.html", mostrar: !pode.rh(eu) },
-  { titulo: "RH", desc: "Escala da semana, logins da equipe e mais", link: "rh.html", mostrar: pode.rh(eu) },
+  // Equipe do salão e do caixa: poucos botões; dentro de cada um, as partes ficam em abas (js/grupos.js).
+  { titulo: "✅ Meu dia", desc: [pode.marcarPresenca(eu) && "presença da equipe", "checklist de abertura, rondas e fechamento", (pode.verLivroCompleto(eu) || eu.setor === "Balcão") && "suas tarefas do rodízio"].filter(Boolean).join(", "), link: pode.marcarPresenca(eu) ? "presenca.html" : "checklists.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
+  { titulo: "💰 Caixa", desc: [pode.verCaixa(eu) && "saídas (sangria, vale, compra, fornecedor)", pode.verConsumo(eu) && "consumo da equipe"].filter(Boolean).join(" e "), link: pode.verCaixa(eu) ? "caixa.html" : "consumo.html", mostrar: pode.verCaixa(eu) || pode.verConsumo(eu) },
+  { titulo: "📖 Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
+  { titulo: "📦 Pedidos", desc: pode.notasEmpresas(eu) ? "Encomendas de clientes e pedidos/notas das empresas" : "Encomendas de clientes", link: "encomendas.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
+  { titulo: "🥖 Estoque e perdas", desc: "Perdas e sobras, compras, contagem e transferência", link: "perdas.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
+  // Produção e confeitaria: tudo dentro de "Produção" (produção do dia, limpeza, estoque, perdas, encomendas, fichas).
+  { titulo: "🍞 Produção", desc: "Produção do dia, limpeza da cozinha, estoque, perdas, encomendas e fichas técnicas", link: "producao.html", mostrar: pode.producao(eu) },
+  { titulo: "RH", desc: "Escala da semana, logins, salários e folha", link: "rh.html", mostrar: pode.rh(eu) },
   { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: pode.verPainel(eu) },
 ];
 const lista = document.getElementById("secoes");
@@ -58,6 +54,7 @@ for (const s of secoes) {
   a.innerHTML = `<b>${s.titulo}</b>${s.emBreve ? '<span class="selo pendente">em breve</span>' : ""}<br><span class="suave">${s.desc}</span>`;
   lista.append(a);
 }
+if (!pode.rh(eu)) { const e = document.createElement("p"); e.style.textAlign = "center"; e.innerHTML = `<a href="escala.html">📅 Minha escala</a>`; lista.append(e); }
 if (!modoTeste) {
   const t = document.createElement("a");
   t.href = "senha.html"; t.className = "suave"; t.style.cssText = "text-align:center;margin-top:8px";

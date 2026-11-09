@@ -35,3 +35,6 @@ export function slogan() {
 </svg>`;
 }
 for (const el of document.querySelectorAll("[data-slogan]")) el.innerHTML = slogan();
+
+// Abas dos módulos (Meu dia, Caixa, Pedidos, Estoque e perdas).
+import("./grupos.js").catch(() => {});

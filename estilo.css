@@ -46,3 +46,6 @@ a.botao, button.botao:not(.principal) { border-left:4px solid var(--laranja); }
 header a, header button { border-color:var(--laranja); }
 /* Slogan da camisa */
 .slogan2 { display:block; width:280px; max-width:80vw; height:auto; }
+.abas-grupo { display:flex; gap:6px; overflow-x:auto; padding:8px 16px; background:var(--creme); border-bottom:1px solid var(--linha); position:sticky; top:0; z-index:5; }
+.abas-grupo a { flex:0 0 auto; padding:8px 14px; border-radius:999px; border:1px solid var(--linha); background:#fff; color:var(--tinta); text-decoration:none; font-weight:600; font-size:15px; }
+.abas-grupo a[aria-current="page"] { background:var(--laranja); border-color:var(--laranja); color:#fff; }
