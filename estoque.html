@@ -485,7 +485,7 @@ async function abaHist() {
         ${m.obs ? `<span class="suave">${esc(m.obs)}</span>` : ""}
         <span class="suave">${esc(m.registradoPor)} às ${esc(m.hora)}</span>
         ${m.cancelamento ? `<span class="suave">Cancelado por ${esc(m.cancelamento.registradoPor)}: ${esc(m.cancelamento.motivo)}</span>` : ""}</div>`;
-      if (!m.cancelamento && podeCancelar && d === hoje()) {
+      if (!m.cancelamento && podeCancelar && (d === hoje() || eu.papel === "dona")) {
         const b = document.createElement("button"); b.textContent = "Cancelar";
         b.onclick = async () => { const mo = prompt("Por que cancelar?"); if (!mo?.trim()) return;
           await acrescentar("estoque", { tipo: "cancelamento", refId: m.id, motivo: mo.trim(), data: m.data, mes: m.mes, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() }).catch(() => alert("Não consegui salvar."));

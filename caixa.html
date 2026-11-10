@@ -157,7 +157,7 @@ async function mostrar() {
         <span class="suave">${esc(r.turno)} · ${esc(r.registradoPor)} às ${esc(r.hora)}</span>
         ${r.cancelamento ? `<span class="suave">Cancelado por ${esc(r.cancelamento.registradoPor)}: ${esc(r.cancelamento.motivo)}</span>` : ""}
       </div>`;
-    if (!r.cancelamento && podeCancelar && d === hoje()) {
+    if (!r.cancelamento && podeCancelar && (d === hoje() || eu.papel === "dona")) {
       const b = document.createElement("button"); b.textContent = "Cancelar";
       b.onclick = async () => {
         const m = prompt("Por que cancelar este registro?"); if (!m?.trim()) return;
