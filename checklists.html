@@ -70,6 +70,12 @@ const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency
 const numero = (t) => (String(t).trim() === "" ? null : Number(String(t).replace(/\./g, "").replace(",", ".")));
 
 let feitos = [];
+// Checklist desfeito pela Daiane: um registro "cancelamento" aponta para ele; os dois saem da conta (ficam no histórico).
+async function lerFeitos() {
+  const regs = await listar("checklists", "data", hoje());
+  const canc = new Set(regs.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  return regs.filter((r) => r.tipo !== "cancelamento" && !canc.has(r.id));
+}
 
 // Fotos: reduzidas no aparelho (~60 KB) e guardadas à parte, em checklists_fotos.
 function reduzir(arquivo) {
@@ -106,7 +112,7 @@ document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true
 async function inicio() {
   document.getElementById("titulo").textContent = "Checklists";
   document.getElementById("voltar").href = "turno.html";
-  feitos = await listar("checklists", "data", hoje());
+  feitos = await lerFeitos();
   let html = `<div class="cartao"><h2 style="margin:0">Hoje, ${dataBR(hoje())}</h2><p class="suave" style="margin:6px 0 0">Toque no checklist para preencher.</p></div><div class="lista-ck">`;
   let setor = "";
   for (const l of minhas) {
@@ -138,6 +144,7 @@ function abrir(id) {
 
   // Um item de valor vira "problema" quando foge do esperado (fundo de troco) ou a diferença passa de R$ 10.
   function avaliar(it, r) {
+    if (r?.semMedidor) return true; // ainda sem termômetro: não chuta número nem pede foto
     const base = avaliarValor(it, r);
     if (it.foto && base === true && !r?.fotoId) return undefined; // sem foto, não conta como feito
     return base;
@@ -147,6 +154,7 @@ function abrir(id) {
     if (r?.valor == null || Number.isNaN(r.valor)) return undefined;
     if (it.esperado != null) return Math.abs(r.valor - it.esperado) < 0.01;
     if (it.diferenca) return Math.abs(r.valor) <= 10;
+    if (it.faixa) return r.valor >= it.faixa[0] && r.valor <= it.faixa[1];
     return true;
   }
 
@@ -157,9 +165,21 @@ function abrir(id) {
     if (ja) {
       tela.innerHTML = html + `<div class="cartao"><h2 style="margin:0">Já feito${turno ? ` (${turno})` : ""}</h2>
         <p class="suave">Por ${esc(ja.registradoPor)} às ${esc(ja.hora)}${ja.problemas ? ` · <b style="color:var(--alerta)">${ja.problemas} problema(s)</b>` : ""}</p>
-        <ul class="respostas">${ja.respostas.map((r) => `<li class="${r.ok ? "" : "ruim"}">${r.ok ? "✓" : "✗"} ${esc(r.texto)}${r.valor != null ? `: <b>${r.dinheiro ? reais(r.valor) : esc(r.valor)}</b>` : ""}${r.obs ? ` <span class="suave">(${esc(r.obs)})</span>` : ""}${r.fotoId ? `<br><img data-foto="${esc(r.fotoId)}" alt="Foto">` : ""}</li>`).join("")}</ul></div>`;
+        <ul class="respostas">${ja.respostas.map((r) => `<li class="${r.ok ? "" : "ruim"}">${r.ok ? "✓" : "✗"} ${esc(r.texto)}${r.valor != null ? `: <b>${r.dinheiro ? reais(r.valor) : esc(r.valor)}</b>` : ""}${r.obs ? ` <span class="suave">(${esc(r.obs)})</span>` : ""}${r.fotoId ? `<br><img data-foto="${esc(r.fotoId)}" alt="Foto">` : ""}</li>`).join("")}</ul>
+        ${eu.papel === "dona" ? `<button class="botao" id="desfazer" style="color:var(--alerta);margin-top:8px">Desfazer este checklist (volta para pendente)</button>` : ""}</div>`;
       ligarTurnos();
       mostrarFotos(tela);
+      const desf = tela.querySelector("#desfazer");
+      if (desf) desf.onclick = async () => {
+        if (!confirm("Desfazer este checklist? Ele volta a ficar pendente (o feito fica guardado no histórico).")) return;
+        desf.disabled = true;
+        try {
+          await acrescentar("checklists", { tipo: "cancelamento", refId: ja.id, lista: l.id, data: ja.data, mes: ja.mes, turno: ja.turno || null, hora: agora(),
+            motivo: "Desfeito pela Daiane", registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+          feitos = feitos.filter((f) => f.id !== ja.id);
+          desenhar();
+        } catch { alert("Não consegui desfazer. Verifique a internet."); desf.disabled = false; }
+      };
       return;
     }
     if (pode.somenteLeitura(eu)) { tela.innerHTML = html + `<div class="cartao"><p class="suave" style="margin:0">Ainda não foi feito${turno ? ` (${turno})` : ""}.</p></div>`; ligarTurnos(); return; }
@@ -174,13 +194,14 @@ function abrir(id) {
       const precisaObs = ok === false;
       const estado = atual !== -1 && it.n > atual ? "travado" : it.n === atual ? "atual" : "";
       html += `<div class="item ${ok === true ? "feito" : ok === false ? "ruim" : ""} ${estado}" data-n="${it.n}">
-        <div class="linha1"><span class="texto">${esc(it.texto)}${it.esperado != null ? ` <span class="suave">(deve ser ${reais(it.esperado)})</span>` : ""}</span>
+        <div class="linha1"><span class="texto">${esc(it.texto)}${it.esperado != null ? ` <span class="suave">(deve ser ${reais(it.esperado)})</span>` : ""}${it.faixa ? ` <span class="suave">(o certo é ${it.faixa[0]} a ${it.faixa[1]} °C)</span>` : ""}</span>
         ${it.tipo === "check"
           ? `<span class="sim-nao">${it.foto
               ? `<label class="camera ${r.ok === true && r.fotoId ? "feita" : ""}" aria-label="Tirar foto e marcar feito">${r.ok === true && r.fotoId ? "✓" : "📷"}<input type="file" accept="image/*" capture="environment"></label>`
               : `<button class="sim" aria-label="Feito" aria-pressed="${r.ok === true}">✓</button>`}<button class="nao" aria-label="Não está certo" aria-pressed="${r.ok === false}">✗</button></span>`
           : `<span class="sim-nao"><input class="valor" inputmode="decimal" placeholder="${it.tipo === "dinheiro" ? "R$" : "valor"}" value="${r.valor ?? ""}">${it.foto
               ? `<label class="camera ${r.fotoId ? "feita" : ""}" aria-label="Tirar foto">📷<input type="file" accept="image/*" capture="environment"></label>` : ""}</span>`}</div>
+        ${it.semMedidor ? `<button class="sem-medidor" aria-pressed="${!!r.semMedidor}" style="align-self:flex-start;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--linha);background:${r.semMedidor ? "var(--laranja);color:#fff" : "#fff"}">${r.semMedidor ? "✓ " : ""}${esc(it.semMedidor)}</button>` : ""}
         ${it.foto ? (r.fotoId ? `<div class="prova"><img data-foto="${esc(r.fotoId)}" alt="Foto">Foto tirada. Toque no 📷 para trocar.</div>`
                               : `<div class="prova">📷 Este item precisa de foto do que foi feito.</div>`) : ""}
         ${precisaObs ? `<input class="obs" placeholder="${it.diferenca ? "Motivo da diferença" : "O que está errado e o que foi feito?"}" value="${esc(r.obs || "")}">` : ""}
@@ -197,6 +218,7 @@ function abrir(id) {
       const n = Number(div.dataset.n), it = itens[n];
       div.querySelector(".sim")?.addEventListener("click", () => { respostas[n] = { ...respostas[n], ok: true, obs: "" }; guardar(); desenhar(); });
       div.querySelector(".nao")?.addEventListener("click", () => { respostas[n] = { ...respostas[n], ok: false }; guardar(); desenhar(); div.isConnected || tela.querySelector(`.item[data-n="${n}"] .obs`)?.focus(); });
+      div.querySelector(".sem-medidor")?.addEventListener("click", () => { respostas[n] = { ...respostas[n], semMedidor: !respostas[n]?.semMedidor }; guardar(); desenhar(); });
       const v = div.querySelector(".valor");
       if (v) v.addEventListener("change", () => { respostas[n] = { ...respostas[n], valor: numero(v.value) }; guardar(); desenhar(); });
       const cam = div.querySelector("label.camera input");
@@ -241,8 +263,8 @@ function abrir(id) {
     if (semObs) return (erro.textContent = `Explique o problema em: "${semObs.texto}".`);
     const lista = itens.map((it) => {
       const r = respostas[it.n] || {};
-      return { n: it.n, texto: it.texto, ok: avaliar(it, r), ...(it.tipo !== "check" ? { valor: r.valor, dinheiro: it.tipo === "dinheiro" } : {}),
-        ...(r.fotoId ? { fotoId: r.fotoId } : {}), obs: (r.obs || "").trim() };
+      return { n: it.n, texto: it.texto, ok: avaliar(it, r), ...(it.tipo !== "check" ? { valor: r.semMedidor ? null : (r.valor ?? null), dinheiro: it.tipo === "dinheiro" } : {}),
+        ...(r.fotoId ? { fotoId: r.fotoId } : {}), obs: r.semMedidor ? `${it.semMedidor}` : (r.obs || "").trim() };
     });
     e.target.disabled = true;
     try {
@@ -264,7 +286,7 @@ function abrir(id) {
 
 async function rota() {
   const id = location.hash.slice(1);
-  if (id) { if (!feitos.length) feitos = await listar("checklists", "data", hoje()); abrir(id); }
+  if (id) { if (!feitos.length) feitos = await lerFeitos(); abrir(id); }
   else inicio();
   scrollTo(0, 0);
 }

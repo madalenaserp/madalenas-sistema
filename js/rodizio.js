@@ -15,15 +15,22 @@ export const TAREFAS_BALCAO = [
   { id: "contar_estoque", texto: "Contar o estoque", fotos: null },
   { id: "mercadorias_expostas", texto: "Verificar mercadorias expostas (qualidade, identificação e preço)", fotos: null },
   { id: "maquininhas", texto: "Verificar se as maquininhas estão carregadas", fotos: "uma" },
+  { id: "embalar", texto: "Embalar produtos (com etiqueta de validade e etiqueta da balança)", fotos: "uma" },
   // Limpezas da semana (Daiane, 08/11/2026): um dia fixo para cada.
   { id: "lixeiras", texto: "Lavar todas as lixeiras", fotos: "antes_depois", dias: [1] },
   { id: "varanda", texto: "Lavar a varanda", fotos: "antes_depois", dias: [3] },
   { id: "paredes_fora", texto: "Lavar as paredes de fora", fotos: "antes_depois", dias: [5] },
 ];
+// Tarefas fixas de uma pessoa, todo dia que ela trabalha (fora do rodízio). Daiane, 10/11/2026.
+export const TAREFAS_FIXAS = [
+  { id: "supervisao_embalagem", pessoa: "Maurina", texto: "Supervisionar a embalagem 1 a 2 horas depois que os produtos saem da produção: embalados, com etiqueta de validade e etiqueta da balança", fotos: "uma" },
+];
 const NOMES_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 export const diasDaTarefa = (t) => (t.dias ? t.dias.map((d) => NOMES_DIAS[d]).join(" e ") : "");
 
-export const PESSOAS_BALCAO = EQUIPE.filter((p) => p.setor === "Balcão").map((p) => p.nome);
+// Quem entra no rodízio: balcão, lanches e a Fabrícia (Daiane, 10/11/2026).
+// Na tela "Quem é da equipe" a Daiane marca quem entra no rodízio (campo rodizio); sem marcação, vale a regra acima.
+export const PESSOAS_BALCAO = EQUIPE.filter((p) => p.rodizio ?? (["Balcão", "Lanches"].includes(p.setor) || p.nome === "Fabrícia")).map((p) => p.nome);
 
 const diasDesde = (dia) => { const [a, m, d] = dia.split("-").map(Number); return Math.round(Date.UTC(a, m - 1, d) / 86400000); };
 
@@ -33,5 +40,7 @@ export async function distribuir(dia) {
   const trabalham = PESSOAS_BALCAO.filter((n) => !folgas.includes(n));
   const giro = diasDesde(dia);
   const [a, m, d] = dia.split("-").map(Number), semana = new Date(a, m - 1, d).getDay();
-  return TAREFAS_BALCAO.filter((t) => !t.dias || t.dias.includes(semana)).map((t, i) => ({ tarefa: t, pessoa: trabalham.length ? trabalham[(i + giro) % trabalham.length] : "" }));
+  const rodizio = TAREFAS_BALCAO.filter((t) => !t.dias || t.dias.includes(semana)).map((t, i) => ({ tarefa: t, pessoa: trabalham.length ? trabalham[(i + giro) % trabalham.length] : "" }));
+  const fixas = TAREFAS_FIXAS.filter((t) => !folgas.includes(t.pessoa)).map((t) => ({ tarefa: t, pessoa: t.pessoa, fixa: true }));
+  return [...fixas, ...rodizio];
 }

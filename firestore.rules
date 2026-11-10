@@ -30,7 +30,9 @@ service cloud.firestore {
     match /presenca/{id} {
       allow read: if papel(["dona", "gestor", "lider"]);
       allow create, update: if papel(["dona", "lider"])
-        && request.resource.data.marcadoPorUid == request.auth.uid;
+        && request.resource.data.marcadoPorUid == request.auth.uid
+        // Desfazer uma marcação: só a Daiane (10/11/2026).
+        && (request.resource.data.situacao != "cancelado" || papel(["dona"]));
       allow delete: if false;
     }
 
@@ -45,9 +47,12 @@ service cloud.firestore {
     // Livro de Ordens e Ocorrências: só se acrescenta. Correção é um registro novo.
     match /livro/{id} {
       allow read: if papel(["dona", "gestor", "lider"])
-        || (ativo() && resource.data.tipo in ["ordem", "ciente", "feito"]);
+        || (ativo() && resource.data.tipo in ["ordem", "ciente", "feito", "cancelamento"]);
       allow create: if edita() && request.resource.data.autorUid == request.auth.uid && (
            request.resource.data.tipo in ["ciente", "feito"]
+        // Cancelar um registro (ex.: era teste): líderes e a Daiane, sempre com motivo. Fica no livro.
+        || (request.resource.data.tipo == "cancelamento" && papel(["dona", "lider"])
+            && request.resource.data.motivo is string && request.resource.data.motivo.size() > 0)
         || (request.resource.data.tipo == "ordem" && papel(["dona"]))
         || (request.resource.data.tipo in ["ocorrencia", "passagem", "fechamento", "correcao"] && papel(["dona", "lider"]))
         || (request.resource.data.tipo == "visto" && papel(["dona"])));
@@ -166,7 +171,9 @@ service cloud.firestore {
     match /checklists/{id} {
       allow read: if ativo();
       allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
-        && (!(request.resource.data.lista in ["caixa_abertura", "caixa_fechamento"]) || caixaOuLiderEdita());
+        && (!(request.resource.data.lista in ["caixa_abertura", "caixa_fechamento"]) || caixaOuLiderEdita())
+        // Desfazer um checklist: só a Daiane (10/11/2026).
+        && (request.resource.data.get("tipo", "") != "cancelamento" || papel(["dona"]));
       allow update, delete: if false;
     }
 
@@ -222,6 +229,14 @@ service cloud.firestore {
       allow read: if ativo();
       allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
         && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
+    // Item novo do estoque: qualquer pessoa da equipe cria (a Daiane arruma depois em Estoque → Insumos).
+    match /estoque_insumos/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.nome is string && request.resource.data.nome.size() > 0
+        && request.resource.data.unidade is string && request.resource.data.unidade.size() > 0;
       allow update, delete: if false;
     }
     match /estoque_cadastro/{id} {
@@ -280,6 +295,18 @@ service cloud.firestore {
         || (request.resource.data.tipo == "status" && request.resource.data.para in ["pronto", "entregue"])
         || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelado"
             && request.resource.data.motivo is string && request.resource.data.motivo.size() > 0));
+      allow update, delete: if false;
+    }
+
+    // Quem é da equipe (nomes, setor, função, rodízio): todos leem; só a Daiane troca. Cada versão vai para o histórico.
+    match /config/{id} {
+      allow read: if ativo();
+      allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
+      allow delete: if false;
+    }
+    match /config_historico/{id} {
+      allow read: if papel(["dona"]);
+      allow create: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
       allow update, delete: if false;
     }
 

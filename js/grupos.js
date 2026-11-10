@@ -2,12 +2,13 @@
 // não precisar voltar ao menu. Cada aba continua sendo a mesma tela de antes (nada muda nos dados).
 import { usuarioAtual } from "./sessao.js";
 import { pode } from "./equipe.js";
+import { PESSOAS_BALCAO } from "./rodizio.js";
 
 export const GRUPOS = {
   dia: { titulo: "Meu dia", abas: [
     { titulo: "Presença", link: "presenca.html", mostrar: (u) => pode.marcarPresenca(u) },
     { titulo: "Checklist", link: "checklists.html" },
-    { titulo: "Minhas tarefas", link: "tarefas.html", mostrar: (u) => pode.verLivroCompleto(u) || u.setor === "Balcão" },
+    { titulo: "Minhas tarefas", link: "tarefas.html", mostrar: (u) => pode.verLivroCompleto(u) || PESSOAS_BALCAO.includes(u.nome) },
   ] },
   caixa: { titulo: "Caixa", abas: [
     { titulo: "Saídas do caixa", link: "caixa.html", mostrar: (u) => pode.verCaixa(u) },

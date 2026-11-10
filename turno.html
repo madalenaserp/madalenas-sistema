@@ -34,13 +34,13 @@ if (modoTeste) document.getElementById("teste").innerHTML =
 // Cada seção é uma tela separada. As que ainda não existem aparecem como "em breve".
 const secoes = [
   // Equipe do salão e do caixa: poucos botões; dentro de cada um, as partes ficam em abas (js/grupos.js).
-  { titulo: "✅ Meu dia", desc: [pode.marcarPresenca(eu) && "presença da equipe", "checklist de abertura, rondas e fechamento", (pode.verLivroCompleto(eu) || eu.setor === "Balcão") && "suas tarefas do rodízio"].filter(Boolean).join(", "), link: pode.marcarPresenca(eu) ? "presenca.html" : "checklists.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
+  { titulo: "✅ Meu dia", desc: [pode.marcarPresenca(eu) && "presença da equipe", "checklist de abertura, rondas e fechamento", (pode.verLivroCompleto(eu) || ["Balcão", "Lanches"].includes(eu.setor) || eu.nome === "Fabrícia") && "suas tarefas do rodízio"].filter(Boolean).join(", "), link: pode.marcarPresenca(eu) ? "presenca.html" : "checklists.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
   { titulo: "💰 Caixa", desc: [pode.verCaixa(eu) && "saídas (sangria, vale, compra, fornecedor)", pode.verConsumo(eu) && "consumo da equipe"].filter(Boolean).join(" e "), link: pode.verCaixa(eu) ? "caixa.html" : "consumo.html", mostrar: pode.verCaixa(eu) || pode.verConsumo(eu) },
-  { titulo: "📖 Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
+  { titulo: "📖 Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências e passagem de turno" : "Ordens da Daiane para você", link: "livro.html" },
   { titulo: "📦 Pedidos", desc: pode.notasEmpresas(eu) ? "Pedidos do balcão (mesas), encomendas e notas das empresas" : "Pedidos do balcão (mesas) e encomendas", link: "balcao.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
-  { titulo: "🥖 Estoque e perdas", desc: "Perdas e sobras, compras, contagem e transferência", link: "perdas.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
+  { titulo: "🥖 Estoque e perdas", desc: "Perdas e sobras, compras, tirar do estoque e contagem", link: pode.producao(eu) && !pode.verPainel(eu) ? "estoque.html" : "perdas.html" },
   // Produção e confeitaria: tudo dentro de "Produção" (produção do dia, limpeza, estoque, perdas, encomendas, fichas).
-  { titulo: "🍞 Produção", desc: "Produção do dia, limpeza da cozinha, estoque, perdas, encomendas e fichas técnicas", link: "producao.html", mostrar: pode.producao(eu) },
+  { titulo: "🍞 Produção", desc: "Produção do dia, limpeza da cozinha, encomendas e fichas técnicas", link: "producao.html", mostrar: pode.producao(eu) },
   { titulo: "RH", desc: "Escala da semana, logins, salários e folha", link: "rh.html", mostrar: pode.rh(eu) },
   { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: pode.verPainel(eu) },
 ];

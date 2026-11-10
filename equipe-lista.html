@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Quem é da equipe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  .pes { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:10px 12px; display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .pes input[type=text], .pes select { font-size:16px; padding:8px; border:1px solid var(--linha); border-radius:8px; background:#fff; width:100%; box-sizing:border-box; }
+  .pes .nome { grid-column:1 / -1; font-weight:700; }
+  .pes label.marca { display:flex; gap:6px; align-items:center; font-size:14px; }
+  .pes button.tira { grid-column:1 / -1; justify-self:end; border:none; background:none; color:var(--alerta); font-size:14px; cursor:pointer; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Quem é da equipe</h1><a href="rh.html">Voltar</a></header>
+<main>
+  <div class="cartao suave" style="font-size:14px">Aqui você troca quem trabalha na loja. A lista vale para a presença, a escala, o rodízio, o caixa e o consumo.
+    <b>Para trocar alguém</b> (ex.: a Natália saiu e entrou outra pessoa), toque em "Tirar da equipe" e depois em "+ Pessoa nova". O que a pessoa antiga fez continua guardado.
+    Depois, crie o login dela em <a href="equipe.html">Equipe e acessos</a> e coloque o salário em <a href="diarias.html">Salários e diárias</a>. Se mudar alguém para líder, recrie o login dela em Equipe e acessos para valer também na permissão.</div>
+  <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>
+  <button class="botao" id="mais" style="text-align:center">+ Pessoa nova</button>
+  <p class="msg-erro" id="erro"></p>
+  <button class="botao principal" id="salvar">Salvar equipe</button>
+  <p class="suave" id="quando" style="font-size:13px"></p>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, dataBR } from "./js/sessao.js";
+import { EQUIPE, SETORES, pode } from "./js/equipe.js";
+import { ler, salvarComHistorico } from "./js/db.js";
+
+const eu = await exigirUsuario();
+if (!pode.rh(eu)) location.href = "turno.html";
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const semAcento = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const rodizioPadrao = (p) => ["Balcão", "Lanches"].includes(p.setor) || p.nome === "Fabrícia";
+
+let lista = EQUIPE.filter((p) => p.setor !== "Gestão").map((p) => ({ ...p, rodizio: p.rodizio ?? rodizioPadrao(p) }));
+const atual = await ler("config", "equipe").catch(() => null);
+if (atual?.alteradoEm) document.getElementById("quando").textContent = `Última alteração: ${dataBR(atual.alteradoEm.slice(0, 10))} por ${atual.alteradoPor}.`;
+
+function desenhar() {
+  const el = document.getElementById("lista");
+  el.innerHTML = lista.map((p, k) => `<div class="pes" data-k="${k}">
+    <input type="text" class="nome" data-f="nome" value="${esc(p.nome)}" placeholder="Nome (como a equipe chama)">
+    <select data-f="setor">${SETORES.map((s) => `<option ${s === p.setor ? "selected" : ""}>${s}</option>`).join("")}</select>
+    <select data-f="papel"><option value="equipe" ${p.papel !== "lider" ? "selected" : ""}>Equipe</option><option value="lider" ${p.papel === "lider" ? "selected" : ""}>Líder (marca presença)</option></select>
+    <label class="marca"><input type="checkbox" data-f="rodizio" ${p.rodizio ? "checked" : ""}> Entra no rodízio do balcão</label>
+    <button class="tira" data-tira="${k}">Tirar da equipe</button></div>`).join("");
+  el.querySelectorAll(".pes").forEach((d) => d.querySelectorAll("[data-f]").forEach((i) => (i.oninput = i.onchange = () => {
+    lista[d.dataset.k][i.dataset.f] = i.type === "checkbox" ? i.checked : i.value;
+  })));
+  el.querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => {
+    const p = lista[b.dataset.tira];
+    if (confirm(`Tirar ${p.nome || "esta pessoa"} da equipe? Tudo o que ela fez continua guardado. Lembre de desativar o login em Equipe e acessos.`)) { lista.splice(b.dataset.tira, 1); desenhar(); }
+  }));
+}
+desenhar();
+document.getElementById("mais").onclick = () => {
+  lista.push({ nome: "", usuario: "", setor: "Balcão", papel: "equipe", rodizio: true });
+  desenhar();
+  document.querySelector(".pes:last-child .nome").focus();
+};
+document.getElementById("salvar").onclick = async (e) => {
+  const erro = document.getElementById("erro");
+  const limpa = lista.map((p) => ({ nome: String(p.nome).trim(), usuario: p.usuario || semAcento(String(p.nome).trim()), setor: p.setor, papel: p.papel === "lider" ? "lider" : "equipe", rodizio: !!p.rodizio }));
+  if (limpa.some((p) => !p.nome)) return (erro.textContent = "Tem pessoa sem nome.");
+  const nomes = limpa.map((p) => p.nome.toLowerCase());
+  if (new Set(nomes).size !== nomes.length) return (erro.textContent = "Tem dois nomes iguais. Use o sobrenome para diferenciar.");
+  e.target.disabled = true;
+  try {
+    await salvarComHistorico("config", "equipe", { lista: limpa, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() });
+    erro.textContent = "";
+    alert("Equipe salva. As telas já usam a lista nova.");
+  } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; }
+  e.target.disabled = false;
+};
+</script>
+</body>
+</html>

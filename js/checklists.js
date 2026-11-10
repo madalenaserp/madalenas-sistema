@@ -9,17 +9,17 @@ export const CHECKLISTS = [
     id: "salao_abertura", titulo: "Abertura do salão", setor: "Salão", quem: "todos", porTurno: true,
     secoes: [
       ["Equipe", [
+        "Antes de começar, abrir o Livro do dia e conferir as pendências do turno anterior",
         "Escalados presentes, cada um na função definida pela gestão (ausência ou atraso vai para o Livro)",
         "Uniforme limpo, avental, cabelo preso, unhas curtas sem adornos; mãos lavadas",
-        "Pendências do turno anterior lidas no Livro",
       ]],
       ["Equipamentos", [
         "Maquininhas de cartão carregadas e funcionando; carregadores organizados",
         "Sistema de vendas funcionando e bobinas disponíveis",
         { texto: "Limpar a televisão (pano seco ou próprio, sem produto direto na tela) e deixar funcionando", foto: true },
         { texto: "Máquina de café e equipamentos de lanche limpos e em condições de uso", foto: true },
-        { texto: "Temperatura da vitrine refrigerada (°C)", tipo: "numero", foto: true },
-        { texto: "Temperatura da geladeira de bebidas (°C)", tipo: "numero", foto: true },
+        { texto: "Temperatura da vitrine refrigerada (°C)", tipo: "numero", foto: true, faixa: [2, 3], semMedidor: "Ainda sem termômetro" },
+        { texto: "Temperatura da geladeira de bebidas (°C)", tipo: "numero", foto: true, semMedidor: "Ainda sem termômetro" },
       ]],
       ["Limpeza e organização", [
         { texto: "Balcão, vitrine (vidro por dentro e por fora), mesas e cadeiras limpos; chão varrido e com pano", foto: true },
@@ -29,19 +29,18 @@ export const CHECKLISTS = [
       ["Produtos e vitrine", [
         "Café feito e disponível",
         "Pão de queijo, salgados, coxinhas fritas e frios disponíveis (conferir com a produção)",
-        "Frios fatiados conforme a necessidade",
         "Validade e qualidade de todos os expostos conferidas; o que reprovar sai da vitrine e é anotado como perda",
         { texto: "Vitrine padronizada, sem excesso nem vazios, tudo com identificação e preço; bebidas e revenda abastecidas", foto: true },
         "Faltas ou estoque baixo comunicados à produção",
       ]],
       ["Pedidos das empresas e encomendas", [
         "Encomendas do dia conferidas: quais estão prontas e quais pendentes",
-        "Pedidos das empresas separados e conferidos (produto, quantidade, identificação)",
+        "Pedidos das empresas separados e conferidos conforme a solicitação de cada empresa (produto, quantidade, frios fatiados, identificação)",
         "Foto de cada nota assinada tirada no sistema (Notas das empresas)",
         "Atrasos ou divergências comunicados ao responsável",
       ]],
       ["Conferência final", [
-        "Equipe posicionada, vitrine e caixa prontos; luzes, som e placa \"Aberto\" ligados",
+        "Equipe posicionada, vitrine e caixa prontos, luzes e TV ligadas",
       ]],
     ],
   },
@@ -89,7 +88,7 @@ export const CHECKLISTS = [
         "Ambiente limpo, organizado e pronto para a próxima abertura",
       ]],
       ["Segurança", [
-        "Luzes e som desligados (os equipamentos ficam ligados)",
+        "Luzes e TV desligadas (os equipamentos ficam ligados)",
         "Janelas e portas trancadas",
       ]],
     ],

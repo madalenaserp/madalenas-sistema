@@ -24,7 +24,7 @@ import { listar, listarEntre, ler } from "./js/db.js";
 import { CHECKLISTS } from "./js/checklists.js";
 import { distribuir } from "./js/rodizio.js";
 import { chaveProduto } from "./js/produtos.js";
-import { INSUMOS_PADRAO, LOCAIS } from "./js/insumos.js";
+import { LOCAIS, carregarListaInsumos } from "./js/insumos.js";
 import { TAREFAS_COZINHA, COZINHAS } from "./js/cozinha.js";
 import { folgasNoDia, segundaDe, somarDias } from "./js/escala.js";
 
@@ -40,8 +40,10 @@ function bloco(titulo, itens, tipo) {
 }
 
 async function mostrar() {
-  const registros = await listar("presenca", "data", campoDia.value);
-  const livro = await listar("livro", "data", campoDia.value);
+  const registros = (await listar("presenca", "data", campoDia.value)).filter((r) => r.situacao !== "cancelado");
+  const livroBruto = await listar("livro", "data", campoDia.value);
+  const livroCanc = new Set(livroBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+  const livro = livroBruto.filter((r) => r.tipo !== "cancelamento" && !livroCanc.has(r.id));
   // Encomendas do dia escolhido e do dia seguinte.
   const [a0, m0, d0] = campoDia.value.split("-").map(Number);
   const dx = new Date(a0, m0 - 1, d0 + 1);
@@ -68,7 +70,9 @@ async function mostrar() {
   const tFeita = (t) => t.fotos === "uma" ? tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === "depois") : t.fotos ? ["antes", "depois"].every((k) => tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === k)) : tarefasRegs.some((r) => r.tarefa === t.id && r.tipo === "feito");
   const tarefasAbertas = plano.filter((p) => !tFeita(p.tarefa)).map((p) => `${p.pessoa || "ninguém"}: ${p.tarefa.texto}`);
   const tarefasFeitas = plano.filter((p) => tFeita(p.tarefa)).map((p) => `${p.pessoa}: ${p.tarefa.texto}`);
-  const cks = await listar("checklists", "data", campoDia.value);
+  const cksBruto = await listar("checklists", "data", campoDia.value);
+  const cksCanc = new Set(cksBruto.filter((c) => c.tipo === "cancelamento").map((c) => c.refId));
+  const cks = cksBruto.filter((c) => c.tipo !== "cancelamento" && !cksCanc.has(c.id));
   const ckFeitos = [], ckPendentes = [];
   for (const l of CHECKLISTS) {
     const meus = cks.filter((c) => c.lista === l.id);
@@ -79,7 +83,7 @@ async function mostrar() {
       if (f) ckFeitos.push(`${nome}: ${f.registradoPor} às ${f.hora}`); else ckPendentes.push(nome);
     }
   }
-  const ckProblemas = cks.flatMap((c) => c.respostas.filter((r) => !r.ok).map((r) =>
+  const ckProblemas = cks.flatMap((c) => (c.respostas || []).filter((r) => !r.ok).map((r) =>
     `${c.titulo}${c.turno ? ` (${c.turno})` : ""}: ${r.texto}${r.valor != null ? ` = ${r.valor}` : ""} <span class="suave">(${r.obs}; ${c.registradoPor})</span>`));
   const perdasBruto = await listar("perdas", "data", campoDia.value);
   const perdasCanc = new Set(perdasBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
@@ -108,14 +112,14 @@ async function mostrar() {
   const cxBruto = await listar("caixa", "data", campoDia.value);
   const cxCanc = new Set(cxBruto.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const cx = cxBruto.filter((r) => r.tipo === "movimento" && !cxCanc.has(r.id));
-  const CX = { sangria: "Sangria", vale: "Vale", feriado: "Feriado pago", diarista: "Diarista", compra: "Compra", fornecedor: "Fornecedor", reforco: "Reforço de troco", outro: "Outra saída" };
+  const CX = { sangria: "Sangria", vale: "Vale", feriado: "Feriado pago", diarista: "Diarista", compra: "Compra", fornecedor: "Fornecedor", reforco: "Entrou dinheiro para troco", outro: "Outra saída" };
   const cxSem = cx.filter((r) => r.tipoMov !== "reforco" && r.autorizadoPor === "Ninguém")
     .map((r) => `${CX[r.tipoMov]}: ${r.para} · ${(r.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} <span class="suave">(${r.registradoPor} às ${r.hora})</span>`);
   const sangDia = cx.filter((r) => r.tipoMov === "sangria").reduce((s2, r) => s2 + r.valor, 0);
   if (sangDia > 600.001) cxSem.unshift(`<b>Sangrias do dia passaram de R$ 600,00: ${sangDia.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b>`);
   const cxSaiu = cx.filter((r) => r.tipoMov !== "reforco").reduce((s2, r) => s2 + r.valor, 0);
   // Estoque: saldo (última contagem + movimentos), abaixo do mínimo, sumiço na contagem e compras do dia.
-  const insCad = (await ler("estoque_cadastro", "insumos").catch(() => null))?.lista || INSUMOS_PADRAO;
+  const insCad = await carregarListaInsumos();
   const estRegs = (await listarEntre("estoque", "data", "2000-01-01", campoDia.value)).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || ""));
   const estCanc = new Set(estRegs.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const est = estRegs.filter((r) => r.tipo === "mov" && !estCanc.has(r.id));
@@ -171,7 +175,7 @@ async function mostrar() {
   const folgasEsc = await folgasNoDia(campoDia.value);
   const semMarcar = EQUIPE_DO_TURNO.filter((p) => !por[p.nome] && !folgasEsc.includes(p.nome)).map((p) => p.nome);
   const vieram = registros.filter((r) => r.situacao === "veio")
-    .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
+    .map((r) => `${r.pessoa}${r.chegada ? ` às ${r.chegada}` : ""}${r.saida ? `, saiu ${r.saida}` : ""} <span class="suave">· marcado por ${r.marcadoPor}</span>`);
   const folgas = registros.filter((r) => r.situacao === "folga").map((r) => r.pessoa);
   document.getElementById("resumo").innerHTML =
     bloco("Ocorrências urgentes", urgentes, "alerta") +

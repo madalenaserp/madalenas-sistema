@@ -2,7 +2,11 @@
 // papel: "dona" (tudo), "gestor" (só vê: painel e telas, sem lançar nada), "lider" (marca presença), "equipe".
 // No sistema ligado ao Firebase, o papel que vale é o da coleção "usuarios" (as regras do servidor
 // leem de lá). Esta lista serve para a tela de presença e para o modo teste.
-export const EQUIPE = [
+// Desde 10/11/2026 a Daiane troca as pessoas em RH → Quem é da equipe (fica no servidor, em config/equipe);
+// esta lista abaixo só vale enquanto ela não salvar a dela (ou sem internet / antes do login).
+import { ler } from "./db.js";
+
+const PADRAO = [
   { nome: "Daiane", usuario: "daiane", setor: "Gestão", papel: "dona" },
   { nome: "Fábio", usuario: "fabio", setor: "Gestão", papel: "gestor" },
   { nome: "Dara", usuario: "dara", setor: "Caixa", papel: "lider" },
@@ -21,6 +25,17 @@ export const EQUIPE = [
   { nome: "Gabriel", usuario: "gabriel", setor: "Produção", papel: "equipe" },
   { nome: "Eduardo", usuario: "eduardo", setor: "Confeitaria", papel: "equipe" },
 ];
+
+async function carregarEquipe() {
+  try {
+    const d = await ler("config", "equipe");
+    if (d?.lista?.length) return [...PADRAO.filter((p) => p.setor === "Gestão"), ...d.lista.filter((p) => p.nome && p.setor !== "Gestão")];
+  } catch { /* antes do login ou sem internet: usa a lista padrão */ }
+  return PADRAO;
+}
+export const EQUIPE_PADRAO = PADRAO;
+export const EQUIPE = await carregarEquipe();
+export const SETORES = ["Caixa", "Balcão", "Lanches", "Produção", "Confeitaria"];
 
 export const pessoa = (nome) => EQUIPE.find((p) => p.nome === nome);
 export const EQUIPE_DO_TURNO = EQUIPE.filter((p) => p.setor !== "Gestão");

@@ -83,11 +83,11 @@ const TIPOS = {
   sangria:    { nome: "Sangria", desc: "Dinheiro retirado do caixa e entregue", sinal: -1, campo: "Entregue para", opcoes: ["Daiane", "Fábio", "Cofre"] },
   vale:       { nome: "Vale de funcionário", desc: "Adiantamento para alguém da equipe", sinal: -1, campo: "Funcionário", pessoas: true },
   feriado:    { nome: "Pagamento de feriado", desc: "Feriado pago em mãos a alguém da equipe", sinal: -1, campo: "Funcionário", pessoas: true, exigeAut: true },
-  diarista:   { nome: "Diarista / ajudante", desc: "Pagamento de quem não é fixo", sinal: -1, campo: "Nome de quem recebeu", texto: true, servico: true },
+  diarista:   { nome: "Diarista / ajudante", desc: "Pagamento da diária de quem recebe por dia ou de quem veio ajudar", sinal: -1, campo: "Quem recebeu", pessoas: true, outroNome: true, servico: true },
   compra:     { nome: "Compra", desc: "Algo comprado com dinheiro do caixa", sinal: -1, campo: "O que comprou e onde", texto: true, foto: true, exigeAut: true },
-  fornecedor: { nome: "Pagamento de fornecedor", desc: "Farinha, ovos, queijo, salgados, gás...", sinal: -1, campo: "Fornecedor", opcoes: ["Farinha", "Ovos", "Queijo Priori", "Salgados", "Gás", "Outro"], foto: true, exigeAut: true },
-  reforco:    { nome: "Reforço de troco", desc: "Dinheiro que entrou no caixa (não é venda)", sinal: 1, campo: "Quem trouxe", opcoes: ["Daiane", "Fábio", "Cofre"] },
-  outro:      { nome: "Outra saída", desc: "Qualquer outra coisa (explique)", sinal: -1, campo: "O que foi", texto: true },
+  fornecedor: { nome: "Pagamento de fornecedor", desc: "Farinha, ovos, queijo, salgados, gás...", sinal: -1, campo: "Fornecedor", opcoes: ["Farinha", "Ovos", "Queijo Priori", "Salgados", "Gás", "Outro"], foto: "opcional", exigeAut: true },
+  reforco:    { nome: "Entrou dinheiro para troco", desc: "Não é venda. Ex.: o troco acabou e a Daiane trouxe R$ 50 em moedas e notas pequenas", sinal: 1, campo: "Quem trouxe", opcoes: ["Daiane", "Fábio", "Cofre"] },
+  outro:      { nome: "Outra saída", desc: "O que não se encaixa acima. Ex.: frete, motoboy, conserto pequeno, chaveiro", sinal: -1, campo: "O que foi (ex.: motoboy da entrega da encomenda)", texto: true },
 };
 const AUTORIZOU = ["Daiane", "Fábio", "Ninguém"];
 const LIMITE_SANGRIA = 600; // Daiane, 07/11/2026: no máximo R$ 600 saem do caixa físico em sangrias, SOMADO NO DIA.
@@ -194,17 +194,17 @@ function formulario(tipoMov) {
   const sel = { para: null, autorizadoPor: null };
   let urlFoto = null;
   const grupo = (id, lista, cls = "") => `<div class="opcoes ${cls}" id="${id}">${lista.map((x) => `<button type="button" data-v="${esc(x)}" aria-pressed="false">${esc(x)}</button>`).join("")}</div>`;
-  const campoPara = t.pessoas ? `<select id="f-para" style="font-size:17px;padding:10px;border:1px solid var(--linha);border-radius:10px;background:#fff"><option value="">Escolha a pessoa</option>${EQUIPE_DO_TURNO.map((p) => `<option>${esc(p.nome)}</option>`).join("")}</select>`
+  const campoPara = t.pessoas ? `<select id="f-para" style="font-size:17px;padding:10px;border:1px solid var(--linha);border-radius:10px;background:#fff"><option value="">Escolha a pessoa</option>${EQUIPE_DO_TURNO.map((p) => `<option>${esc(p.nome)}</option>`).join("")}${t.outroNome ? `<option value="__outro">Outra pessoa (escrever o nome)</option>` : ""}</select>${t.outroNome ? `<input type="text" id="f-outro" placeholder="Nome de quem recebeu" autocomplete="off" hidden>` : ""}`
     : t.opcoes ? grupo("f-para-op", t.opcoes, t.opcoes.length === 3 ? "tres" : "") : `<input type="text" id="f-para" autocomplete="off">`;
   folha.innerHTML = `<h2>${t.sinal > 0 ? "Entrada" : "Saída"}: ${esc(t.nome)}</h2>
     <label class="rot" for="f-valor">${tipoMov === "feriado" ? "Diária(s) (R$)" : "Valor (R$)"}</label><input id="f-valor" inputmode="decimal" placeholder="0,00">
     ${tipoMov === "feriado" ? `<label class="rot" for="f-pass">Passagem (R$)</label><input id="f-pass" inputmode="decimal" placeholder="Valor da passagem desta pessoa (0 se não tem)"><p id="f-total" style="margin:0;font-size:16px;font-weight:700"></p>` : ""}
     ${tipoMov === "sangria" ? `<p id="f-sang" style="margin:0;font-size:15px"></p><p class="suave" style="margin:0;font-size:13px">Máximo de ${reais(LIMITE_SANGRIA)} em sangrias no dia todo (somando todas). Pagamento de feriado não é sangria: registre em "Pagamento de feriado", um por pessoa.</p>` : tipoMov === "feriado" ? `<p class="suave" style="margin:0;font-size:13px">Um registro para cada pessoa. Escolha a pessoa abaixo e a diária aparece sozinha.</p>` : ""}
     <label class="rot">${esc(t.campo)}</label>${campoPara}
-    ${tipoMov === "feriado" ? `<p id="f-diaria" style="margin:0;font-size:15px"></p>` : ""}
+    ${t.pessoas ? `<p id="f-diaria" style="margin:0;font-size:15px"></p>` : ""}
     ${t.servico ? `<label class="rot" for="f-serv">Que serviço fez</label><input type="text" id="f-serv" autocomplete="off" placeholder="Ex.: ajudou na produção das 6h às 12h">` : ""}
     ${t.sinal < 0 ? `<label class="rot">Quem autorizou</label>${t.exigeAut ? grupo("f-aut", ["Daiane", "Fábio"]) + `<p class="suave" style="margin:0;font-size:13px">${tipoMov === "feriado" ? "Só paga com autorização da Daiane ou do Fábio." : "Não existe compra sem autorização. Sem a Daiane ou o Fábio autorizar, não compre."}</p>` : grupo("f-aut", AUTORIZOU, "tres")}` : ""}
-    ${t.foto ? `<label class="camera" id="f-cam">📷 <span>Foto do comprovante ou nota (obrigatória)</span><input type="file" accept="image/*" capture="environment"></label>` : ""}
+    ${t.foto ? `<label class="camera" id="f-cam">📷 <span>Foto do comprovante ou nota ${t.foto === "opcional" ? "(se tiver; o gás, por exemplo, não tem)" : "(obrigatória)"}</span><input type="file" accept="image/*" capture="environment"></label>` : ""}
     <input type="text" id="f-obs" placeholder="${tipoMov === "outro" ? "Explique (obrigatório)" : "Observação (opcional)"}" autocomplete="off">
     <p class="msg-erro" id="f-erro"></p>
     <button class="botao principal" id="f-ok">Salvar</button>
@@ -224,6 +224,18 @@ function formulario(tipoMov) {
       dica.innerHTML = `${esc(e.target.value)} recebe ${forma === "maos" ? "em mãos: <b>2 diárias</b>" : "pela conta: <b>1 diária</b>"} de ${reais(v)} = <b>${reais(v * qtd)}</b>. Some a passagem abaixo.`; total(); }
     else dica.textContent = e.target.value ? "A Daiane ainda não cadastrou a diária desta pessoa. Pergunte a ela o valor." : "";
   };
+  // Vale e diarista: mostra a diária da pessoa (do RH). No diarista já preenche; no vale é só referência (o vale nem sempre é uma diária).
+  if (tipoMov === "vale" || tipoMov === "diarista") folha.querySelector("#f-para").onchange = async (e) => {
+    const outro = folha.querySelector("#f-outro");
+    if (outro) outro.hidden = e.target.value !== "__outro";
+    const dica = folha.querySelector("#f-diaria");
+    if (!e.target.value || e.target.value === "__outro") { dica.textContent = ""; return; }
+    const v = (await diarias()).valores?.[e.target.value];
+    if (!v) { dica.textContent = "A Daiane ainda não cadastrou a diária desta pessoa."; return; }
+    if (tipoMov === "diarista") { folha.querySelector("#f-valor").value = v.toFixed(2).replace(".", ","); dica.innerHTML = `Diária de ${esc(e.target.value)}: <b>${reais(v)}</b> (já preenchida; mude se for diferente).`; }
+    else { dica.innerHTML = `Diária de ${esc(e.target.value)}: <b>${reais(v)}</b> <button type="button" id="usar-diaria" style="font-size:13px;padding:4px 8px;border-radius:8px;border:1px solid var(--linha);background:#fff;margin-left:6px">Usar esse valor</button>`;
+      dica.querySelector("#usar-diaria").onclick = () => { folha.querySelector("#f-valor").value = v.toFixed(2).replace(".", ","); }; }
+  };
   const cam = folha.querySelector("#f-cam");
   if (cam) cam.querySelector("input").onchange = async function trocar(e) {
     const a = e.target.files[0]; if (!a) return;
@@ -235,7 +247,8 @@ function formulario(tipoMov) {
   folha.querySelector("#f-ok").onclick = async (e) => {
     const erro = folha.querySelector("#f-erro");
     const valor = numero(folha.querySelector("#f-valor").value);
-    const para = sel.para || folha.querySelector("#f-para")?.value.trim();
+    let para = sel.para || folha.querySelector("#f-para")?.value.trim();
+    if (para === "__outro") para = folha.querySelector("#f-outro")?.value.trim();
     const servico = folha.querySelector("#f-serv")?.value.trim();
     const obs = folha.querySelector("#f-obs").value.trim();
     if (!(valor > 0)) return (erro.textContent = tipoMov === "feriado" ? "Coloque a diária." : "Coloque o valor.");
@@ -248,7 +261,7 @@ function formulario(tipoMov) {
     if (!para) return (erro.textContent = `Preencha: ${t.campo.toLowerCase()}.`);
     if (t.servico && !servico) return (erro.textContent = "Escreva que serviço a pessoa fez.");
     if (t.sinal < 0 && !sel.autorizadoPor) return (erro.textContent = t.exigeAut ? "Marque quem autorizou. Sem autorização, não pode comprar." : "Marque quem autorizou (ou Ninguém).");
-    if (t.foto && !urlFoto) return (erro.textContent = "Tire a foto do comprovante.");
+    if (t.foto === true && !urlFoto) return (erro.textContent = "Tire a foto do comprovante.");
     if (tipoMov === "outro" && !obs) return (erro.textContent = "Explique o que foi.");
     e.target.disabled = true;
     try {

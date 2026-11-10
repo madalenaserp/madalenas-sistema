@@ -75,7 +75,7 @@
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
 import { acrescentar, listarEntre, ler, salvarComHistorico } from "./js/db.js";
-import { INSUMOS_PADRAO, LOCAIS } from "./js/insumos.js";
+import { INSUMOS_PADRAO, LOCAIS, UNIDADES, carregarListaInsumos, criarInsumo } from "./js/insumos.js";
 
 const eu = await exigirUsuario();
 const lanca = !pode.somenteLeitura(eu);          // o Fábio só vê
@@ -93,9 +93,10 @@ const agora = () => new Date().toTimeString().slice(0, 5);
 const localPadrao = eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora";
 const ACOES = {
   entrada:       { nome: "📷 Chegou compra", desc: "Tire a foto da nota: o sistema preenche e você confere", sinal: 1 },
-  uso:           { nome: "Levei para a produção", desc: "Saiu do estoque para usar", sinal: -1 },
-  transferencia: { nome: "Transferir", desc: "Da panificadora para a confeitaria ou o contrário", sinal: 0 },
-  perda:         { nome: "Perdi / estragou", desc: "Venceu, molhou, caiu, rasgou", sinal: -1 },
+  saida:         { nome: "Tirei do estoque", desc: "Para usar na produção ou para levar à outra unidade", sinal: 0, menu: true },
+  uso:           { nome: "Usado na produção", desc: "", sinal: -1, escondido: true },
+  transferencia: { nome: "Levado para a outra unidade", desc: "", sinal: 0, escondido: true },
+  perda:         { nome: "Perdi / estragou", desc: "Só insumo (farinha, ovo, leite...). Bolo, pão ou salgado pronto vai em Perdas e sobras", sinal: -1 },
   contagem:      { nome: "Contagem", desc: "Contar o que tem de verdade na prateleira", sinal: 0 },
 };
 
@@ -123,7 +124,33 @@ document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true
 
 /* ---------- Dados ---------- */
 let INSUMOS = INSUMOS_PADRAO;
-async function carregarInsumos() { const c = await ler("estoque_cadastro", "insumos").catch(() => null); if (c?.lista?.length) INSUMOS = c.lista; }
+async function carregarInsumos() { INSUMOS = await carregarListaInsumos(); }
+// "+ Item novo": qualquer pessoa cria um insumo que ainda não está na lista. Devolve o item (ou null se desistiu).
+function pedirItemNovo(nomeInicial = "") {
+  return new Promise((ok) => {
+    const caixa = document.createElement("div");
+    caixa.style.cssText = "position:fixed;inset:0;background:#0007;z-index:30;display:flex;align-items:center;justify-content:center;padding:16px";
+    caixa.innerHTML = `<div class="cartao" style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:8px">
+      <h2 style="margin:0">Item novo no estoque</h2>
+      <label class="rot">Nome</label><input id="n-nome" value="${esc(nomeInicial)}" placeholder="Ex.: Farinha de trigo Dona Benta" style="font-size:17px;padding:10px;border:1px solid var(--linha);border-radius:10px">
+      <label class="rot">Conta em</label><input id="n-un" list="n-uns" placeholder="kg, unidade, saco 25 kg…" style="font-size:17px;padding:10px;border:1px solid var(--linha);border-radius:10px">
+      <datalist id="n-uns">${UNIDADES.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>
+      <p class="msg-erro" id="n-e"></p>
+      <button class="botao principal" id="n-ok">Criar item</button><button class="botao" id="n-x" style="border:none;text-align:center">Cancelar</button></div>`;
+    document.body.append(caixa);
+    caixa.querySelector(nomeInicial ? "#n-un" : "#n-nome").focus();
+    caixa.querySelector("#n-x").onclick = () => { caixa.remove(); ok(null); };
+    caixa.querySelector("#n-ok").onclick = async (e) => {
+      const nome = caixa.querySelector("#n-nome").value.trim(), un = caixa.querySelector("#n-un").value.trim();
+      if (!nome || !un) return (caixa.querySelector("#n-e").textContent = "Preencha o nome e em que se conta.");
+      const igual = INSUMOS.find((i) => i.nome.toLowerCase() === nome.toLowerCase());
+      if (igual) { caixa.remove(); return ok(igual); }
+      e.target.disabled = true;
+      try { const item = await criarInsumo(nome, un, eu); INSUMOS.push(item); caixa.remove(); ok(item); }
+      catch { caixa.querySelector("#n-e").textContent = "Não consegui criar. Verifique a internet."; e.target.disabled = false; }
+    };
+  });
+}
 const ins = (id) => INSUMOS.find((i) => i.id === id) || { id, nome: id, unidade: "", minimo: 0 };
 // Código de barras: o sistema aprende. Na primeira vez a pessoa escolhe o insumo; depois o código já acha sozinho.
 let CODIGOS = {};
@@ -195,7 +222,7 @@ async function abaSaldo() {
 /* ---------- Registrar ---------- */
 function abaMov() {
   if (!lanca) { sec.innerHTML = `<p class="suave">Você só acompanha o estoque.</p>`; return; }
-  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}</div>`;
+  sec.innerHTML = `<div class="acoes-est">${Object.entries(ACOES).filter(([, a]) => !a.escondido).map(([k, a]) => `<button data-a="${k}"><b>${a.nome}</b><span class="suave">${a.desc}</span></button>`).join("")}</div>`;
   // "Chegou compra" começa pela foto da nota (uma foto só); dá para preencher à mão se a leitura não der certo.
   sec.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => (b.dataset.a === "contagem" ? contagem() : b.dataset.a === "entrada" ? lerNota() : formulario(b.dataset.a))));
 }
@@ -204,17 +231,18 @@ const folha = document.getElementById("folha");
 fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
 const grupo = (id, lista, sel) => `<div class="opcoes" id="${id}">${lista.map((x) => `<button type="button" data-v="${esc(x)}" aria-pressed="${x === sel}">${esc(x)}</button>`).join("")}</div>`;
 const ligaGrupo = (id, fn) => { const g = folha.querySelector(id); g.onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; g.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); fn(v); }; };
-const selInsumo = () => `<select id="m-ins" class="sel"><option value="">Escolha o insumo</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}">${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}</select>`;
+const selInsumo = () => `<select id="m-ins" class="sel"><option value="">${INSUMOS.length ? "Escolha o insumo" : "Nenhum item ainda: toque em + Item novo"}</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}">${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}<option value="__novo">+ Item novo (não está na lista)</option></select>`;
 
 function formulario(acao, fotoPronta = null) {
   const a = ACOES[acao];
-  const sel = { local: localPadrao, de: localPadrao, para: LOCAIS.find((l) => l !== localPadrao) };
+  const sel = { local: localPadrao, de: localPadrao, para: LOCAIS.find((l) => l !== localPadrao), praQue: null };
   let urlFoto = fotoPronta;
   folha.innerHTML = `<h2>${a.nome}</h2>
     ${campoCodigo("m-cod")}
     <label class="rot">Insumo</label>${selInsumo()}
     <label class="rot" for="m-q">Quantidade <span id="m-un"></span></label><input id="m-q" inputmode="decimal" placeholder="0">
-    ${acao === "transferencia" ? `<label class="rot">De</label>${grupo("m-de", LOCAIS, sel.de)}<label class="rot">Para</label>${grupo("m-para", LOCAIS, sel.para)}` : `<label class="rot">Onde</label>${grupo("m-local", LOCAIS, sel.local)}`}
+    ${acao === "saida" ? `<label class="rot">Para quê?</label>${grupo("m-praque", ["Usar na produção", "Levar para a outra unidade"], null)}<label class="rot">De qual unidade saiu</label>${grupo("m-local", LOCAIS, sel.local)}<p class="suave" id="m-destino" style="margin:0;font-size:14px"></p>`
+      : acao === "transferencia" ? `<label class="rot">De</label>${grupo("m-de", LOCAIS, sel.de)}<label class="rot">Para</label>${grupo("m-para", LOCAIS, sel.para)}` : `<label class="rot">Onde</label>${grupo("m-local", LOCAIS, sel.local)}`}
     ${acao === "entrada" ? `<label class="rot" for="m-p">Preço de cada <span class="m-un2"></span> (R$)</label><input id="m-p" inputmode="decimal" placeholder="0,00">
       <p id="m-tot" class="suave" style="margin:0"></p>
       <label class="rot" for="m-f">Fornecedor</label><input type="text" id="m-f" autocomplete="off" placeholder="Ex.: Atacadão, Priori, distribuidor do ovo">
@@ -224,7 +252,13 @@ function formulario(acao, fotoPronta = null) {
     <button class="botao principal" id="m-ok">Salvar</button>
     <button class="botao" id="m-x" style="text-align:center;border:none">Cancelar</button>`;
   const insSel = folha.querySelector("#m-ins");
-  insSel.onchange = () => { const u = insSel.value ? ins(insSel.value).unidade : ""; folha.querySelector("#m-un").textContent = u ? `(${u})` : ""; folha.querySelectorAll(".m-un2").forEach((e) => (e.textContent = u)); };
+  insSel.onchange = async () => {
+    if (insSel.value === "__novo") {
+      const item = await pedirItemNovo();
+      insSel.innerHTML = selInsumo().replace(/^<select[^>]*>|<\/select>$/g, "");
+      insSel.value = item ? item.id : "";
+    }
+    const u = insSel.value ? ins(insSel.value).unidade : ""; folha.querySelector("#m-un").textContent = u ? `(${u})` : ""; folha.querySelectorAll(".m-un2").forEach((e) => (e.textContent = u)); };
   let codigo = null;
   ligaCodigo("m-cod", (v, id) => {
     codigo = v;
@@ -232,7 +266,9 @@ function formulario(acao, fotoPronta = null) {
     if (id) { insSel.value = id; insSel.onchange(); msg.innerHTML = `<span class="ok">✓ ${esc(ins(id).nome)}</span>`; folha.querySelector("#m-q").focus(); }
     else { msg.innerHTML = `<b>Código novo.</b> Escolha o insumo na lista abaixo: da próxima vez ele já aparece sozinho.`; insSel.focus(); }
   });
-  if (acao === "transferencia") { ligaGrupo("#m-de", (v) => (sel.de = v)); ligaGrupo("#m-para", (v) => (sel.para = v)); } else ligaGrupo("#m-local", (v) => (sel.local = v));
+  const destino = () => { const d = folha.querySelector("#m-destino"); if (d) d.textContent = sel.praQue === "Levar para a outra unidade" ? `Vai para: ${LOCAIS.find((l) => l !== sel.local)}` : ""; };
+  if (acao === "transferencia") { ligaGrupo("#m-de", (v) => (sel.de = v)); ligaGrupo("#m-para", (v) => (sel.para = v)); } else ligaGrupo("#m-local", (v) => { sel.local = v; destino(); });
+  if (acao === "saida") ligaGrupo("#m-praque", (v) => { sel.praQue = v; destino(); });
   if (acao === "entrada") {
     const tot = () => { const q = numero(folha.querySelector("#m-q").value), p = numero(folha.querySelector("#m-p").value); folha.querySelector("#m-tot").textContent = q > 0 && p > 0 ? `Total: ${reais(q * p)}` : ""; };
     folha.querySelector("#m-q").oninput = tot; folha.querySelector("#m-p").oninput = tot;
@@ -248,7 +284,9 @@ function formulario(acao, fotoPronta = null) {
   folha.querySelector("#m-ok").onclick = async (e) => {
     const erro = folha.querySelector("#m-e");
     const insumoId = insSel.value, qtd = numero(folha.querySelector("#m-q").value), obs = folha.querySelector("#m-o").value.trim();
-    if (!insumoId) return (erro.textContent = "Escolha o insumo.");
+    if (!insumoId || insumoId === "__novo") return (erro.textContent = "Escolha o insumo (ou crie em + Item novo).");
+    if (acao === "saida" && !sel.praQue) return (erro.textContent = "Diga para quê: usar na produção ou levar para a outra unidade.");
+    if (acao === "saida") { acao = sel.praQue === "Usar na produção" ? "uso" : "transferencia"; if (acao === "transferencia") { sel.de = sel.local; sel.para = LOCAIS.find((l) => l !== sel.local); } }
     if (!(qtd > 0)) return (erro.textContent = "Coloque a quantidade.");
     if (acao === "transferencia" && sel.de === sel.para) return (erro.textContent = "De e Para não podem ser o mesmo lugar.");
     let preco = null, fornecedor = null;
@@ -310,7 +348,7 @@ async function lerNota() {
       if (fornLido && folha.querySelector("#l-forn")) folha.querySelector("#l-forn").value = fornLido;
     } catch (err) { prog.textContent = "O leitor não funcionou agora. Toque em \"Preencher à mão\"."; console.error(err); }
   };
-  const opcoesIns = (sel) => `<option value="">— não é do estoque —</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}`;
+  const opcoesIns = (sel) => `<option value="">— não é do estoque —</option>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}<option value="__novo">+ Criar item novo com este nome</option>`;
   function desenharItens(texto) {
     const box = folha.querySelector("#l-itens");
     if (!itens.length) { box.innerHTML = `<details><summary class="suave">Ver o texto que o leitor entendeu</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(texto)}</pre></details>`; return; }
@@ -324,7 +362,14 @@ async function lerNota() {
       <details><summary class="suave" style="font-size:13px">Ver o texto que o leitor entendeu</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(texto)}</pre></details>
       <button class="botao principal" id="l-ok" style="text-align:center;margin-top:8px">Conferi: salvar compra</button>`;
     ligaGrupo("#l-local", (v) => { local = v; });
-    box.querySelectorAll("[data-k]").forEach((c) => c.querySelectorAll("[data-f]").forEach((el) => (el.oninput = el.onchange = () => { itens[c.dataset.k][el.dataset.f] = el.dataset.f === "insumoId" ? el.value : numero(el.value); })));
+    box.querySelectorAll("[data-k]").forEach((c) => c.querySelectorAll("[data-f]").forEach((el) => (el.oninput = el.onchange = async () => {
+      if (el.dataset.f === "insumoId" && el.value === "__novo") {
+        const item = await pedirItemNovo(itens[c.dataset.k].descricao || "");
+        itens[c.dataset.k].insumoId = item ? item.id : "";
+        box.querySelectorAll('select[data-f="insumoId"]').forEach((s2) => { const k = s2.closest("[data-k]").dataset.k; s2.innerHTML = opcoesIns(itens[k].insumoId); });
+        return;
+      }
+      itens[c.dataset.k][el.dataset.f] = el.dataset.f === "insumoId" ? el.value : numero(el.value); })));
     box.querySelector("#l-ok").onclick = async (e) => {
       const erro = folha.querySelector("#l-e");
       const validos = itens.filter((it) => it.insumoId);
@@ -358,11 +403,20 @@ async function contagem() {
       ${campoCodigo("c-cod")}
       <label class="camera" id="c-cam" style="padding:12px">📷 <span>Contar pela foto da prateleira (o sistema sugere, você confere)</span><input type="file" accept="image/*" capture="environment"></label>
       <p id="c-ia" class="suave" style="margin:0;font-size:13px"></p>
+      ${INSUMOS.length ? "" : `<p class="suave">Ainda não tem nenhum item no estoque. Toque em + Item novo para começar.</p>`}
       <div>${[...INSUMOS].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<div class="cont"><span>${esc(i.nome)} <span class="suave" style="font-size:12px">(${esc(i.unidade)})</span></span><input inputmode="decimal" data-c="${esc(i.id)}"></div><div class="suave" data-obs="${esc(i.id)}" style="font-size:12px;margin:-4px 0 6px" hidden></div>`).join("")}</div>
+      <button class="botao" id="c-novo" style="text-align:center">+ Item novo (não está na lista)</button>
       <p class="msg-erro" id="c-e"></p>
       <button class="botao principal" id="c-ok">Salvar contagem</button>
       <button class="botao" id="c-x" style="text-align:center;border:none">Cancelar</button>`;
     ligaGrupo("#c-l", (v) => { local = v; });
+    folha.querySelector("#c-novo").onclick = async () => {
+      const valores = Object.fromEntries([...folha.querySelectorAll("[data-c]")].map((i) => [i.dataset.c, i.value]));
+      const item = await pedirItemNovo(); if (!item) return;
+      desenhar();
+      for (const [id, v] of Object.entries(valores)) { const c = folha.querySelector(`[data-c="${id}"]`); if (c) c.value = v; }
+      folha.querySelector(`[data-c="${item.id}"]`)?.focus();
+    };
     ligaCodigo("c-cod", (v, id) => {
       const msg = folha.querySelector("#c-cod-msg"), c = folha.querySelector("#c-cod");
       if (!id) { msg.innerHTML = "<b>Código novo.</b> Conte pela lista; registre uma compra ou uso com esse código para ele ser reconhecido."; c.select(); return; }
@@ -471,7 +525,9 @@ async function abaCusto() {
 }
 
 /* ---------- Insumos (só a Daiane) ---------- */
+let removidosAntes = [];
 function abaCad() {
+  ler("estoque_cadastro", "insumos").then((c) => { removidosAntes = c?.versao >= 2 ? c.removidos || [] : []; }).catch(() => {});
   let lista = INSUMOS.map((i) => ({ ...i }));
   const desenhar = () => {
     sec.innerHTML = `<div class="cartao"><p class="suave" style="margin:0 0 8px;font-size:13px">Nome, unidade em que se conta (kg, saco 25 kg, cartela...) e o mínimo que precisa ter. Abaixo do mínimo, aparece em vermelho no seu Painel.</p>
@@ -485,7 +541,8 @@ function abaCad() {
       const limpa = lista.map((i) => ({ id: i.id, nome: String(i.nome).trim(), unidade: String(i.unidade).trim(), minimo: numero(i.minimo) || 0 }));
       if (limpa.some((i) => !i.nome || !i.unidade)) return (sec.querySelector("#i-e").textContent = "Todo insumo precisa de nome e unidade.");
       e.target.disabled = true;
-      try { await salvarComHistorico("estoque_cadastro", "insumos", { lista: limpa, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() }); INSUMOS = limpa; sec.querySelector("#i-e").textContent = ""; alert("Lista salva."); }
+      const removidos = INSUMOS.map((i) => i.id).filter((id) => !limpa.some((i) => i.id === id));
+      try { await salvarComHistorico("estoque_cadastro", "insumos", { versao: 2, lista: limpa, removidos: [...new Set([...(removidosAntes || []), ...removidos])], alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() }); INSUMOS = limpa; sec.querySelector("#i-e").textContent = ""; alert("Lista salva."); }
       catch { sec.querySelector("#i-e").textContent = "Não consegui salvar."; }
       e.target.disabled = false;
     };

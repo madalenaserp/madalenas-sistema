@@ -70,15 +70,20 @@ async function registrar(tipo, campos) {
   catch { alert("Não consegui salvar. Verifique a internet e tente de novo."); }
 }
 
-const deTipo = (t) => registros.filter((r) => r.tipo === t).sort((a, b) => a.em.localeCompare(b.em));
+// Cancelado (ex.: era teste): sai da lista, mas continua guardado no livro.
+const cancelados = () => new Set(registros.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+const deTipo = (t) => { const c = cancelados(); return registros.filter((r) => r.tipo === t && !c.has(r.id)).sort((a, b) => (a.em || "").localeCompare(b.em || "")); };
+let pendenciasDeOntem = [];
 const ligados = (tipo, id) => registros.filter((r) => r.tipo === tipo && r.refId === id);
 
 function correcoes(id) {
   return ligados("correcao", id).map((c) =>
     `<div class="correcao"><b>Correção</b> (${esc(c.autor)}, ${hora(c.em)}): ${esc(c.texto)}</div>`).join("");
 }
-function botaoCorrigir(id) {
-  return pode.registrarNoLivro(eu) || pode.darOrdens(eu) ? `<button data-corrigir="${id}">Corrigir</button>` : "";
+function botaoCorrigir(id, tipo) {
+  const corrigir = pode.registrarNoLivro(eu) || pode.darOrdens(eu) ? `<button data-corrigir="${id}">Corrigir</button>` : "";
+  const podeCancelar = tipo === "ordem" ? eu.papel === "dona" : pode.registrarNoLivro(eu);
+  return corrigir + (podeCancelar ? `<button data-cancelar="${id}">Cancelar</button>` : "");
 }
 
 const ordensVisiveis = () => deTipo("ordem").filter((o) => pode.verLivroCompleto(eu) || o.para === "Todos" || o.para === eu.nome);
@@ -86,7 +91,7 @@ const ordensVisiveis = () => deTipo("ordem").filter((o) => pode.verLivroCompleto
 const telas = {
   ordens() {
     const ordens = ordensVisiveis();
-    let html = "";
+    let html = pode.darOrdens(eu) ? "" : `<div class="cartao lembrete" style="margin:0">Aqui aparecem as <b>ordens da Daiane</b>. Quando ler, toque em <b>Estou ciente</b>. Quando terminar, toque em <b>Marcar feito</b>.</div>`;
     if (pode.darOrdens(eu)) html += `
       <form class="cartao" data-form="ordem">
         <h2>Nova ordem</h2>
@@ -110,7 +115,7 @@ const telas = {
         <div class="acoes">
           ${souAlvo && !jaCiente ? `<button class="forte" data-ciente="${o.id}">Estou ciente</button>` : ""}
           ${souAlvo && !jaFeito ? `<button data-feito="${o.id}">Marcar feito</button>` : ""}
-          ${botaoCorrigir(o.id)}
+          ${botaoCorrigir(o.id, "ordem")}
         </div></div>`;
     }).join("") : `<div class="cartao"><p class="suave">Nenhuma ordem neste dia.</p></div>`;
     return html;
@@ -126,7 +131,7 @@ const telas = {
           <input type="time" name="hora" value="${agora()}">
         </div>
         <select name="codigo">${Object.entries(CODIGOS).map(([k, v]) => `<option value="${k}">${k} · ${v}</option>`).join("")}</select>
-        <p class="lembrete" style="margin:0">Faltas e atestados já ficam na Presença. Aqui, só se precisar explicar algo a mais.</p>
+        <p class="lembrete" style="margin:0">Só o que fugiu do normal: alguém passou mal, cliente reclamou, equipamento quebrou, faltou moeda para troco. Faltas e atestados ficam na Presença. <b>Se nada aconteceu, não precisa escrever nada.</b></p>
         <textarea name="fato" required placeholder="O que aconteceu (só o fato, sem opinião)"></textarea>
         <textarea name="providencia" placeholder="O que foi feito"></textarea>
         <input type="text" name="comunicado" placeholder="Avisado a quem?">
@@ -146,41 +151,28 @@ const telas = {
 
   passagem() {
     let html = "";
+    if (pendenciasDeOntem.length) html += `<div class="cartao registro urgente"><h2 style="margin:0 0 4px">Pendências deixadas no dia anterior</h2>
+      ${pendenciasDeOntem.map((p) => `<div><b>${esc(p.pendencias)}</b> <span class="meta">(${esc(p.autor)}, ${hora(p.em)})</span></div>`).join("")}</div>`;
     if (pode.registrarNoLivro(eu)) html += `
       <form class="cartao" data-form="passagem">
-        <h2>Passagem de turno (manhã → tarde)</h2>
-        <textarea name="pendencias" required placeholder="O que fica pendente para o próximo turno"></textarea>
-        <select name="recebeu" required>${opcoesPessoas('<option value="">Quem recebeu o turno?</option>')}</select>
+        <h2>Passagem de turno</h2>
+        <select name="momento"><option value="passagem" ${turnoAgora() === "Manhã" ? "selected" : ""}>Troca de turno (manhã → tarde)</option><option value="fechamento" ${turnoAgora() === "Tarde" ? "selected" : ""}>Fechamento (fica para amanhã)</option></select>
+        <textarea name="pendencias" required placeholder="O que ficou pendente (escreva &quot;nenhuma&quot; se não houver)"></textarea>
+        <select name="recebeu">${opcoesPessoas('<option value="">Ninguém agora: o próximo turno vê</option>')}</select>
         <button class="botao principal">Registrar passagem</button>
       </form>`;
-    const lista = deTipo("passagem");
+    const lista = [...deTipo("passagem"), ...deTipo("fechamento")].sort((a, b) => (a.em || "").localeCompare(b.em || ""));
     html += lista.length ? lista.map((p) => `<div class="cartao registro">
+        <div class="meta" style="margin:0 0 4px">${p.tipo === "fechamento" ? "Fechamento · fica para amanhã" : "Troca de turno"}</div>
         <div><b>${esc(p.pendencias)}</b></div>
-        <div class="meta">Entregou: ${esc(p.autor)} · recebeu: ${esc(p.recebeu)} · ${hora(p.em)}</div>
+        <div class="meta">Entregou: ${esc(p.autor)}${p.recebeu ? ` · recebeu: ${esc(p.recebeu)}` : " · o próximo turno vê"} · ${hora(p.em)}</div>
         ${correcoes(p.id)}<div class="acoes">${botaoCorrigir(p.id)}</div></div>`).join("")
       : `<div class="cartao"><p class="suave">Nenhuma passagem registrada neste dia.</p></div>`;
-    return html;
-  },
-
-  fechamento() {
-    let html = "";
-    const fech = deTipo("fechamento");
-    if (pode.registrarNoLivro(eu)) html += `
-      <form class="cartao" data-form="fechamento">
-        <h2>Fechamento do dia</h2>
-        <textarea name="pendencias" required placeholder="Pendências para amanhã (escreva &quot;nenhuma&quot; se não houver)"></textarea>
-        <button class="botao principal">Registrar fechamento</button>
-      </form>`;
-    html += fech.length ? fech.map((f) => `<div class="cartao registro">
-        <div><b>${esc(f.pendencias)}</b></div>
-        <div class="meta">Fechado por ${esc(f.autor)} às ${hora(f.em)}</div>
-        ${correcoes(f.id)}<div class="acoes">${botaoCorrigir(f.id)}</div></div>`).join("")
-      : `<div class="cartao"><p class="suave">O dia ainda não foi fechado.</p></div>`;
     const vistos = deTipo("visto");
     html += vistos.map((v) => `<div class="cartao registro ordem"><b>Visto da Daiane</b> às ${hora(v.em)}${v.decisao ? `<div style="margin-top:4px">Decisão: ${esc(v.decisao)}</div>` : ""}</div>`).join("");
     if (pode.darVisto(eu)) html += `
       <form class="cartao" data-form="visto">
-        <h2>Seu visto</h2>
+        <h2>Seu visto no dia</h2>
         <textarea name="decisao" placeholder="Decisão ou orientação (opcional)"></textarea>
         <button class="botao principal">Dar visto no dia</button>
       </form>`;
@@ -189,13 +181,13 @@ const telas = {
 };
 
 const NOMES = pode.verLivroCompleto(eu)
-  ? { ordens: "Ordens", ocorrencias: "Ocorrências", passagem: "Passagem", fechamento: "Fechamento" }
+  ? { ordens: "Ordens", ocorrencias: "Ocorrências", passagem: "Passagem de turno" }
   : { ordens: "Minhas ordens" };
 
 function desenhar() {
   const contagem = {
     ordens: ordensVisiveis().length, ocorrencias: deTipo("ocorrencia").length,
-    passagem: deTipo("passagem").length, fechamento: deTipo("fechamento").length,
+    passagem: deTipo("passagem").length + deTipo("fechamento").length,
   };
   document.getElementById("abas").style.gridTemplateColumns = `repeat(${Object.keys(NOMES).length},1fr)`;
   document.getElementById("abas").innerHTML = Object.entries(NOMES).map(([k, v]) =>
@@ -207,7 +199,16 @@ async function carregar() {
   // A equipe só vê as ordens; ocorrências e passagens ficam para líderes e gestão.
   registros = pode.verLivroCompleto(eu)
     ? await listar("livro", "data", campoDia.value)
-    : await listar("livro", "data", campoDia.value, "tipo", ["ordem", "ciente", "feito"]);
+    : await listar("livro", "data", campoDia.value, "tipo", ["ordem", "ciente", "feito", "cancelamento"]);
+  // Pendências do fechamento do dia anterior (quem abre vê em destaque na Passagem de turno).
+  pendenciasDeOntem = [];
+  if (pode.verLivroCompleto(eu)) {
+    const [a, m, d] = campoDia.value.split("-").map(Number), x = new Date(a, m - 1, d - 1);
+    const ontem = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    const regsOntem = await listar("livro", "data", ontem).catch(() => []);
+    const c = new Set(regsOntem.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+    pendenciasDeOntem = regsOntem.filter((r) => r.tipo === "fechamento" && !c.has(r.id) && !/^nenhuma\.?$/i.test((r.pendencias || "").trim()));
+  }
   desenhar();
 }
 
@@ -223,14 +224,17 @@ conteudo.addEventListener("submit", async (e) => {
   form.querySelector("button").disabled = true;
   if (tipo === "ordem") await registrar("ordem", { texto: d.texto.trim(), para: d.para, prazo: d.prazo || null });
   if (tipo === "ocorrencia") await registrar("ocorrencia", { turno: d.turno, hora: d.hora, codigo: d.codigo, fato: d.fato.trim(), providencia: d.providencia.trim(), comunicado: d.comunicado.trim(), urgente: !!d.urgente });
-  if (tipo === "passagem") await registrar("passagem", { pendencias: d.pendencias.trim(), recebeu: d.recebeu });
-  if (tipo === "fechamento") await registrar("fechamento", { pendencias: d.pendencias.trim() });
+  if (tipo === "passagem") await registrar(d.momento === "fechamento" ? "fechamento" : "passagem", { pendencias: d.pendencias.trim(), recebeu: d.recebeu || null });
   if (tipo === "visto") await registrar("visto", { decisao: d.decisao.trim() });
 });
 conteudo.addEventListener("click", async (e) => {
   const t = e.target;
   if (t.dataset.ciente) await registrar("ciente", { refId: t.dataset.ciente });
   if (t.dataset.feito) await registrar("feito", { refId: t.dataset.feito });
+  if (t.dataset.cancelar) {
+    const motivo = prompt("Por que cancelar este registro? (ex.: era teste). Ele sai da lista, mas fica guardado no livro.");
+    if (motivo?.trim()) await registrar("cancelamento", { refId: t.dataset.cancelar, motivo: motivo.trim() });
+  }
   if (t.dataset.corrigir) {
     const texto = prompt("Escreva a correção. O registro original continua no livro.");
     if (texto?.trim()) await registrar("correcao", { refId: t.dataset.corrigir, texto: texto.trim() });

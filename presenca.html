@@ -32,6 +32,7 @@
 <header><div data-logo="pequeno"></div><h1>Presença</h1><a href="turno.html">Voltar</a></header>
 <main>
   <div class="cartao"><h2 id="data"></h2><p class="suave">Toque no nome para registrar.</p><div class="contagem" id="contagem"></div></div>
+  <div class="cartao" id="sem-saida" hidden style="border-left:4px solid var(--laranja);font-size:15px"></div>
   <div id="pessoas" style="display:flex;flex-direction:column;gap:8px"></div>
 </main>
 
@@ -60,7 +61,8 @@ const ITENS = [
 const rotuloProblema = Object.fromEntries(ITENS.map(([k, , r]) => [k, r]));
 
 const folgasEscala = await folgasNoDia(data);
-const registros = Object.fromEntries((await listar("presenca", "data", data)).map((r) => [r.pessoa, r]));
+// Marcação desfeita pela Daiane fica no histórico com situacao "cancelado" e volta a contar como pendente.
+const registros = Object.fromEntries((await listar("presenca", "data", data)).filter((r) => r.situacao !== "cancelado").map((r) => [r.pessoa, r]));
 const lista = document.getElementById("pessoas");
 const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
@@ -68,7 +70,7 @@ const folha = document.getElementById("folha");
 function resumo(r, nome) {
   if (!r) return folgasEscala.includes(nome) ? ["Folga na escala", "neutro"] : ["Pendente", "pendente"];
   if (r.situacao === "veio") {
-    const hora = r.chegada ? ` ${r.chegada}` : "";
+    const hora = (r.chegada ? ` ${r.chegada}` : "") + (r.saida ? ` às ${r.saida}` : "");
     if (!r.problemas?.length) return [`Presente${hora}`, "ok"];
     return [`Presente${hora} · ${r.problemas.map((p) => rotuloProblema[p] || p).join(", ")}`, "alerta"];
   }
@@ -95,6 +97,10 @@ function desenhar() {
     lista.append(b);
   }
   const feitos = EQUIPE_DO_TURNO.filter((p) => registros[p.nome]).length;
+  const semSaida = Object.values(registros).filter((r) => r.situacao === "veio" && !r.saida).map((r) => r.pessoa);
+  document.getElementById("sem-saida").innerHTML = semSaida.length && new Date().getHours() >= 15
+    ? `<b>Ainda sem saída marcada:</b> ${semSaida.join(", ")}. Quem fechar a loja marca antes de ir embora.` : "";
+  document.getElementById("sem-saida").hidden = !(semSaida.length && new Date().getHours() >= 15);
   const faltas = Object.values(registros).filter((r) => r.situacao === "faltou").length;
   const problemas = Object.values(registros).filter((r) => r.problemas?.length).length;
   document.getElementById("contagem").innerHTML =
@@ -108,12 +114,13 @@ fundo.onclick = (e) => { if (e.target === fundo) fechar(); };
 
 let chegada = null; // hora de chegada escolhida na folha
 
-async function gravar(p, situacao, problemas = [], obs = "") {
+async function gravar(p, situacao, problemas = [], obs = "", saida = null) {
   const registro = { data, pessoa: p.nome, setor: p.setor, situacao, problemas, obs,
-    chegada: situacao === "veio" ? chegada : null, marcadoPor: eu.nome, marcadoPorUid: eu.uid, marcadoEm: new Date().toISOString() };
+    chegada: situacao === "veio" ? chegada : null, saida: situacao === "veio" ? saida : null,
+    marcadoPor: eu.nome, marcadoPorUid: eu.uid, marcadoEm: new Date().toISOString() };
   try {
     await salvarComHistorico("presenca", `${data}_${p.nome}`, registro);
-    registros[p.nome] = registro;
+    if (situacao === "cancelado") delete registros[p.nome]; else registros[p.nome] = registro;
     fechar();
     desenhar();
   } catch {
@@ -133,7 +140,11 @@ function abrir(p) {
   const fora = atual?.situacao === "veio" ? atual.problemas || [] : [];
   folha.innerHTML = `
     <h2>${p.nome} <span class="suave">· ${p.setor}</span></h2>
-    <label class="campo" style="margin:0">Chegada <input type="time" id="chegada" value="${chegada}"></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <label class="campo" style="margin:0">Chegada <input type="time" id="chegada" value="${chegada}"></label>
+      <label class="campo" style="margin:0">Saída <input type="time" id="saida" value="${atual?.saida || ""}"></label>
+    </div>
+    ${atual?.situacao === "veio" && !atual.saida ? `<button class="botao principal" data-acao="saiu">🚪 Marcar saída agora (${agora()})</button>` : ""}
     <p class="suave" style="margin:6px 0 0">Apresentação</p>
     <div class="marcas">${ITENS.map(([k, t]) =>
       `<label><input type="checkbox" value="${k}" ${fora.includes(k) ? "" : "checked"}>${t}</label>`).join("")}</div>
@@ -145,14 +156,20 @@ function abrir(p) {
       <button class="botao" data-acao="atestado">Atestado</button>
       <button class="botao" data-acao="folga">Folga</button>
     </div>
-    <button class="botao" data-acao="fechar" style="border:none">Cancelar</button>`;
+    ${atual && eu.papel === "dona" ? `<button class="botao" data-acao="desfazer" style="color:var(--alerta)">Desfazer esta marcação (volta para pendente)</button>` : ""}
+    <button class="botao" data-acao="fechar" style="border:none">Fechar</button>`;
   folha.querySelector("#chegada").onchange = (e) => { chegada = e.target.value || null; };
   folha.onclick = (e) => {
     const acao = e.target.closest("[data-acao]")?.dataset.acao;
     const obs = folha.querySelector("#obs").value.trim();
+    const saidaCampo = folha.querySelector("#saida").value || null;
     if (acao === "presente") {
       const problemas = [...folha.querySelectorAll(".marcas input:not(:checked)")].map((i) => i.value);
-      gravar(p, "veio", problemas, obs);
+      gravar(p, "veio", problemas, obs, saidaCampo);
+    } else if (acao === "saiu") {
+      gravar(p, "veio", atual.problemas || [], obs, agora());
+    } else if (acao === "desfazer") {
+      if (confirm(`Desfazer a marcação de ${p.nome}? Ela volta para pendente (fica guardado no histórico).`)) gravar(p, "cancelado", [], "Desfeito pela Daiane");
     } else if (acao === "faltou" || acao === "atestado" || acao === "folga") gravar(p, acao, [], obs);
     else if (acao === "fechar") fechar();
   };
