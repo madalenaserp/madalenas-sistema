@@ -58,12 +58,18 @@ export async function lerNotaIA(dataUrl, insumos) {
   const r = await gerar([imagem(dataUrl), `Esta é a foto de uma nota ou cupom de compra de uma padaria no Brasil (pode estar torta, de lado ou escrita à mão).
 Leia TODOS os itens comprados. Para cada item devolva: descricao (como está na nota), qtd (número), preco (preço de UMA unidade em reais, número), total (número).
 Se só houver o total, calcule preco = total / qtd. Números usam vírgula decimal na nota; devolva como número JSON.
+Para cada item devolva também o tamanho de UMA unidade comprada, lido da descrição: conteudo (número) e base ("kg", "L" ou "unidade").
+Exemplos: "FARINHA TRIGO 25KG" -> conteudo 25, base "kg"; "LEITE CX 12X1L" -> 12, "L"; "MARGARINA 500G" -> 0.5, "kg"; "CREME LEITE 200G" -> 0.2, "kg"; "OVOS CX 30" ou "BANDEJA 30 OVOS" -> 30, "unidade"; "OLEO 900ML" -> 0.9, "L".
+Se a unidade da nota já é KG, L ou UN (vendido a peso ou por unidade), use conteudo 1 e a base correspondente. Se a descrição NÃO diz o tamanho, use conteudo 0 e base "".
 Para cada item, escolha o insumoId da lista abaixo que é o MESMO produto; se nenhum for o mesmo, use "".
 Lista de insumos (id = nome (unidade)):
 ${lista(insumos)}
-Devolva só JSON: {"fornecedor": "nome da loja ou vazio", "itens": [{"descricao": "", "qtd": 0, "preco": 0, "total": 0, "insumoId": ""}]}`]);
+Devolva só JSON: {"fornecedor": "nome da loja ou vazio", "itens": [{"descricao": "", "qtd": 0, "preco": 0, "total": 0, "conteudo": 0, "base": "", "insumoId": ""}]}`]);
   const ids = new Set(insumos.map((i) => i.id));
-  return { fornecedor: String(r.fornecedor || ""), itens: (r.itens || []).map((i) => ({ descricao: String(i.descricao || ""), qtd: Number(i.qtd) || 0, preco: Number(i.preco) || 0, total: Number(i.total) || 0, insumoId: ids.has(i.insumoId) ? i.insumoId : "" })) };
+  return { fornecedor: String(r.fornecedor || ""), itens: (r.itens || []).map((i) => {
+    const base = ["kg", "L", "unidade"].includes(i.base) ? i.base : "", conteudo = base && Number(i.conteudo) > 0 ? Number(i.conteudo) : 0;
+    return { descricao: String(i.descricao || ""), qtd: Number(i.qtd) || 0, preco: Number(i.preco) || 0, total: Number(i.total) || 0, conteudo, base: conteudo ? base : "", insumoId: ids.has(i.insumoId) ? i.insumoId : "" };
+  }) };
 }
 
 // Foto da prateleira -> [{insumoId, qtd, obs}] (só o que dá para ver e contar)

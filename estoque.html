@@ -343,6 +343,8 @@ async function lerNota() {
         texto = await lerTexto(urlFoto, (st, p) => { prog.textContent = st === "recognizing text" ? `Lendo a nota… ${Math.round(p * 100)}%` : "Preparando o leitor…"; });
         itens = separarItens(texto, INSUMOS);
       }
+      const { tamanhoNoTexto } = await import("./js/custos.js");
+      for (const it of itens) if (!(it.conteudo > 0)) { const t = tamanhoNoTexto(it.descricao); it.conteudo = t ? Math.round(t.conteudo * 1000) / 1000 : 0; it.base = t ? t.base : ""; }
       prog.innerHTML = itens.length ? `Achei <b>${itens.length}</b> item(ns). <b>Confira cada um</b> antes de salvar.` : `Não consegui achar os itens nesta foto. Tente outra foto mais reta e com mais luz, ou toque em "Preencher à mão".`;
       desenharItens(texto);
       if (fornLido && folha.querySelector("#l-forn")) folha.querySelector("#l-forn").value = fornLido;
@@ -356,7 +358,9 @@ async function lerNota() {
         <span class="suave" style="font-size:13px">Na nota: <b>${esc(it.descricao)}</b></span>
         <select class="sel" data-f="insumoId">${opcoesIns(it.insumoId)}</select>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="suave" style="font-size:12px">Quantidade<input data-f="qtd" inputmode="decimal" value="${n(it.qtd)}" style="font-size:16px;padding:8px;border:1px solid var(--linha);border-radius:8px;width:100%;box-sizing:border-box"></label>
-          <label class="suave" style="font-size:12px">Preço de cada (R$)<input data-f="preco" inputmode="decimal" value="${String(it.preco.toFixed(2)).replace(".", ",")}" style="font-size:16px;padding:8px;border:1px solid var(--linha);border-radius:8px;width:100%;box-sizing:border-box"></label></div></div>`).join("")}
+          <label class="suave" style="font-size:12px">Preço de cada (R$)<input data-f="preco" inputmode="decimal" value="${String(it.preco.toFixed(2)).replace(".", ",")}" style="font-size:16px;padding:8px;border:1px solid var(--linha);border-radius:8px;width:100%;box-sizing:border-box"></label></div>
+        <label class="suave" style="font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Cada um tem <input data-f="conteudo" inputmode="decimal" value="${it.conteudo ? n(it.conteudo) : ""}" placeholder="?" style="font-size:16px;padding:6px;border:1px solid var(--linha);border-radius:8px;width:80px">
+          <select data-f="base" style="font-size:16px;padding:6px;border:1px solid var(--linha);border-radius:8px">${["kg", "L", "unidade"].map((b) => `<option ${it.base === b ? "selected" : ""}>${b}</option>`).join("")}</select> <span>(serve para o custo da ficha)</span></label></div>`).join("")}
       <label class="rot">Onde</label>${grupo("l-local", LOCAIS, local)}
       <label class="rot" for="l-forn">Fornecedor</label><input type="text" id="l-forn" autocomplete="off" style="font-size:17px;padding:10px;border:1px solid var(--linha);border-radius:10px;width:100%;box-sizing:border-box">
       <details><summary class="suave" style="font-size:13px">Ver o texto que o leitor entendeu</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(texto)}</pre></details>
@@ -369,7 +373,7 @@ async function lerNota() {
         box.querySelectorAll('select[data-f="insumoId"]').forEach((s2) => { const k = s2.closest("[data-k]").dataset.k; s2.innerHTML = opcoesIns(itens[k].insumoId); });
         return;
       }
-      itens[c.dataset.k][el.dataset.f] = el.dataset.f === "insumoId" ? el.value : numero(el.value); })));
+      itens[c.dataset.k][el.dataset.f] = ["insumoId", "base"].includes(el.dataset.f) ? el.value : numero(el.value); })));
     box.querySelector("#l-ok").onclick = async (e) => {
       const erro = folha.querySelector("#l-e");
       const validos = itens.filter((it) => it.insumoId);
@@ -383,7 +387,8 @@ async function lerNota() {
         const base = { data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
         const fotoId = await acrescentar("estoque_fotos", { ...base, foto: urlFoto });
         for (const it of validos) await acrescentar("estoque", { ...base, criadoEm: new Date().toISOString(), tipo: "mov", acao: "entrada", insumoId: it.insumoId, nome: ins(it.insumoId).nome, unidade: ins(it.insumoId).unidade,
-          qtd: it.qtd, local, de: null, para: null, preco: Math.round(it.preco * 100) / 100, fornecedor, obs: `Lido da nota: ${it.descricao}`, fotoId, codigo: null, lidoPelaFoto: true });
+          qtd: it.qtd, local, de: null, para: null, preco: Math.round(it.preco * 100) / 100, fornecedor, obs: `Lido da nota: ${it.descricao}`, fotoId, codigo: null, lidoPelaFoto: true,
+          conteudo: it.conteudo > 0 ? it.conteudo : null, base: it.conteudo > 0 ? it.base || "kg" : null });
         fundo.hidden = true; ir("hist");
       } catch { erro.textContent = "Não consegui salvar. Verifique a internet."; e.target.disabled = false; }
     };

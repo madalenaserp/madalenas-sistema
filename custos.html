@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Custo e preço</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  .selo.meio { background:#fff4d6; color:#8a6100; }
+  .prod summary { list-style:none; cursor:pointer; }
+  .prod summary::-webkit-details-marker { display:none; }
+  .nums { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:8px; font-size:13px; }
+  .nums b { display:block; font-size:17px; }
+  .ing { border-top:1px solid var(--linha); padding:8px 0; display:flex; flex-direction:column; gap:4px; font-size:14px; }
+  .ing select, .tam input, .tam select, .prod input { font-size:16px; padding:7px; border:1px solid var(--linha); border-radius:8px; background:#fff; box-sizing:border-box; }
+  .ing select { width:100%; }
+  .falta { color:var(--alerta); font-size:13px; }
+  .tam { border-top:1px solid var(--linha); padding:8px 0; display:flex; flex-direction:column; gap:4px; font-size:14px; }
+  .tam .linha { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .tam input { width:90px; }
+</style>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Custo e preço</h1><a href="producao.html">Voltar</a></header>
+<main>
+  <div class="cartao suave" style="font-size:14px">O custo vem das <b>notas de compra</b> (o preço da última nota de cada item) e das <b>fichas técnicas</b>. Conta só os ingredientes, sem gás, embalagem e mão de obra.
+    <b>Preço sugerido</b> = custo ÷ CMV. Com CMV de 30%, o preço fica cerca de 3,3 vezes o custo.</div>
+  <div class="cartao" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label for="cmv"><b>CMV que você quer</b></label><input id="cmv" inputmode="decimal" style="width:70px;font-size:17px;padding:8px;border:1px solid var(--linha);border-radius:8px"> %
+    <span class="suave" id="salvo" style="margin-left:auto;font-size:13px"></span>
+  </div>
+  <div id="lista" style="display:flex;flex-direction:column;gap:8px"><p class="suave">Carregando…</p></div>
+  <details class="cartao" id="tamanhos"><summary><b>Tamanho das embalagens</b> <span class="suave" id="t-resumo"></span></summary><div id="t-lista"></div></details>
+</main>
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+import { exigirUsuario, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { ler, listarEntre, salvarComHistorico } from "./js/db.js";
+import { carregarListaInsumos } from "./js/insumos.js";
+import { PRODUTOS_PRODUCAO } from "./js/produtos.js";
+import { BASES, ultimasCompras, precoBase, custoDaFicha, chaveIngrediente } from "./js/custos.js";
+
+const eu = await exigirUsuario();
+if (!pode.verPainel(eu)) location.href = "turno.html";
+const edita = eu.papel === "dona";
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const reais = (v) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const br = (v, d = 3) => Number(v).toLocaleString("pt-BR", { maximumFractionDigits: d });
+const numero = (t) => Number(String(t).trim().replace(/\./g, (m, i, s) => (s.includes(",") ? "" : m)).replace(",", "."));
+
+const [insumos, regs, fichasRegs, salvo] = await Promise.all([
+  carregarListaInsumos(),
+  listarEntre("estoque", "data", "2000-01-01", "9999-12-31"),
+  listarEntre("fichas", "data", "2000-01-01", "9999-12-31"),
+  ler("config", "custos").catch(() => null),
+]);
+const canc = new Set(regs.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
+const compras = ultimasCompras(regs.filter((r) => r.tipo === "mov" && !canc.has(r.id)));
+const conf = { ligacoes: { ...(salvo?.ligacoes || {}) }, conteudos: { ...(salvo?.conteudos || {}) }, precos: { ...(salvo?.precos || {}) }, cmv: salvo?.cmv || 30 };
+
+// Ficha que vale de cada produto (a última versão) e se está aprovada.
+fichasRegs.sort((a, b) => (a.criadoEm || "").localeCompare(b.criadoEm || ""));
+const fichas = PRODUTOS_PRODUCAO.map((p) => {
+  const f = fichasRegs.filter((r) => r.tipo === "ficha" && r.produto === p).at(-1);
+  if (!f) return null;
+  const par = fichasRegs.filter((r) => r.refId === f.id && ["aprovacao", "correcao"].includes(r.tipo)).at(-1);
+  return { produto: p, f, aprovada: par?.tipo === "aprovacao" };
+}).filter(Boolean);
+
+const cmvEl = document.getElementById("cmv");
+cmvEl.value = br(conf.cmv, 1); cmvEl.disabled = !edita;
+cmvEl.onchange = () => { const v = numero(cmvEl.value); if (v > 5 && v < 90) { conf.cmv = v; guardar(); redesenhar(); } else cmvEl.value = br(conf.cmv, 1); };
+
+let espera = null;
+function guardar() {
+  if (!edita) return;
+  const el = document.getElementById("salvo"); el.textContent = "Salvando…";
+  clearTimeout(espera);
+  espera = setTimeout(async () => {
+    try { await salvarComHistorico("config", "custos", { ...conf, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() }); el.textContent = "Salvo ✓"; }
+    catch { el.textContent = "Não salvou. Verifique a internet."; }
+  }, 700);
+}
+
+const selo = (cmv) => cmv <= 35 ? "ok" : cmv <= 40 ? "meio" : "alerta";
+const abertos = new Set();
+// Redesenha depois do evento (trocar a tela no meio do "change" quebra o navegador).
+let pendente = false;
+const redesenhar = () => { if (!pendente) { pendente = true; setTimeout(() => { pendente = false; desenhar(); }, 0); } };
+function desenhar() {
+  const lista = document.getElementById("lista");
+  if (!fichas.length) { lista.innerHTML = `<div class="cartao suave">Ainda não tem ficha técnica. Quando o Daniel preencher as fichas e as notas de compra forem lidas no Estoque, o custo aparece aqui sozinho.</div>`; desenharTamanhos(); return; }
+  const opcoes = (sel) => `<option value="">— escolher o item do estoque —</option><option value="__zero" ${sel === "__zero" ? "selected" : ""}>Não tem custo (ex.: água)</option>${[...insumos].sort((a, b) => a.nome.localeCompare(b.nome)).map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join("")}`;
+  lista.innerHTML = fichas.map(({ produto, f, aprovada }, k) => {
+    const c = custoDaFicha(f, insumos, compras, conf);
+    const sug = c.porUnidade != null ? c.porUnidade / (conf.cmv / 100) : null;
+    const atual = conf.precos[produto];
+    const cmvAtual = atual > 0 && c.porUnidade != null && !c.faltam.length ? (c.porUnidade / atual) * 100 : null;
+    return `<details class="cartao prod" data-k="${k}" ${abertos.has(k) ? "open" : ""}><summary>
+      <b>${esc(produto)}</b>${aprovada ? "" : ` <span class="selo pendente">ficha não aprovada</span>`}
+      ${c.faltam.length ? ` <span class="selo alerta">falta ${c.faltam.length} ingrediente(s)</span>` : cmvAtual != null ? ` <span class="selo ${selo(cmvAtual)}">CMV ${br(cmvAtual, 0)}%</span>` : ""}
+      <div class="nums"><span>Custo de cada<b>${c.faltam.length ? "…" : c.porUnidade != null ? reais(c.porUnidade) : "?"}</b></span>
+        <span>Preço sugerido<b>${c.faltam.length || sug == null ? "…" : reais(sug)}</b></span>
+        <span>Preço hoje<b>${atual > 0 ? reais(atual) : "—"}</b></span></div>
+      <span class="suave" style="font-size:13px">${c.faltam.length ? `Toque para ver o que falta (${c.faltam.map((l) => esc(l.nome)).join(", ")}).` : `Receita inteira: ${reais(c.total)} · rende ${f.rendimento} unidades. Toque para ver.`}</span>
+    </summary>
+    ${c.linhas.map((l, j) => `<div class="ing"><span><b>${esc(l.nome)}</b> · ${br(l.qtd)} ${esc(l.un)}${l.custo != null ? ` = <b>${reais(l.custo)}</b>` : ""}</span>
+      ${edita ? `<select data-ing="${esc(chaveIngrediente(l.nome))}">${opcoes(l.ligacao.id)}</select>` : ""}
+      ${l.preco ? `<span class="suave" style="font-size:12px">Última nota: ${reais(l.preco.preco)} por ${esc(l.preco.unidade)} (${dataBR(l.preco.data)}${l.preco.fornecedor ? `, ${esc(l.preco.fornecedor)}` : ""})${l.preco.porBase != null ? ` = ${reais(l.preco.porBase)} o ${esc(l.preco.tamanho.base)}` : ""}</span>` : ""}
+      ${l.problema ? `<span class="falta">Falta: ${esc(l.problema)}${/tamanho|quanto tem/.test(l.problema) ? ` (em "Tamanho das embalagens", no fim da tela)` : ""}</span>` : l.ligacao.palpite && l.ligacao.id && l.ligacao.id !== "__zero" ? `<span class="suave" style="font-size:12px">Ligado pelo nome. Se estiver errado, escolha o certo.</span>` : ""}</div>`).join("")}
+    <div class="ing"><label><b>Preço de venda hoje (R$ de cada)</b></label><input data-preco="${esc(produto)}" inputmode="decimal" value="${atual > 0 ? br(atual, 2) : ""}" ${edita ? "" : "disabled"} style="width:120px">
+      ${cmvAtual != null ? `<span class="suave">Com esse preço o CMV é <b>${br(cmvAtual, 1)}%</b> (${cmvAtual <= 35 ? "bom" : cmvAtual <= 40 ? "no limite" : "alto: o preço não cobre bem o custo"}).</span>` : ""}
+      ${!aprovada ? `<span class="suave" style="font-size:12px">Esta ficha ainda não foi aprovada. O custo pode mudar quando a ficha for corrigida.</span>` : ""}</div>
+  </details>`;
+  }).join("");
+  lista.querySelectorAll("details.prod").forEach((d) => (d.ontoggle = () => (d.open ? abertos.add(+d.dataset.k) : abertos.delete(+d.dataset.k))));
+  lista.querySelectorAll("[data-ing]").forEach((s) => (s.onchange = () => { conf.ligacoes[s.dataset.ing] = s.value; guardar(); redesenhar(); }));
+  lista.querySelectorAll("[data-preco]").forEach((i) => (i.onchange = () => { const v = numero(i.value); if (v > 0) conf.precos[i.dataset.preco] = v; else delete conf.precos[i.dataset.preco]; guardar(); redesenhar(); }));
+  desenharTamanhos();
+}
+
+// Quanto tem em cada embalagem comprada (o sistema lê da nota; aqui a Daiane confere ou completa).
+function desenharTamanhos() {
+  const comPreco = insumos.filter((i) => compras[i.id]).map((i) => ({ i, p: precoBase(i, compras[i.id], conf) }));
+  const sem = comPreco.filter((x) => !x.p.tamanho).length;
+  document.getElementById("t-resumo").textContent = comPreco.length ? (sem ? `· ${sem} sem tamanho` : "· tudo certo") : "· nenhuma nota ainda";
+  if (sem) document.getElementById("tamanhos").open = true;
+  const box = document.getElementById("t-lista");
+  box.innerHTML = `<p class="suave" style="font-size:13px;margin:6px 0">Quando a nota diz o tamanho (ex.: "FARINHA 25KG"), o sistema já pega sozinho. Só complete o que estiver em vermelho.</p>` +
+    (comPreco.sort((a, b) => !b.p.tamanho - !a.p.tamanho || a.i.nome.localeCompare(b.i.nome)).map(({ i, p }) => `<div class="tam">
+      <span><b>${esc(i.nome)}</b> · ${reais(p.preco)} por ${esc(p.unidade)} <span class="suave" style="font-size:12px">(${dataBR(p.data)}${p.descricao ? `, na nota: ${esc(p.descricao)}` : ""})</span></span>
+      <span class="linha">1 ${esc(p.unidade)} tem <input data-tam="${esc(i.id)}" inputmode="decimal" value="${p.tamanho ? br(p.tamanho.conteudo) : ""}" ${edita ? "" : "disabled"}>
+        <select data-base="${esc(i.id)}" ${edita ? "" : "disabled"}>${BASES.map((b) => `<option ${p.tamanho?.base === b ? "selected" : ""}>${b}</option>`).join("")}</select>
+        ${p.porBase != null ? `<span class="suave">= ${reais(p.porBase)} o ${esc(p.tamanho.base)}</span>` : `<span class="falta">quanto tem?</span>`}</span></div>`).join("") || "");
+  const muda = (id) => {
+    const q = numero(box.querySelector(`[data-tam="${id}"]`).value), b = box.querySelector(`[data-base="${id}"]`).value;
+    if (q > 0) conf.conteudos[id] = { conteudo: q, base: b }; else delete conf.conteudos[id];
+    guardar(); redesenhar();
+  };
+  box.querySelectorAll("[data-tam]").forEach((el) => (el.onchange = () => muda(el.dataset.tam)));
+  box.querySelectorAll("[data-base]").forEach((el) => (el.onchange = () => muda(el.dataset.base)));
+}
+desenhar();
+</script>
+</body>
+</html>

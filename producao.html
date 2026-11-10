@@ -30,6 +30,7 @@ const secoes = [
   { titulo: "Encomendas", desc: "O que tem para fazer hoje e amanhã", link: "encomendas.html" },
   { titulo: "Checklist da produção", desc: "Abertura e fechamento da panificadora e da confeitaria", emBreve: true },
   { titulo: "Fichas técnicas", desc: "Receita, pesada, rendimento, forno e fotos de cada produto", link: "fichas.html" },
+  { titulo: "Custo e preço", desc: "Quanto custa cada produto pela ficha e pelas notas, e o preço sugerido", link: "custos.html", mostrar: pode.verPainel(eu) },
 ];
 const lista = document.getElementById("secoes");
 for (const s of secoes) {

@@ -192,6 +192,7 @@ async function ver(p, s) {
     await Promise.all([...tela.querySelectorAll("img")].filter((i) => !i.hidden).map((i) => i.complete && i.src ? 0 : new Promise((r) => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
     window.print();
   });
+  if (aprova) botao("💰 Ver custo e preço sugerido", "", () => (location.href = "custos.html"));
   if (aprova && s.estado === "esperando") {
     botao("✓ Aprovar esta ficha", "principal", () => parecer(f, "aprovacao", ""));
     botao("Pedir correção", "", () => { const t = prompt("O que precisa corrigir?"); if (t?.trim()) parecer(f, "correcao", t.trim()); });
