@@ -26,13 +26,19 @@ const PADRAO = [
   { nome: "Eduardo", usuario: "eduardo", setor: "Confeitaria", papel: "equipe" },
 ];
 
+// Guarda a lista por 10 minutos neste aparelho para a troca de tela não esperar o servidor toda vez.
+const CHAVE_EQ = "madalenas.equipe";
 async function carregarEquipe() {
+  const montar = (lista) => [...PADRAO.filter((p) => p.setor === "Gestão"), ...lista.filter((p) => p.nome && p.setor !== "Gestão")];
+  try { const c = JSON.parse(sessionStorage.getItem(CHAVE_EQ) || "null"); if (c && Date.now() - c.em < 10 * 60 * 1000) return c.lista ? montar(c.lista) : PADRAO; } catch {}
   try {
     const d = await ler("config", "equipe");
-    if (d?.lista?.length) return [...PADRAO.filter((p) => p.setor === "Gestão"), ...d.lista.filter((p) => p.nome && p.setor !== "Gestão")];
-  } catch { /* antes do login ou sem internet: usa a lista padrão */ }
+    try { sessionStorage.setItem(CHAVE_EQ, JSON.stringify({ em: Date.now(), lista: d?.lista?.length ? d.lista : null })); } catch {}
+    if (d?.lista?.length) return montar(d.lista);
+  } catch { /* antes do login ou sem internet: usa a lista padrão (e não guarda) */ }
   return PADRAO;
 }
+export const esquecerEquipeGuardada = () => { try { sessionStorage.removeItem(CHAVE_EQ); } catch {} };
 export const EQUIPE_PADRAO = PADRAO;
 export const EQUIPE = await carregarEquipe();
 export const SETORES = ["Caixa", "Balcão", "Lanches", "Produção", "Confeitaria"];

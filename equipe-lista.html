@@ -31,7 +31,7 @@
 <script type="module" src="js/marca.js"></script>
 <script type="module">
 import { exigirUsuario, dataBR } from "./js/sessao.js";
-import { EQUIPE, SETORES, pode } from "./js/equipe.js";
+import { EQUIPE, SETORES, pode, esquecerEquipeGuardada } from "./js/equipe.js";
 import { ler, salvarComHistorico } from "./js/db.js";
 
 const eu = await exigirUsuario();
@@ -76,6 +76,7 @@ document.getElementById("salvar").onclick = async (e) => {
   try {
     await salvarComHistorico("config", "equipe", { lista: limpa, alteradoPor: eu.nome, alteradoPorUid: eu.uid, alteradoEm: new Date().toISOString() });
     erro.textContent = "";
+    esquecerEquipeGuardada();
     alert("Equipe salva. As telas já usam a lista nova.");
   } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; }
   e.target.disabled = false;

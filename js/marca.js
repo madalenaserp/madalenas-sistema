@@ -53,5 +53,10 @@ function faixaDeErro(msg) {
   d.onclick = () => location.reload();
   (document.body || document.documentElement).append(d);
 }
-addEventListener("unhandledrejection", (e) => faixaDeErro(e.reason?.message || e.reason));
-addEventListener("error", (e) => { if (e.message) faixaDeErro(e.message); });
+// Ao trocar de tela, o navegador corta o que estava carregando: isso não é erro. Só mostra se a página continuar aberta.
+let saindo = false;
+addEventListener("pagehide", () => { saindo = true; });
+addEventListener("beforeunload", () => { saindo = true; });
+const talvezFaixa = (msg) => { if (saindo) return; setTimeout(() => { if (!saindo && document.visibilityState === "visible") faixaDeErro(msg); }, 2500); };
+addEventListener("unhandledrejection", (e) => talvezFaixa(e.reason?.message || e.reason));
+addEventListener("error", (e) => { if (e.message) talvezFaixa(e.message); });
