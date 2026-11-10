@@ -57,9 +57,9 @@ async function mostrar() {
   const encAmanha = encs.filter((e) => e.dataEntrega === diaSeguinte)
     .map((e) => `${e.horaEntrega} · ${e.cliente}: ${e.pedido}${e.conf.includes("vespera") ? "" : ' <span class="suave">(<b>sem conferir na véspera</b>)</span>'}`);
   const viram = Object.values(Object.fromEntries(encBruto.filter((r) => r.tipo === "visto" && r.dataEntrega === campoDia.value)
-    .sort((x, y) => x.criadoEm.localeCompare(y.criadoEm)).map((r) => [r.registradoPor, r]))).map((r) => `${r.registradoPor} às ${r.hora}`);
+    .sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || "")).map((r) => [r.registradoPor, r]))).map((r) => `${r.registradoPor} às ${r.hora}`);
   const notasBruto = await listar("notas", "data", campoDia.value);
-  const notaUlt = (id, t) => notasBruto.filter((r) => r.refId === id && r.tipo === t).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm)).at(-1);
+  const notaUlt = (id, t) => notasBruto.filter((r) => r.refId === id && r.tipo === t).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || "")).at(-1);
   const notas = notasBruto.filter((r) => r.tipo === "nota" && !notaUlt(r.id, "cancelado")).map((r) => ({ ...r, conf: notaUlt(r.id, "conferido") }));
   const notasAtencao = notas.filter((n) => !n.conf || !n.conf.ok)
     .map((n) => `${n.empresa}: ${n.conf ? `<b>problema</b> (${n.conf.detalhe || ({ sem_via: "faltou a via na pasta", sem_assinatura: "via sem assinatura", fora_guappo: "não está no Guappo" })[n.conf.problema] || n.conf.problema})` : "foto enviada, falta conferir"}`);
@@ -100,7 +100,7 @@ async function mostrar() {
     return t.fotos === "antes_depois" ? m.some((r) => r.tipo === "antes") && m.some((r) => r.tipo === "depois") : m.some((r) => r.tipo === "depois" || r.tipo === "feito"); };
   const cozAbertas = COZINHAS.flatMap((o) => TAREFAS_COZINHA.filter((t) => !cozFeita(t, o)).map((t) => `${o}: ${t.texto}${t.freq === "semanal" ? ' <span class="suave">(semanal)</span>' : ""}`));
   const cozQuem = [...new Set(coz.filter((r) => r.data === campoDia.value && r.tipo !== "antes").map((r) => r.registradoPor))];
-  const fichasRegs = (await listarEntre("fichas", "data", "2000-01-01", "9999-12-31")).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  const fichasRegs = (await listarEntre("fichas", "data", "2000-01-01", "9999-12-31")).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || ""));
   const fichaAtual = {};
   for (const r of fichasRegs.filter((r) => r.tipo === "ficha")) fichaAtual[r.produto] = r;
   const fichasEsperando = Object.values(fichaAtual).filter((f) => !fichasRegs.some((r) => r.refId === f.id)).map((f) => `${f.produto} <span class="suave">(${f.registradoPor})</span>`);
@@ -116,7 +116,7 @@ async function mostrar() {
   const cxSaiu = cx.filter((r) => r.tipoMov !== "reforco").reduce((s2, r) => s2 + r.valor, 0);
   // Estoque: saldo (última contagem + movimentos), abaixo do mínimo, sumiço na contagem e compras do dia.
   const insCad = (await ler("estoque_cadastro", "insumos").catch(() => null))?.lista || INSUMOS_PADRAO;
-  const estRegs = (await listarEntre("estoque", "data", "2000-01-01", campoDia.value)).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  const estRegs = (await listarEntre("estoque", "data", "2000-01-01", campoDia.value)).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || ""));
   const estCanc = new Set(estRegs.filter((r) => r.tipo === "cancelamento").map((r) => r.refId));
   const est = estRegs.filter((r) => r.tipo === "mov" && !estCanc.has(r.id));
   const sd = {};
@@ -140,7 +140,7 @@ async function mostrar() {
   const mes6 = new Date(campoDia.value); mes6.setMonth(mes6.getMonth() - 6);
   const cobs = await listarEntre("cobrancas", "mes", mes6.toISOString().slice(0, 7), campoDia.value.slice(0, 7)).catch(() => []);
   const cobCanc = new Set(cobs.filter((c) => c.tipo === "cancelamento").map((c) => c.refId));
-  const cobOk = cobs.filter((c) => !cobCanc.has(c.id)).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
+  const cobOk = cobs.filter((c) => !cobCanc.has(c.id)).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || ""));
   const ultCob = {};
   for (const c of cobOk.filter((c) => c.tipo === "cobranca")) ultCob[`${c.empresa}|${c.mes}`] = c;
   const atrasadas = Object.values(ultCob).map((c) => ({ c, pago: cobOk.filter((p) => p.tipo === "pagamento" && p.empresa === c.empresa && p.mes === c.mes).reduce((t, p) => t + p.valor, 0) }))
@@ -244,9 +244,19 @@ async function aurora(forcar = false) {
     caixaAurora.innerHTML = topo(formatar(r)); ligar();
   } catch (e) { console.error(e); caixaAurora.innerHTML = topo(`<p class="suave">A Aurora não conseguiu responder agora. Toque em Atualizar daqui a pouco.</p>`); ligar(); }
 }
-campoDia.onchange = async () => { await mostrar(); aurora(); };
-await mostrar();
-aurora();
+// Se uma parte der erro, mostra o motivo em vez de deixar a tela em branco.
+async function carregar() {
+  const r = document.getElementById("resumo");
+  r.innerHTML = `<div class="cartao"><p class="suave">Carregando o painel do dia…</p></div>`;
+  try { await mostrar(); return true; }
+  catch (e) {
+    console.error(e);
+    r.innerHTML = `<div class="cartao"><h2>Não consegui montar o painel</h2><p class="suave">Tire um print desta tela e mande para o Claude.</p><p style="font-size:13px;word-break:break-word">${String(e?.message || e).replace(/[<>&]/g, "")}<br>${String(e?.stack || "").split("\n").slice(0, 3).join("<br>").replace(/[<>&]/g, "")}</p></div>`;
+    return false;
+  }
+}
+campoDia.onchange = async () => { if (await carregar()) aurora(); };
+if (await carregar()) aurora();
 </script>
 </body>
 </html>

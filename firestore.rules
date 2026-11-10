@@ -272,6 +272,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Pedidos do balcão (mesas 1 a 6, balcão, viagem): toda a equipe vê a fila e lança; nada se altera nem se apaga.
+    match /balcao/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
+           (request.resource.data.tipo == "pedido" && request.resource.data.itens is list && request.resource.data.itens.size() > 0)
+        || (request.resource.data.tipo == "status" && request.resource.data.para in ["pronto", "entregue"])
+        || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelado"
+            && request.resource.data.motivo is string && request.resource.data.motivo.size() > 0));
+      allow update, delete: if false;
+    }
+
     // Qualquer outra coisa: bloqueada.
     match /{caminho=**} { allow read, write: if false; }
   }

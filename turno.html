@@ -37,7 +37,7 @@ const secoes = [
   { titulo: "✅ Meu dia", desc: [pode.marcarPresenca(eu) && "presença da equipe", "checklist de abertura, rondas e fechamento", (pode.verLivroCompleto(eu) || eu.setor === "Balcão") && "suas tarefas do rodízio"].filter(Boolean).join(", "), link: pode.marcarPresenca(eu) ? "presenca.html" : "checklists.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
   { titulo: "💰 Caixa", desc: [pode.verCaixa(eu) && "saídas (sangria, vale, compra, fornecedor)", pode.verConsumo(eu) && "consumo da equipe"].filter(Boolean).join(" e "), link: pode.verCaixa(eu) ? "caixa.html" : "consumo.html", mostrar: pode.verCaixa(eu) || pode.verConsumo(eu) },
   { titulo: "📖 Livro do dia", desc: pode.verLivroCompleto(eu) ? "Ordens, ocorrências, passagem e fechamento" : "Ordens para você hoje", link: "livro.html" },
-  { titulo: "📦 Pedidos", desc: pode.notasEmpresas(eu) ? "Encomendas de clientes e pedidos/notas das empresas" : "Encomendas de clientes", link: "encomendas.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
+  { titulo: "📦 Pedidos", desc: pode.notasEmpresas(eu) ? "Pedidos do balcão (mesas), encomendas e notas das empresas" : "Pedidos do balcão (mesas) e encomendas", link: "balcao.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
   { titulo: "🥖 Estoque e perdas", desc: "Perdas e sobras, compras, contagem e transferência", link: "perdas.html", mostrar: !pode.producao(eu) || pode.verPainel(eu) },
   // Produção e confeitaria: tudo dentro de "Produção" (produção do dia, limpeza, estoque, perdas, encomendas, fichas).
   { titulo: "🍞 Produção", desc: "Produção do dia, limpeza da cozinha, estoque, perdas, encomendas e fichas técnicas", link: "producao.html", mostrar: pode.producao(eu) },

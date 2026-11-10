@@ -42,7 +42,7 @@
     @page { size:80mm auto; margin:0; }
     body { background:#fff !important; }
     body > *:not(#impressao) { display:none !important; }
-    #impressao { display:block; width:72mm; margin:0 auto; padding:2mm 0 6mm; font-family:Arial, sans-serif; color:#000; font-size:12pt; line-height:1.25; }
+    #impressao { display:block; width:64mm; margin:0 4mm 0 9mm; padding:2mm 0 6mm; font-family:Arial, sans-serif; color:#000; font-size:12pt; line-height:1.25; }
     #impressao .cupom { page-break-after:always; break-after:page; }
     #impressao .cupom:last-child { page-break-after:auto; break-after:auto; }
     #impressao h1 { font-size:15pt; text-align:center; margin:0; }
@@ -50,7 +50,9 @@
     #impressao .grande { font-size:15pt; font-weight:700; }
     #impressao hr { border:none; border-top:1px dashed #000; margin:2mm 0; }
     #impressao p { margin:1mm 0; }
-    #impressao .pedido { font-size:14pt; font-weight:700; white-space:pre-wrap; }
+    #impressao .pedido { font-size:14pt; font-weight:700; }
+    #impressao .pedido ul { margin:0; padding-left:5mm; }
+    #impressao .pedido li { margin:0 0 1.5mm; }
   }
   .barra-impr { display:flex; justify-content:flex-end; }
   .barra-impr button { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--linha); background:var(--cartao); cursor:pointer; }
@@ -78,6 +80,7 @@
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
 import { acrescentar, listarEntre } from "./js/db.js";
+import { campoItens, itensEmTexto, itensEmHtml } from "./js/itens.js";
 
 const eu = await exigirUsuario();
 const leitura = pode.somenteLeitura(eu); // o Fábio só vê
@@ -144,9 +147,9 @@ async function mostrar() {
     (semConferir.length ? ` · <span class="selo alerta">${semConferir.length} sem conferir</span>` : "") + `</p>`;
 
   const lista = document.getElementById("lista");
-  lista.innerHTML = itens.length ? "" : `<p class="suave">Nenhuma encomenda ${aba === "hoje" ? "para hoje" : aba === "amanha" ? "para amanhã" : "nos próximos 15 dias"}.</p>`;
+  lista.innerHTML = ativas.length ? "" : `<p class="suave">Nenhuma encomenda ${aba === "hoje" ? "para hoje" : aba === "amanha" ? "para amanhã" : "nos próximos 15 dias"}.</p>`;
   let diaAtual = "";
-  for (const e of itens) {
+  for (const e of ativas) {
     if (aba === "proximas" && e.dataEntrega !== diaAtual) {
       diaAtual = e.dataEntrega;
       const t = document.createElement("p");
@@ -155,6 +158,14 @@ async function mostrar() {
       lista.append(t);
     }
     lista.append(cartao(e));
+  }
+  // Canceladas saem da lista; ficam guardadas aqui embaixo, fechadas, só para consulta.
+  const canc = itens.filter((e) => e.status === "cancelada");
+  if (canc.length) {
+    const d = document.createElement("details");
+    d.innerHTML = `<summary class="suave" style="cursor:pointer;padding:8px 0">Canceladas (${canc.length})</summary>`;
+    for (const e of canc) d.append(cartao(e));
+    lista.append(d);
   }
 }
 
@@ -167,7 +178,7 @@ function cartao(e) {
   div.innerHTML = `
     <div class="topo"><span><b>${esc(e.cliente)}</b>${e.telefone ? ` <a class="suave" href="tel:${esc(e.telefone)}">${esc(e.telefone)}</a>` : ""}</span>
       <span class="hora">${esc(e.horaEntrega || "")}</span></div>
-    <div class="pedido">${esc(e.pedido)}</div>
+    <div class="pedido">${itensEmHtml(e)}</div>
     <div><span class="selo ${e.status === "entregue" ? "ok" : e.status === "cancelada" ? "pendente" : e.status === "anotada" ? "pendente" : e.status}" style="margin-left:0">${ROTULO[e.status]}${e.statusPor ? ` · ${esc(e.statusPor)}` : ""}</span>
       ${e.unidade ? `<span class="selo pendente">${esc(e.unidade)}</span>` : ""}
       ${e.retirada === "entrega" ? `<span class="selo pendente">Entregar no endereço</span>` : ""}</div>
@@ -206,7 +217,7 @@ function cupom(e) {
     <p class="grande">${diaSemana(e.dataEntrega)}, ${dataBR(e.dataEntrega)} às ${esc(e.horaEntrega || "")}</p>
     <p>${e.retirada === "entrega" ? "<b>ENTREGAR NO ENDEREÇO</b>" : "Cliente retira na loja"}</p><hr>
     <p class="grande">${esc(e.cliente)}</p>${e.telefone ? `<p>Tel: ${esc(e.telefone)}</p>` : ""}<hr>
-    <p class="pedido">${esc(e.pedido)}</p>
+    <div class="pedido">${itensEmHtml(e)}</div>
     ${e.obs ? `<p>Obs: ${esc(e.obs)}</p>` : ""}<hr>
     ${e.valor ? `<p>Total: ${reais(e.valor)}</p><p>Sinal: ${reais(e.sinal)}</p><p class="grande">${falta > 0 ? `Falta: ${reais(falta)}` : "PAGO"}</p><hr>` : ""}
     <p>Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}</p>
@@ -241,8 +252,8 @@ function abrirFolha() {
     <input id="f-cliente" placeholder="Nome do cliente" autocomplete="off">
     <label class="rot" for="f-tel">Telefone / WhatsApp</label>
     <input id="f-tel" inputmode="tel" placeholder="(21) 9…" autocomplete="off">
-    <label class="rot" for="f-pedido">O que foi encomendado</label>
-    <textarea id="f-pedido" rows="3" placeholder="Ex.: bolo de chocolate 2 kg, escrito 'Parabéns Ana'; 50 salgados fritos"></textarea>
+    <label class="rot">O que foi encomendado (um item por linha)</label>
+    <div id="f-itens"></div>
     <div class="duas">
       <div><label class="rot" for="f-data">Dia da entrega</label><input type="date" id="f-data" min="${hoje()}" value="${dataPadrao}"></div>
       <div><label class="rot" for="f-hora">Horário</label><input type="time" id="f-hora"></div>
@@ -259,6 +270,8 @@ function abrirFolha() {
     <p class="erro" id="f-erro"></p>
     <button class="botao principal" id="f-salvar">Salvar encomenda</button>
     <button class="botao" id="f-cancelar" style="text-align:center;border:none">Cancelar</button>`;
+  const campo = campoItens([], "Ex.: mini salgados fritos");
+  folha.querySelector("#f-itens").append(campo.el);
   const escolher = (id, set) => folha.querySelector(id).onclick = (ev) => {
     const v = ev.target.closest("button")?.dataset.v; if (!v) return;
     set(v); ev.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
@@ -270,11 +283,12 @@ function abrirFolha() {
   folha.querySelector("#f-salvar").onclick = async (ev) => {
     const erro = folha.querySelector("#f-erro");
     const cliente = folha.querySelector("#f-cliente").value.trim();
-    const pedido = folha.querySelector("#f-pedido").value.trim();
+    const itensPed = campo.ler();
+    const pedido = itensEmTexto(itensPed);
     const dataEntrega = folha.querySelector("#f-data").value;
     const horaEntrega = folha.querySelector("#f-hora").value;
     if (!cliente) return (erro.textContent = "Escreva o nome do cliente.");
-    if (!pedido) return (erro.textContent = "Escreva o que foi encomendado.");
+    if (!itensPed.length) return (erro.textContent = "Escreva o que foi encomendado (pelo menos um item).");
     if (!dataEntrega || dataEntrega < hoje()) return (erro.textContent = "Escolha o dia da entrega (hoje ou depois).");
     if (!horaEntrega) return (erro.textContent = "Coloque o horário da entrega.");
     if (!unidade) return (erro.textContent = "Escolha quem faz: Panificadora ou Confeitaria.");
@@ -283,7 +297,7 @@ function abrirFolha() {
     ev.target.disabled = true;
     try {
       await acrescentar("encomendas", {
-        tipo: "encomenda", cliente, telefone: folha.querySelector("#f-tel").value.trim(), pedido,
+        tipo: "encomenda", cliente, telefone: folha.querySelector("#f-tel").value.trim(), pedido, itens: itensPed,
         dataEntrega, horaEntrega, unidade, retirada, valor, sinal, obs: folha.querySelector("#f-obs").value.trim(),
         anotadoPor: eu.nome, registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(),
       });

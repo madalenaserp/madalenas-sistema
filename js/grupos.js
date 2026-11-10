@@ -14,6 +14,7 @@ export const GRUPOS = {
     { titulo: "Consumo da equipe", link: "consumo.html", mostrar: (u) => pode.verConsumo(u) },
   ] },
   pedidos: { titulo: "Pedidos", abas: [
+    { titulo: "Balcão", link: "balcao.html" },
     { titulo: "Encomendas", link: "encomendas.html" },
     { titulo: "Empresas", link: "notas.html", mostrar: (u) => pode.notasEmpresas(u) },
   ] },

@@ -38,3 +38,20 @@ for (const el of document.querySelectorAll("[data-slogan]")) el.innerHTML = slog
 
 // Abas dos módulos (Meu dia, Caixa, Pedidos, Estoque e perdas).
 import("./grupos.js").catch(() => {});
+
+// Botão voltar do celular: o navegador mostra a página guardada (velha). Recarrega para vir com os dados de agora.
+addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
+
+// Se algo der erro sem aviso, mostra uma faixa no rodapé (em vez de a tela ficar em branco) para a Daiane mandar o print.
+function faixaDeErro(msg) {
+  if (document.getElementById("faixa-erro")) return;
+  const d = document.createElement("div");
+  d.id = "faixa-erro";
+  d.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;background:#b3261e;color:#fff;border-radius:12px;padding:10px 12px;font-size:14px;box-shadow:0 4px 16px #0004";
+  const t = String(msg || "erro").replace(/[<>&]/g, "").slice(0, 200);
+  d.innerHTML = `<b>Algo não carregou.</b> Toque aqui para tentar de novo. Se continuar, mande um print para o Claude.<br><span style="font-size:12px;opacity:.85">${t}</span>`;
+  d.onclick = () => location.reload();
+  (document.body || document.documentElement).append(d);
+}
+addEventListener("unhandledrejection", (e) => faixaDeErro(e.reason?.message || e.reason));
+addEventListener("error", (e) => { if (e.message) faixaDeErro(e.message); });

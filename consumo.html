@@ -129,11 +129,18 @@ async function mostrarDia() {
         : `<span class="selo ${tipo}" style="margin-left:0">${esc(texto)}</span>`}</div>
       ${r.obs ? `<div class="suave">${esc(r.obs)}</div>` : ""}
       <div class="suave" style="font-size:13px">Registrado por ${esc(r.registradoPor)}</div>`;
-    if (!r.cancelamento && d === hoje() && lanca) {
+    if (!r.cancelamento && lanca && (d === hoje() || eu.papel === "dona")) {
       const b = document.createElement("button");
       b.textContent = "Cancelar (lançado errado)";
       b.onclick = () => cancelar(r);
       div.append(b);
+      if (eu.papel === "dona") {
+        const c = document.createElement("button");
+        c.textContent = "Corrigir";
+        c.style.marginLeft = "6px";
+        c.onclick = () => abrirFolha(r);
+        div.append(c);
+      }
     }
     lista.append(div);
   }
@@ -154,8 +161,10 @@ const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
 fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
 
-function abrirFolha() {
-  let pagamento = null, autorizou = null;
+// original: quando a Daiane corrige um consumo, abre preenchido; ao salvar grava o novo e cancela o antigo (fica no histórico).
+function abrirFolha(original = null) {
+  if (original instanceof Event) original = null;
+  let pagamento = original?.pagamento || null, autorizou = original?.autorizadoPor || null;
   let setor = "";
   const opcoesPessoa = EQUIPE_DO_TURNO.map((p) => {
     const grupo = p.setor !== setor ? `${setor ? "</optgroup>" : ""}<optgroup label="${p.setor}">` : "";
@@ -163,7 +172,7 @@ function abrirFolha() {
     return `${grupo}<option>${esc(p.nome)}</option>`;
   }).join("") + "</optgroup>";
   folha.innerHTML = `
-    <h2>Registrar consumo</h2>
+    <h2>${original ? "Corrigir consumo" : "Registrar consumo"}</h2>
     <label class="rot" for="f-pessoa">Quem consumiu</label>
     <select id="f-pessoa"><option value="">Escolha…</option>${opcoesPessoa}</select>
     <label class="rot" for="f-itens">O que consumiu</label>
@@ -183,6 +192,15 @@ function abrirFolha() {
   const autBloco = folha.querySelector("#f-aut-bloco");
   autBloco.hidden = true;
   const marcar = (grupo, valor) => grupo.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === valor));
+  if (original) {
+    folha.querySelector("#f-pessoa").value = original.pessoa;
+    folha.querySelector("#f-itens").value = original.itens || "";
+    folha.querySelector("#f-valor").value = (Number(original.valor) || 0).toFixed(2).replace(".", ",");
+    folha.querySelector("#f-obs").value = original.obs || "";
+    marcar(folha.querySelector("#f-pag"), pagamento);
+    autBloco.hidden = !precisaAutorizacao(pagamento);
+    if (autorizou) marcar(folha.querySelector("#f-aut"), autorizou);
+  }
   folha.querySelector("#f-pag").onclick = (e) => {
     const v = e.target.closest("button")?.dataset.v; if (!v) return;
     pagamento = v; marcar(e.currentTarget, v);
@@ -205,7 +223,7 @@ function abrirFolha() {
     if (!pagamento) return (erro.textContent = "Escolha como foi o pagamento.");
     if (precisaAutorizacao(pagamento) && !autorizou) return (erro.textContent = "Diga quem autorizou (ou Ninguém).");
     const p = EQUIPE_DO_TURNO.find((x) => x.nome === pessoaNome);
-    const d = hoje();
+    const d = original?.data || hoje();
     e.target.disabled = true;
     try {
       await acrescentar("consumo", {
@@ -214,7 +232,10 @@ function abrirFolha() {
         pagamento, autorizadoPor: precisaAutorizacao(pagamento) ? autorizou : null,
         obs: folha.querySelector("#f-obs").value.trim(),
         registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(),
+        ...(original ? { corrigeId: original.id } : {}),
       });
+      if (original) await acrescentar("consumo", { tipo: "cancelamento", refId: original.id, motivo: "Corrigido pela Daiane (o certo está no registro novo)",
+        data: original.data, mes: original.mes, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
       fundo.hidden = true;
       campoDia.value = d;
       mostrarDia();

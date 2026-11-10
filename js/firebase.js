@@ -13,7 +13,10 @@ export function firebase() {
     const fs = await import(`${SDK}/firebase-firestore.js`);
     const auth = await import(`${SDK}/firebase-auth.js`);
     const app = initializeApp(firebaseConfig);
-    return { fs, db: fs.getFirestore(app), auth, conta: auth.getAuth(app) };
+    // Long polling: no iPhone (Safari com proteção avançada e navegador de dentro de apps) a conexão padrão às vezes trava e a tela fica em branco.
+    let db;
+    try { db = fs.initializeFirestore(app, { experimentalForceLongPolling: true }); } catch { db = fs.getFirestore(app); }
+    return { fs, db, auth, conta: auth.getAuth(app) };
   })();
   return pronto;
 }
