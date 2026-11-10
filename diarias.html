@@ -54,6 +54,22 @@ for (const p of EQUIPE_DO_TURNO) {
   tr.querySelector("[data-sal]").oninput = (e) => { const v = num(e.target.value); tr.querySelector("[data-dia]").value = v > 0 ? br(Math.round((v / 30) * 100) / 100) : ""; };
   tab.append(tr, tr2);
 }
+// Link de preenchimento: os valores vêm depois do # (o # nunca vai para o servidor nem para o código).
+// Formato: #pre=<base64url de {"Nome": salário}>. Só preenche a tela; nada é salvo até a Daiane tocar em Salvar.
+try {
+  const m = location.hash.match(/pre=([A-Za-z0-9_-]+)/);
+  if (m) {
+    const b = atob(m[1].replace(/-/g, "+").replace(/_/g, "/"));
+    const pre = JSON.parse(new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))));
+    let n = 0;
+    for (const [nome, v] of Object.entries(pre)) {
+      const i = tab.querySelector(`[data-sal="${CSS.escape(nome)}"]`);
+      if (i && v > 0) { i.value = br(v); i.dispatchEvent(new Event("input")); n++; }
+    }
+    history.replaceState(null, "", location.pathname);
+    document.getElementById("msg").textContent = `${n} salário(s) preenchido(s) pela folha. Confira e toque em Salvar.`;
+  }
+} catch { document.getElementById("msg").textContent = "Não consegui ler o link de preenchimento."; }
 if (atual.alteradoEm) document.getElementById("quando").textContent = `Última alteração: ${dataBR(atual.alteradoEm.slice(0, 10))} por ${atual.alteradoPor}.`;
 document.getElementById("salvar").onclick = async (e) => {
   const valores = {}, salarios = {};
