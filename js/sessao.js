@@ -49,7 +49,11 @@ export async function usuarioAtual() {
 // Manda para a entrada se ninguém entrou. Use: const eu = await exigirUsuario();
 export async function exigirUsuario() {
   const u = await usuarioAtual();
-  if (!u) { location.href = "index.html"; await new Promise(() => {}); }
+  if (!u) {
+    // Guarda a página (e o # dela) para voltar depois do login.
+    try { sessionStorage.setItem("madalenas.voltar", location.pathname.split("/").pop() + location.search + location.hash); } catch {}
+    location.href = "index.html"; await new Promise(() => {});
+  }
   return u;
 }
 
@@ -60,4 +64,11 @@ export function hoje() {
 export function dataBR(iso) {
   const [a, m, d] = iso.split("-");
   return `${d}/${m}/${a}`;
+}
+
+// Para onde ir depois do login: a página que pediu o login, ou o menu.
+export function destinoDepoisDoLogin() {
+  let v = null;
+  try { v = sessionStorage.getItem("madalenas.voltar"); sessionStorage.removeItem("madalenas.voltar"); } catch {}
+  return v && /^[a-z0-9-]+\.html([?#].*)?$/i.test(v) && !v.startsWith("index.html") ? v : "turno.html";
 }

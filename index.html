@@ -39,10 +39,10 @@
 <script type="module" src="js/marca.js"></script>
 <script type="module">
 import { EQUIPE } from "./js/equipe.js";
-import { entrar, usuarioAtual } from "./js/sessao.js";
+import { entrar, usuarioAtual, destinoDepoisDoLogin } from "./js/sessao.js";
 import { modoTeste } from "./js/firebase.js";
 
-if (await usuarioAtual()) location.href = "turno.html";
+if (await usuarioAtual()) location.href = destinoDepoisDoLogin();
 
 if (modoTeste) {
   document.getElementById("teste").hidden = false;
@@ -51,7 +51,7 @@ if (modoTeste) {
     const b = document.createElement("button");
     b.className = "botao";
     b.innerHTML = `<b>${p.nome}</b><br><span class="suave">${p.setor}</span>`;
-    b.onclick = async () => { await entrar(p.nome); location.href = "turno.html"; };
+    b.onclick = async () => { await entrar(p.nome); location.href = destinoDepoisDoLogin(); };
     caixa.append(b);
   }
 } else {
@@ -63,7 +63,7 @@ if (modoTeste) {
     erro.textContent = "";
     try {
       await entrar(document.getElementById("usuario").value, document.getElementById("senha").value);
-      if (await usuarioAtual()) location.href = "turno.html";
+      if (await usuarioAtual()) location.href = destinoDepoisDoLogin();
       else erro.textContent = "Usuário sem cadastro ativo. Fale com a Daiane.";
     } catch {
       erro.textContent = "Usuário ou senha errados.";
