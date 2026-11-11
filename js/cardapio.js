@@ -6,7 +6,7 @@ export const CARDAPIO = [
     ["Pão com polenguinho", 5], ["Pão com ovo, queijo e presunto", 12], ["Misto quente (pão de forma)", 10], ["Misto quente (pão francês)", 10],
     ["Pão de queijo", 1], ["Pão com queijo e presunto", 9], ["Pão com peito de peru e queijo minas", 12], ["Pão com queijo minas", 8], ["Pão com linguiça", 15],
   ] },
-  { grupo: "Adicionais", itens: [["Adicional de queijo", 2], ["Adicional de presunto", 2], ["Adicional de mortadela", 2], ["Adicional de ovo", 2]] },
+  { grupo: "Adicionais", itens: [["Adicional de queijo prato", 2], ["Adicional de queijo muçarela", 2], ["Adicional de queijo minas", 2], ["Adicional de presunto", 2], ["Adicional de mortadela", 2], ["Adicional de ovo", 2]] },
   { grupo: "Tapiocas", itens: [["Tapioca ovo mexido", 8], ["Tapioca peru com minas", 12], ["Tapioca frango com requeijão", 12], ["Tapioca queijo com presunto", 11]] },
   { grupo: "Coxinhas", itens: [
     ["Coxinha de frango", 9.5], ["Coxinha de frango + Guaraná", 10], ["Coxinha frango com requeijão", 9.5], ["Coxinha frango com requeijão + Guaraná", 10],
