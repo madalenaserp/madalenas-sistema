@@ -33,6 +33,18 @@
   .opcoes button { padding:12px 6px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; }
   .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
   .erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  .folha > * { flex-shrink:0; }
+  .cats { display:flex; flex-wrap:wrap; gap:6px; }
+  .cats button { flex:0 0 auto; padding:8px 12px; border-radius:999px; border:1px solid var(--linha); background:#fff; font-size:14px; cursor:pointer; }
+  .cats button[aria-pressed="true"] { background:var(--tinta); color:#fff; border-color:var(--tinta); }
+  .menu { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .menu button { text-align:left; padding:10px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:15px; cursor:pointer; line-height:1.2; position:relative; }
+  .menu button small { display:block; color:var(--suave); font-size:13px; margin-top:2px; }
+  .menu button .qt { position:absolute; top:-6px; right:-6px; background:var(--laranja); color:#fff; border-radius:999px; min-width:24px; height:24px; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .escolhidos { border:1px solid var(--linha); border-radius:10px; padding:6px 10px; background:#fffaf4; }
+  .escolhidos .l { display:grid; grid-template-columns:1fr auto auto auto; gap:6px; align-items:center; padding:4px 0; font-size:15px; }
+  .escolhidos .l button { width:36px; height:36px; border-radius:8px; border:1px solid var(--linha); background:#fff; font-size:18px; cursor:pointer; }
+  .escolhidos .tot { text-align:right; font-weight:700; font-size:17px; border-top:1px dashed var(--linha); padding-top:6px; margin-top:4px; }
   #impressao { display:none; }
   @media print {
     @page { size:80mm auto; margin:0; }
@@ -69,6 +81,7 @@ import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
 import { acrescentar, listar } from "./js/db.js";
 import { campoItens, itensEmTexto, itensEmHtml } from "./js/itens.js";
+import { CARDAPIO, reais } from "./js/cardapio.js";
 
 const eu = await exigirUsuario();
 const leitura = pode.somenteLeitura(eu);
@@ -121,6 +134,7 @@ function cartao(p, posicao) {
     ${p.cliente ? `<div><b>${esc(p.cliente)}</b></div>` : ""}
     <div class="itens">${itensEmHtml(p)}</div>
     ${p.obs ? `<div class="suave">Obs: ${esc(p.obs)}</div>` : ""}
+    ${p.total ? `<div><b>Total: ${reais(p.total)}</b>${p.itens.some((i) => !i.preco) ? ` <span class="suave">+ itens fora do cardápio</span>` : ""}</div>` : ""}
     <div><span class="selo ${p.status === "pronto" || p.status === "entregue" ? "ok" : "pendente"}" style="margin-left:0">${selo}${p.statusPor ? ` · ${esc(p.statusPor)} às ${esc(p.statusHora)}` : ""}</span>
       <span class="selo ${p.pago ? "ok" : "alerta"}">${p.pago ? "Pago" : "Paga no fim"}</span></div>
     ${p.motivo ? `<div class="suave">Cancelado: ${esc(p.motivo)}</div>` : ""}
@@ -164,6 +178,7 @@ function imprimir(p) {
     ${p.cliente ? `<p class="centro">${esc(p.cliente)}</p>` : ""}<hr>
     <div class="pedido">${itensEmHtml(p)}</div>
     ${p.obs ? `<p>Obs: ${esc(p.obs)}</p>` : ""}<hr>
+    ${p.total ? `<p><b>Total: ${reais(p.total)}</b>${p.itens.some((i) => !i.preco) ? " + itens fora do cardápio" : ""}</p>` : ""}
     <p>${p.pago ? "PAGO" : "Paga no fim"}</p>
     <p>Pedido às ${esc(p.hora)} · ${dataBR(p.data)} · por ${esc(p.registradoPor)}</p>
   </div>`;
@@ -183,8 +198,11 @@ function abrirFolha() {
     <div class="opcoes" id="f-onde">${MESAS.map((m) => `<button type="button" data-v="${m}" aria-pressed="false">${/^\d+$/.test(m) ? `Mesa ${m}` : m}</button>`).join("")}</div>
     <label class="rot" for="f-cliente">Nome do cliente (opcional)</label>
     <input id="f-cliente" placeholder="Para chamar quando ficar pronto" autocomplete="off">
-    <label class="rot">O que pediu (um item por linha)</label>
-    <div id="f-itens"></div>
+    <label class="rot">O que pediu (toque no item; tocar de novo soma mais um)</label>
+    <div class="cats" id="f-cats">${CARDAPIO.map((g, k) => `<button type="button" data-g="${k}" aria-pressed="${k === 0}">${esc(g.grupo)}</button>`).join("")}</div>
+    <div class="menu" id="f-menu"></div>
+    <div class="escolhidos" id="f-escolhidos" hidden></div>
+    <details id="f-outro"><summary class="suave" style="font-size:14px;cursor:pointer">+ Item fora do cardápio (escrever)</summary><div id="f-itens" style="margin-top:6px"></div></details>
     <input id="f-obs" placeholder="Observação (sem cebola, alergia, ponto da carne…)">
     <label class="rot">Já pagou?</label>
     <div class="opcoes duas" id="f-pago"><button type="button" data-v="sim" aria-pressed="false">Já pagou</button><button type="button" data-v="nao" aria-pressed="false">Paga no fim</button></div>
@@ -192,8 +210,28 @@ function abrirFolha() {
     <button class="botao principal" id="f-salvar">Salvar e imprimir comanda</button>
     <button class="botao" id="f-so-salvar" style="text-align:center">Só salvar (sem imprimir)</button>
     <button class="botao" id="f-cancelar" style="text-align:center;border:none">Cancelar</button>`;
-  const campo = campoItens([], "Ex.: pão na chapa");
+  const campo = campoItens([], "Ex.: suco de laranja");
   folha.querySelector("#f-itens").append(campo.el);
+  // Cardápio: toca no item para somar; os escolhidos aparecem com − e + e o total.
+  const qtd = new Map(); let grupo = 0;
+  const desenharMenu = () => {
+    folha.querySelector("#f-menu").innerHTML = CARDAPIO[grupo].itens.map((i) => `<button type="button" data-n="${esc(i.nome)}">${esc(i.nome)}<small>${reais(i.preco)}</small>${qtd.get(i.nome) ? `<span class="qt">${qtd.get(i.nome)}</span>` : ""}</button>`).join("");
+    const box = folha.querySelector("#f-escolhidos");
+    const lista = [...qtd].filter(([, q]) => q > 0);
+    box.hidden = !lista.length;
+    box.innerHTML = lista.map(([n, q]) => `<div class="l"><span><b>${q}×</b> ${esc(n)}</span><span class="suave">${reais(q * precoDe(n))}</span>
+      <button type="button" data-menos="${esc(n)}" aria-label="Tirar um">−</button><button type="button" data-mais="${esc(n)}" aria-label="Mais um">+</button></div>`).join("")
+      + `<div class="tot">Total: ${reais(lista.reduce((t, [n, q]) => t + q * precoDe(n), 0))}</div>`;
+  };
+  const precoDe = (n) => CARDAPIO.flatMap((g) => g.itens).find((i) => i.nome === n)?.preco || 0;
+  const soma = (n, d) => { qtd.set(n, Math.max(0, (qtd.get(n) || 0) + d)); desenharMenu(); };
+  folha.querySelector("#f-cats").onclick = (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    grupo = +b.dataset.g; ev.currentTarget.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); desenharMenu();
+  };
+  folha.querySelector("#f-menu").onclick = (ev) => { const b = ev.target.closest("button"); if (b) soma(b.dataset.n, 1); };
+  folha.querySelector("#f-escolhidos").onclick = (ev) => { const b = ev.target.closest("button"); if (b) soma(b.dataset.mais || b.dataset.menos, b.dataset.mais ? 1 : -1); };
+  desenharMenu();
   const escolher = (id, set) => folha.querySelector(id).onclick = (ev) => {
     const v = ev.target.closest("button")?.dataset.v; if (!v) return;
     set(v); ev.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
@@ -203,15 +241,17 @@ function abrirFolha() {
   folha.querySelector("#f-cancelar").onclick = () => { fundo.hidden = true; };
   const salvar = async (ev, imprimirDepois) => {
     const erro = folha.querySelector("#f-erro");
-    const itens = campo.ler();
+    const doMenu = [...qtd].filter(([, q]) => q > 0).map(([n, q]) => ({ qtd: String(q), produto: n, preco: precoDe(n) }));
+    const itens = [...doMenu, ...campo.ler()];
+    const total = Math.round(doMenu.reduce((t, i) => t + Number(i.qtd) * i.preco, 0) * 100) / 100;
     if (!onde) return (erro.textContent = "Escolha a mesa (ou Balcão / Viagem).");
-    if (!itens.length) return (erro.textContent = "Escreva pelo menos um item.");
+    if (!itens.length) return (erro.textContent = "Toque em pelo menos um item do cardápio (ou escreva em \"fora do cardápio\").");
     if (!pago) return (erro.textContent = "Marque se já pagou.");
     ev.target.disabled = true;
     const d = hoje();
     try {
       const id = await acrescentar("balcao", { tipo: "pedido", data: d, mes: d.slice(0, 7), hora: agora(), onde,
-        cliente: folha.querySelector("#f-cliente").value.trim(), itens, pedido: itensEmTexto(itens),
+        cliente: folha.querySelector("#f-cliente").value.trim(), itens, pedido: itensEmTexto(itens), total,
         obs: folha.querySelector("#f-obs").value.trim(), pago: pago === "sim",
         registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
       fundo.hidden = true;
