@@ -36,19 +36,44 @@ export async function usuarioAtual() {
   });
   if (!user) return null;
   const ref = f.fs.doc(f.db, "usuarios", user.uid);
-  let perfil = await f.fs.getDoc(ref);
+  // Internet fraca: se o perfil demorar, usa o que ficou guardado neste aparelho (só para mostrar a tela;
+  // o que cada um pode gravar continua sendo conferido pelo servidor).
+  const chavePerfil = `madalenas.perfil.${user.uid}`;
+  let guardado = null;
+  try { guardado = JSON.parse(localStorage.getItem(chavePerfil) || "null"); } catch {}
+  let perfil;
+  try {
+    perfil = await Promise.race([f.fs.getDoc(ref), new Promise((_, n) => setTimeout(() => n(new Error("lento")), guardado ? 6000 : 15000))]);
+  } catch (e) {
+    if (guardado && guardado.ativo !== false) return { uid: user.uid, ...guardado };
+    throw e;
+  }
   // Primeiro acesso da Daiane: cria o perfil de dona (as regras só permitem isso para este e-mail).
   if (!perfil.exists() && user.email === `daiane@${DOMINIO}`) {
     await f.fs.setDoc(ref, { nome: "Daiane", usuario: "daiane", setor: "Gestão", papel: "dona", ativo: true });
     perfil = await f.fs.getDoc(ref);
   }
-  if (!perfil.exists() || perfil.data().ativo === false) return null;
+  if (!perfil.exists() || perfil.data().ativo === false) { try { localStorage.removeItem(chavePerfil); } catch {} return null; }
+  try { localStorage.setItem(chavePerfil, JSON.stringify(perfil.data())); } catch {}
   return { uid: user.uid, ...perfil.data() };
 }
 
 // Manda para a entrada se ninguém entrou. Use: const eu = await exigirUsuario();
 export async function exigirUsuario() {
-  const u = await usuarioAtual();
+  // Se a internet estiver fraca e a tela demorar, avisa e oferece tentar de novo (em vez de ficar em branco).
+  let aviso = null;
+  const mostrar = (texto) => {
+    aviso ??= Object.assign(document.createElement("div"), { className: "aviso" });
+    aviso.style.cssText = "position:fixed;left:12px;right:12px;bottom:16px;z-index:50;text-align:center";
+    aviso.innerHTML = `${texto}<br><button type="button" style="margin-top:8px">Tentar de novo</button>`;
+    aviso.querySelector("button").onclick = () => location.reload();
+    document.body.append(aviso);
+  };
+  const timer = setTimeout(() => mostrar("A internet está fraca e a tela está demorando para abrir."), 7000);
+  let u;
+  try { u = await usuarioAtual(); }
+  catch (e) { clearTimeout(timer); mostrar("Não consegui abrir a tela: a internet está fraca ou caiu."); await new Promise(() => {}); }
+  clearTimeout(timer); aviso?.remove();
   if (!u) {
     // Guarda a página (e o # dela) para voltar depois do login.
     try { sessionStorage.setItem("madalenas.voltar", location.pathname.split("/").pop() + location.search + location.hash); } catch {}

@@ -30,7 +30,7 @@ export const abasVisiveis = (g, u) => GRUPOS[g].abas.filter((a) => !a.mostrar ||
 const pagina = location.pathname.split("/").pop() || "index.html";
 const grupo = Object.keys(GRUPOS).find((g) => GRUPOS[g].abas.some((a) => a.link === pagina));
 if (grupo) {
-  const u = await usuarioAtual();
+  const u = await usuarioAtual().catch(() => null);
   const abas = u ? abasVisiveis(grupo, u) : [];
   const header = document.querySelector("header");
   if (abas.length > 1 && header) {

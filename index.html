@@ -42,7 +42,7 @@ import { EQUIPE } from "./js/equipe.js";
 import { entrar, usuarioAtual, destinoDepoisDoLogin } from "./js/sessao.js";
 import { modoTeste } from "./js/firebase.js";
 
-if (await usuarioAtual()) location.href = destinoDepoisDoLogin();
+try { if (await usuarioAtual()) location.href = destinoDepoisDoLogin(); } catch {} // internet fraca: mostra o login mesmo assim
 
 if (modoTeste) {
   document.getElementById("teste").hidden = false;
