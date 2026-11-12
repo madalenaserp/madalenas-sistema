@@ -45,9 +45,24 @@ async function gerar(partes, json = true) {
       const r = await comLimite(m.generateContent(partes), resta, "resposta");
       etapa = "";
       return json ? JSON.parse(r.response.text()) : r.response.text();
-    } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); if (!/not found|404|no longer available/i.test(String(e?.message))) break; }
+    } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); if (!/not found|404|no longer available|429|quota|RESOURCE_EXHAUSTED|503|overloaded|unavailable/i.test(String(e?.message))) break; }
   }
-  throw ultimoErro || new Error("demorou demais");
+  throw explicar(ultimoErro);
+}
+
+// Troca o erro técnico do Google por uma frase curta (sem o endereço comprido), guardando o código.
+function explicar(e) {
+  if (!e) return new Error("demorou demais");
+  const t = String(e.message || e).replace(/https?:\/\/\S+?(:\s|\s|$)/g, "").replace(/^AI:\s*/i, "").replace(/Error fetching from\s*/i, "").trim();
+  const cod = (t.match(/\[(\d{3})/) || [])[1] || "";
+  let frase = "";
+  if (cod === "429" || /quota|RESOURCE_EXHAUSTED/i.test(t)) frase = "limite de uso da IA do Google atingido";
+  else if (cod === "403" || /PERMISSION_DENIED|not been used|disabled/i.test(t)) frase = "a IA não está liberada no Firebase";
+  else if (cod === "401" || /App Check/i.test(t)) frase = "a proteção do site não foi aceita";
+  else if (cod === "404") frase = "modelo da IA não encontrado";
+  else if (/failed to fetch|load failed|network|aborted/i.test(t)) frase = "a internet caiu ou ficou lenta no envio da foto";
+  const err = new Error(`${frase ? frase + " · " : ""}${t}`.slice(0, 220));
+  err.codigo = cod; return err;
 }
 
 const imagem = (dataUrl) => ({ inlineData: { mimeType: dataUrl.slice(5, dataUrl.indexOf(";")), data: dataUrl.split(",")[1] } });

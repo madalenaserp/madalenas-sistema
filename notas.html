@@ -237,7 +237,7 @@ async function folhaValor(empresa, arquivo) {
   catch { $("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; return; }
   // Leitura da nota pela IA: itens, total, número e dia da emissão. Se falhar, preenche à mão como antes.
   try {
-    var ia = await import("./js/ia.js?v=4");
+    var ia = await import("./js/ia.js?v=5");
     if (!ia.iaDisponivel) throw new Error("sem IA");
     const t0 = Date.now(); const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s${ia.etapa ? ` (${ia.etapa})` : ""}. Se demorar, pode preencher à mão e salvar.`; }, 1000);
     const r = await ia.lerComprovanteIA(foto, EMPRESAS).finally(() => clearInterval(rel));
@@ -253,7 +253,7 @@ async function folhaValor(empresa, arquivo) {
     if (r.empresa && r.empresa !== empresa) avisos.push(`No papel está escrito "${esc(r.escrito)}". Parece ser da <b>${esc(r.empresa)}</b>, não da ${esc(empresa)}. Confira antes de salvar.`);
     if (avisos.length) { $("#v-aviso").innerHTML = avisos.join("<br>"); $("#v-aviso").hidden = false; }
     $("#v-prep").textContent = itens.length ? "Li a nota. Confira os itens e o valor." : "Não consegui ler os itens. Coloque o valor à mão.";
-  } catch (err) { console.error(err); const p = $("#v-prep"); if (p) p.textContent = `Não consegui ler a nota sozinho (${String(err?.message || err).slice(0, 90)}). Coloque o valor à mão.`; }
+  } catch (err) { console.error(err); const p = $("#v-prep"); if (p) { p.style.overflowWrap = "anywhere"; p.textContent = `Não consegui ler a nota sozinho (${String(err?.message || err).slice(0, 220)}). Coloque o valor à mão.`; } }
   $("#v-ok").onclick = async (e) => {
     const valor = numero($("#v-valor").value);
     if (!foto) return ($("#v-e").textContent = "A foto não carregou.");
