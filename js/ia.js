@@ -72,6 +72,21 @@ Devolva só JSON: {"fornecedor": "nome da loja ou vazio", "itens": [{"descricao"
   }) };
 }
 
+// Comprovante de venda do Guappo (nota das empresas) -> { itens:[{descricao,qtd,preco,total}], total, numero, emissao, escrito }
+export async function lerComprovanteIA(dataUrl, empresas) {
+  const r = await gerar([imagem(dataUrl), `Esta é a foto de um "Comprovante de VENDA" impresso (bobina 80mm) da padaria Madalena's, vendido a prazo para uma empresa.
+Leia TODOS os itens da tabela de produtos. Cada item tem uma linha com número, código e DESCRIÇÃO (ex.: "173 BOLO PISCINA ESPECIAL"; tire o código do começo) e embaixo "QTDE UN x VALOR UNITÁRIO ... VALOR TOTAL".
+Para cada item devolva: descricao (sem o código), qtd (número; "10,000 UN" = 10), preco (valor unitário), total (valor total do item).
+Leia também: total ("VALOR TOTAL R$"), numero ("Numero:"), emissao (data de "Emissão:" no formato AAAA-MM-DD).
+Em escrito, copie o que estiver ESCRITO À MÃO no papel (data, nome da empresa), ou "".
+Em empresa, escolha da lista o nome que combina com o escrito à mão, ou "": ${empresas.join(", ")}.
+Números usam vírgula decimal na nota; devolva como número JSON.
+Devolva só JSON: {"itens": [{"descricao": "", "qtd": 0, "preco": 0, "total": 0}], "total": 0, "numero": "", "emissao": "", "escrito": "", "empresa": ""}`]);
+  const itens = (r.itens || []).map((i) => ({ descricao: String(i.descricao || "").trim(), qtd: Number(i.qtd) || 0, preco: Number(i.preco) || 0, total: Number(i.total) || 0 })).filter((i) => i.descricao);
+  return { itens, total: Number(r.total) || itens.reduce((t, i) => t + i.total, 0), numero: String(r.numero || "").replace(/\D/g, ""),
+    emissao: /^\d{4}-\d{2}-\d{2}$/.test(r.emissao) ? r.emissao : "", escrito: String(r.escrito || ""), empresa: empresas.includes(r.empresa) ? r.empresa : "" };
+}
+
 // Foto da prateleira -> [{insumoId, qtd, obs}] (só o que dá para ver e contar)
 export async function contarFotoIA(dataUrl, insumos) {
   const r = await gerar([imagem(dataUrl), `Esta é a foto de uma prateleira ou depósito de uma padaria. Conte os itens que aparecem e que estão na lista abaixo.

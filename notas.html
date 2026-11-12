@@ -95,7 +95,7 @@ const podeFoto = pode.editarNotas(eu);
 const veMes = pode.verPainel(eu);
 
 // TECMAR, Tecsea e Redsea são contas diferentes no Guappo.
-const EMPRESAS = ["ABG", "TWAS", "TECMAR", "Tecsea", "Redsea", "LANDSEAAIR", "Artemis", "Cliente Bruno"];
+const EMPRESAS = ["ABG", "TWAS", "TECMAR", "Tecsea", "Redsea", "LANDSEAAIR", "Artemis", "Cliente Bruno", "Secretaria da Prefeitura"];
 const PROBLEMAS = { sem_via: "Faltou a via na pasta", sem_assinatura: "Via sem assinatura", fora_guappo: "Não está no Guappo", outro: "Outro problema" };
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const agora = () => new Date().toTimeString().slice(0, 5);
@@ -168,10 +168,11 @@ async function mostrar() {
       const b = document.createElement("button"); b.className = "foto-btn secundario"; b.style.alignSelf = "flex-start";
       b.textContent = "+ Anotar pedido do WhatsApp"; b.onclick = () => folhaPedido(nome, d); div.append(b);
     }
-    if (d === hoje() && podeFoto) {
+    // Equipe lança a nota do dia; a Daiane também lança notas de dias anteriores (escolhendo o dia lá em cima).
+    if (podeFoto && (d === hoje() || (eu.papel === "dona" && d < hoje()))) {
       const rot = document.createElement("label");
       rot.className = "foto-btn" + (minhas.length ? " secundario" : "");
-      rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" capture="environment">`;
+      rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" ${d === hoje() ? 'capture="environment"' : ""}>`;
       rot.querySelector("input").onchange = (e) => e.target.files[0] && folhaValor(nome, e.target.files[0]);
       div.querySelector(".cab").append(rot);
     }
@@ -180,6 +181,7 @@ async function mostrar() {
   }
 }
 
+const itensNota = (n) => n.itens?.length ? `<span style="font-size:14px">${n.itens.map((i) => `${esc(String(i.qtd).replace(".", ","))} ${esc(i.descricao)}`).join(" · ")}</span>` : "";
 function linhaNota(n) {
   const div = document.createElement("div");
   div.className = "nota" + (n.cancelado ? " cancelada" : "");
@@ -194,9 +196,9 @@ function linhaNota(n) {
   const info = document.createElement("div");
   info.className = "info";
   info.innerHTML = `${n.valor != null ? `<span style="font-size:16px"><b>${reais(n.valor)}</b>${n.pedidoGuappo ? ` <span class="suave">· Guappo nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>` : `<span class="erro">Sem valor</span>`}
-    <span class="ok">✓ Foto por ${esc(n.registradoPor)} às ${esc(n.hora)}</span>${conf}<div class="acoes"></div>`;
+    ${itensNota(n)}<span class="ok">✓ Foto por ${esc(n.registradoPor)} às ${esc(n.hora)}</span>${conf}<div class="acoes"></div>`;
   const acoes = info.querySelector(".acoes");
-  if (podeConferir && !n.conferido && !n.cancelado && campoDia.value === hoje()) {
+  if (podeConferir && !n.conferido && !n.cancelado && (campoDia.value === hoje() || eu.papel === "dona")) {
     const b = (t, c, f) => { const x = document.createElement("button"); x.textContent = t; x.className = c; x.onclick = f; acoes.append(x); };
     b("Na pasta, certo", "conferir", () => gravar(n, { tipo: "conferido", ok: true }));
     b("Problema", "problema", () => folhaProblema(n));
@@ -208,30 +210,64 @@ function linhaNota(n) {
 
 // Foto da via assinada + valor do Guappo (sem valor não salva: é o que vira a cobrança do mês).
 async function folhaValor(empresa, arquivo) {
-  let foto = null;
-  folha.innerHTML = `<h2>Nota · ${esc(empresa)}</h2><img id="v-img" alt="Nota" style="max-height:200px;object-fit:contain;border-radius:8px" hidden><p class="suave" id="v-prep" style="margin:0">Preparando a foto…</p>
+  let foto = null, itens = [];
+  let d = campoDia.value <= hoje() ? campoDia.value : hoje();
+  const dona = eu.papel === "dona";
+  folha.innerHTML = `<h2>Nota · ${esc(empresa)}</h2>
+    <img id="v-img" alt="Nota" style="max-height:200px;object-fit:contain;border-radius:8px" hidden><p class="suave" id="v-prep" style="margin:0">Preparando a foto…</p>
+    ${dona ? `<label class="suave" for="v-dia">Dia da nota</label><input type="date" id="v-dia" value="${d}" max="${hoje()}">` : `<p class="suave" style="margin:0">Dia: <b>${dataBR(d)}</b></p>`}
+    <p class="aviso" id="v-aviso" style="margin:0" hidden></p>
+    <div id="v-itens"></div>
     <label class="suave" for="v-valor">Valor da nota no Guappo (R$)</label><input id="v-valor" inputmode="decimal" placeholder="0,00">
     <label class="suave" for="v-num">Número do pedido no Guappo (se tiver)</label><input id="v-num" inputmode="numeric">
     <p class="msg-erro" id="v-e"></p>
     <button class="botao principal" id="v-ok">Salvar nota</button>
     <button class="botao" id="v-x" style="text-align:center;border:none">Cancelar</button>`;
   fundo.hidden = false;
-  folha.querySelector("#v-x").onclick = () => { fundo.hidden = true; };
-  try { foto = await reduzir(arquivo); const i = folha.querySelector("#v-img"); i.src = foto; i.hidden = false; folha.querySelector("#v-prep").remove(); }
-  catch { folha.querySelector("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; }
-  folha.querySelector("#v-valor").focus();
-  folha.querySelector("#v-ok").onclick = async (e) => {
-    const valor = numero(folha.querySelector("#v-valor").value);
-    if (!foto) return (folha.querySelector("#v-e").textContent = "A foto não carregou.");
-    if (!(valor > 0)) return (folha.querySelector("#v-e").textContent = "Coloque o valor da nota.");
+  const $ = (q) => folha.querySelector(q);
+  $("#v-x").onclick = () => { fundo.hidden = true; };
+  if (dona) $("#v-dia").onchange = () => { if ($("#v-dia").value) d = $("#v-dia").value; };
+  const desenharItens = () => {
+    $("#v-itens").innerHTML = itens.length ? `<div class="cartao" style="padding:10px"><b>Itens lidos da nota</b> <span class="suave" style="font-size:13px">(confira; toque no ✕ para tirar)</span>
+      ${itens.map((i, k) => `<div style="display:flex;gap:6px;align-items:center;border-top:1px solid var(--linha);padding:4px 0;font-size:15px"><span style="flex:1">${esc(String(i.qtd).replace(".", ","))} × ${esc(i.descricao)} <span class="suave">(${reais(i.preco)})</span></span><b>${reais(i.total)}</b>
+        <button type="button" data-tira="${k}" style="border:1px solid var(--linha);background:#fff;border-radius:6px;width:30px;height:30px">✕</button></div>`).join("")}</div>` : "";
+    $("#v-itens").querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.tira, 1); desenharItens(); }));
+  };
+  try { foto = await reduzir(arquivo); const i = $("#v-img"); i.src = foto; i.hidden = false; }
+  catch { $("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; return; }
+  // Leitura da nota pela IA: itens, total, número e dia da emissão. Se falhar, preenche à mão como antes.
+  try {
+    const ia = await import("./js/ia.js");
+    if (!ia.iaDisponivel) throw new Error("sem IA");
+    const t0 = Date.now(); const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s (pode preencher à mão enquanto isso)`; }, 1000);
+    const r = await ia.lerComprovanteIA(foto, EMPRESAS).finally(() => clearInterval(rel));
+    if (!document.body.contains($("#v-ok"))) return; // fechou a tela
+    itens = r.itens; desenharItens();
+    if (r.total > 0 && !$("#v-valor").value) $("#v-valor").value = r.total.toFixed(2).replace(".", ",");
+    if (r.numero && !$("#v-num").value) $("#v-num").value = r.numero;
+    const avisos = [];
+    if (r.emissao && r.emissao !== d) {
+      if (dona && r.emissao <= hoje()) { d = r.emissao; $("#v-dia").value = d; avisos.push(`A nota é do dia <b>${dataBR(r.emissao)}</b>: já troquei o dia.`); }
+      else avisos.push(`A nota diz emissão em <b>${dataBR(r.emissao)}</b>. Confira se é a nota certa.`);
+    }
+    if (r.empresa && r.empresa !== empresa) avisos.push(`No papel está escrito "${esc(r.escrito)}". Parece ser da <b>${esc(r.empresa)}</b>, não da ${esc(empresa)}. Confira antes de salvar.`);
+    if (avisos.length) { $("#v-aviso").innerHTML = avisos.join("<br>"); $("#v-aviso").hidden = false; }
+    $("#v-prep").textContent = itens.length ? "Li a nota. Confira os itens e o valor." : "Não consegui ler os itens. Coloque o valor à mão.";
+  } catch (err) { console.error(err); const p = $("#v-prep"); if (p) p.textContent = "Não consegui ler a nota sozinho. Coloque o valor à mão."; }
+  $("#v-ok").onclick = async (e) => {
+    const valor = numero($("#v-valor").value);
+    if (!foto) return ($("#v-e").textContent = "A foto não carregou.");
+    if (!(valor > 0)) return ($("#v-e").textContent = "Coloque o valor da nota.");
+    if (d > hoje()) return ($("#v-e").textContent = "O dia não pode ser depois de hoje.");
     e.target.disabled = true;
     try {
-      const d = hoje();
-      const base = { empresa, data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+      const base = { empresa, data: d, ...(d < hoje() ? { lancadaDepois: true } : {}), mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
       const fotoId = await acrescentar("notas_fotos", { ...base, foto });
-      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: folha.querySelector("#v-num").value.trim() });
-      fundo.hidden = true; mostrar();
-    } catch { folha.querySelector("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: $("#v-num").value.trim(), itens });
+      fundo.hidden = true;
+      if (d !== campoDia.value) { campoDia.value = d; }
+      mostrar();
+    } catch { $("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
   };
 }
 
@@ -354,6 +390,7 @@ async function mostrarMes() {
   const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
   const box = document.getElementById("tabela");
   box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
+    <details class="cartao" style="margin-bottom:8px"><summary><b>Ver o mês dia a dia</b> <span class="suave">(dia 1, 2, 3…)</span></summary>${diaADia(sit)}</details>
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
     <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar. As fotos de cada dia ficam na aba Dia.</p>`
     : `<p class="suave">Nenhuma nota neste mês.</p>`;
@@ -442,10 +479,17 @@ function folhaPagamento(x, mes) {
   };
   fundo.hidden = false;
 }
+// Todas as notas do mês em ordem de dia, para conferir se falta algum dia.
+function diaADia(sit) {
+  const por = {};
+  for (const x of sit) for (const n of x.ns) (por[n.data] ||= []).push(n);
+  return Object.keys(por).sort().map((d) => `<div style="border-top:1px solid var(--linha);padding:6px 0"><b>Dia ${Number(d.slice(8))}</b> <span class="suave">(${dataBR(d)})</span> · ${reais(por[d].reduce((t, n) => t + (n.valor || 0), 0))}
+    <div class="suave" style="font-size:14px">${por[d].map((n) => `${esc(n.empresa)}: ${n.valor != null ? reais(n.valor) : "sem valor"}`).join(" · ")}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`;
+}
 function verNotasMes(x) {
   folha.innerHTML = `<h2>${esc(x.empresa)} · notas do mês</h2>
     <div style="display:flex;flex-direction:column;gap:8px">${x.ns.map((n) => `<div class="nota"><img data-foto="${esc(n.fotoId)}" alt="Nota"><div class="info"><b>${dataBR(n.data)} · ${n.valor != null ? reais(n.valor) : "sem valor"}</b>
-      <span class="suave">${n.conferido ? (n.conferido.ok ? "✓ conferida" : "✗ " + esc(PROBLEMAS[n.conferido.problema])) : "sem conferir"}</span></div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
+      ${itensNota(n)}<span class="suave">${n.conferido ? (n.conferido.ok ? "✓ conferida" : "✗ " + esc(PROBLEMAS[n.conferido.problema])) : "sem conferir"}</span></div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
     <button class="botao" id="n-x" style="text-align:center">Fechar</button>`;
   folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
   folha.querySelector("#n-x").onclick = () => { fundo.hidden = true; };
