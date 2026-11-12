@@ -237,7 +237,7 @@ async function folhaValor(empresa, arquivo) {
   catch { $("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; return; }
   // Leitura da nota pela IA: itens, total, número e dia da emissão. Se falhar, preenche à mão como antes.
   try {
-    var ia = await import("./js/ia.js?v=5");
+    var ia = await import("./js/ia.js?v=6");
     if (!ia.iaDisponivel) throw new Error("sem IA");
     const t0 = Date.now(); const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s${ia.etapa ? ` (${ia.etapa})` : ""}. Se demorar, pode preencher à mão e salvar.`; }, 1000);
     const r = await ia.lerComprovanteIA(foto, EMPRESAS).finally(() => clearInterval(rel));

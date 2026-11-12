@@ -13,6 +13,7 @@ export let etapa = ""; // onde parou (aparece na mensagem de erro, para achar o 
 
 export const iaDisponivel = !!firebaseConfig;
 
+const ehRede = (e) => /failed to fetch|load failed|network|connection/i.test(String(e?.message || ""));
 const comLimite = (promessa, ms, oque) => Promise.race([promessa, new Promise((_, falha) => setTimeout(() => falha(new Error(`demorou demais (${oque})`)), ms))]);
 
 async function gerar(partes, json = true) {
@@ -34,18 +35,27 @@ async function gerar(partes, json = true) {
   if (ac) { etapa = "proteção"; await comLimite(ac.mod.getToken(ac.inst), 20000, "proteção do site"); }
   let ultimoErro;
   const inicio = Date.now();
-  for (const nome of MODELOS) {
-    etapa = "lendo";
+  const tentativas = MODELOS.flatMap((nome) => [nome, nome]); // cada modelo tem 2 chances (a 2ª só se a internet falhou)
+  for (let k = 0; k < tentativas.length; k++) {
+    const nome = tentativas[k];
+    if (k % 2 === 1 && !ehRede(ultimoErro)) continue;
+    etapa = k % 2 ? "lendo de novo" : "lendo";
     try {
       const resta = LIMITE - (Date.now() - inicio);
       if (resta < 5000) break;
       const conf = json ? { responseMimeType: "application/json", temperature: 0 } : { temperature: 0.9 };
       conf.thinkingConfig = { thinkingLevel: "low" }; // responde mais rápido
       const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: conf }, { timeout: resta });
-      const r = await comLimite(m.generateContent(partes), resta, "resposta");
+      // Resposta "aos pouquinhos" (stream): a conexão não fica parada esperando, o que no iPhone às vezes derruba o envio.
+      const r = await comLimite(m.generateContentStream(partes).then((s) => s.response), resta, "resposta");
       etapa = "";
-      return json ? JSON.parse(r.response.text()) : r.response.text();
-    } catch (e) { ultimoErro = e; console.warn("IA", nome, e?.message); if (!/not found|404|no longer available|429|quota|RESOURCE_EXHAUSTED|503|overloaded|unavailable/i.test(String(e?.message))) break; }
+      return json ? JSON.parse(r.text()) : r.text();
+    } catch (e) {
+      ultimoErro = e; ultimoErro.segundos = Math.round((Date.now() - inicio) / 1000); console.warn("IA", nome, e?.message);
+      if (k % 2 === 0 && ehRede(e)) continue;
+      if (!/not found|404|no longer available|429|quota|RESOURCE_EXHAUSTED|503|overloaded|unavailable/i.test(String(e?.message))) break;
+      k += k % 2 ? 0 : 1; // erro do modelo: pula a 2ª chance e vai para o próximo
+    }
   }
   throw explicar(ultimoErro);
 }
@@ -61,7 +71,7 @@ function explicar(e) {
   else if (cod === "401" || /App Check/i.test(t)) frase = "a proteção do site não foi aceita";
   else if (cod === "404") frase = "modelo da IA não encontrado";
   else if (/failed to fetch|load failed|network|aborted/i.test(t)) frase = "a internet caiu ou ficou lenta no envio da foto";
-  const err = new Error(`${frase ? frase + " · " : ""}${t}`.slice(0, 220));
+  const err = new Error(`${frase ? frase + " · " : ""}${t}${e.segundos != null ? ` · ${e.segundos}s` : ""}`.slice(0, 220));
   err.codigo = cod; return err;
 }
 
