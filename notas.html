@@ -186,11 +186,11 @@ async function mostrar() {
       const b = document.createElement("button"); b.className = "foto-btn secundario"; b.style.alignSelf = "flex-start";
       b.textContent = "+ Anotar pedido do WhatsApp"; b.onclick = () => folhaPedido(nome, d); div.append(b);
     }
-    // Equipe lança a nota do dia; a Daiane também lança notas de dias anteriores (escolhendo o dia lá em cima).
+    // Equipe lança a nota do dia (só câmera); a Daiane também lança notas de dias anteriores e pode escolher foto da galeria.
     if (podeFoto && (d === hoje() || (eu.papel === "dona" && d < hoje()))) {
       const rot = document.createElement("label");
       rot.className = "foto-btn" + (minhas.length ? " secundario" : "");
-      rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" ${d === hoje() ? 'capture="environment"' : ""}>`;
+      rot.innerHTML = `${minhas.length ? "📷 Outra nota" : "📷 Foto da nota"}<input type="file" accept="image/*" ${d === hoje() && eu.papel !== "dona" ? 'capture="environment"' : ""}>`;
       rot.querySelector("input").onchange = (e) => e.target.files[0] && folhaValor(nome, e.target.files[0]);
       div.querySelector(".cab").append(rot);
     }
