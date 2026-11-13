@@ -256,7 +256,7 @@ async function folhaValor(empresa, arquivo) {
   // Leitura da nota: a IA do Google (melhor) e, ao mesmo tempo, a leitura no próprio celular (funciona sem internet boa).
   // Se a IA falhar ou demorar, usa o que o celular leu. Se nada der certo, preenche à mão como antes.
   const peloCelular = (async () => {
-    const m = await import("./js/lernota.js?v=3");
+    const m = await import("./js/lernota.js?v=4");
     const url = URL.createObjectURL(arquivo);
     try { return m.lerComprovanteGuappo(await m.lerTexto(await m.prepararCupom(url))); } finally { URL.revokeObjectURL(url); }
   })();
@@ -561,6 +561,8 @@ if (veMes) {
   };
 }
 mostrar();
+// Liga o leitor de notas do celular logo que a tela abre, para a primeira foto não esperar o download.
+if (podeFoto) setTimeout(() => import("./js/lernota.js?v=4").then((m) => m.aquecer()).catch(() => {}), 1500);
 </script>
 </body>
 </html>

@@ -3,21 +3,27 @@
 // Os arquivos ficam em vendor/ocr (só são baixados quando alguém usa a leitura).
 let worker = null;
 
-async function carregar(progresso) {
-  if (worker) return worker;
-  if (!window.Tesseract) {
-    await new Promise((ok, falha) => {
-      const s = document.createElement("script");
-      s.src = "vendor/ocr/tesseract.min.js"; s.onload = ok; s.onerror = falha;
-      document.head.append(s);
+function carregar(progresso) {
+  // Guarda a promessa: se a tela já está ligando o leitor (aquecer), a foto espera o mesmo, sem ligar outro.
+  worker ??= (async () => {
+    if (!window.Tesseract) {
+      await new Promise((ok, falha) => {
+        const s = document.createElement("script");
+        s.src = "vendor/ocr/tesseract.min.js"; s.onload = ok; s.onerror = falha;
+        document.head.append(s);
+      });
+    }
+    return window.Tesseract.createWorker("por", 1, {
+      workerPath: "vendor/ocr/worker.min.js", corePath: "vendor/ocr/", langPath: "vendor/ocr/lang", gzip: true,
+      logger: (m) => progresso?.(m.status, m.progress),
     });
-  }
-  worker = await window.Tesseract.createWorker("por", 1, {
-    workerPath: "vendor/ocr/worker.min.js", corePath: "vendor/ocr/", langPath: "vendor/ocr/lang", gzip: true,
-    logger: (m) => progresso?.(m.status, m.progress),
-  });
+  })();
+  worker.catch(() => { worker = null; });
   return worker;
 }
+
+// Deixa o leitor pronto antes da primeira foto (baixa e liga uns segundos antes, enquanto a pessoa abre a câmera).
+export function aquecer() { return carregar().catch(() => {}); }
 
 // Devolve o texto lido da imagem (dataURL ou arquivo).
 export async function lerTexto(imagem, progresso) {
@@ -91,7 +97,7 @@ export async function prepararCupom(dataUrl) {
   const m = 4; xa = Math.max(0, xa - m); ya = Math.max(0, ya - m); xb = Math.min(c0.width - 1, xb + m); yb = Math.min(c0.height - 1, yb + m);
   // 2) recorte em boa resolução (largura do papel ~1300 px)
   const sx = xa / e0, sy = ya / e0, sw = (xb - xa + 1) / e0, sh = (yb - ya + 1) / e0;
-  const esc = Math.min(2.5, 1300 / sw);
+  const esc = Math.min(2, 1100 / sw);
   c0.width = c0.height = 0; // libera a memória (no iPhone, canvas esquecido faz a próxima foto sair em branco)
   const c = document.createElement('canvas'); c.width = Math.round(sw * esc); c.height = Math.round(sh * esc);
   const x = c.getContext('2d'); x.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
