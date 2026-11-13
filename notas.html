@@ -264,12 +264,20 @@ async function folhaValor(empresa, arquivo) {
   let r = null, motivo = "", doCelular = false, ia = null;
   const t0 = Date.now();
   const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s${ia?.etapa ? ` (${ia.etapa})` : ""}. Se demorar, pode preencher à mão e salvar.`; }, 1000);
-  try {
+  // Quem terminar primeiro com uma leitura boa ganha: não espera a IA se o celular já leu o comprovante certinho.
+  const bomCelular = (o) => o && o.total > 0 && (o.confere || o.numero);
+  const daIA = (async () => {
     ia = await import("./js/ia.js?v=6");
     if (!ia.iaDisponivel) throw new Error("sem IA");
-    r = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 45s")), 45000))]);
-    if (!r.itens.length && !r.total) { motivo = "a IA não achou os itens"; r = null; }
-  } catch (err) { console.error(err); motivo = String(err?.message || err).slice(0, 220); }
+    const x = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 25s")), 25000))]);
+    if (!x.itens.length && !x.total) throw new Error("a IA não achou os itens");
+    return x;
+  })();
+  daIA.catch(() => {});
+  const celularBom = peloCelular.then((o) => (bomCelular(o) ? o : new Promise(() => {})), () => new Promise(() => {}));
+  const primeiro = await Promise.race([daIA.then((x) => ({ x, de: "ia" }), (e) => ({ erro: e })), celularBom.then((x) => ({ x, de: "celular" }))]);
+  if (primeiro.x) { r = primeiro.de === "celular" ? { ...primeiro.x, escrito: "", empresa: "" } : primeiro.x; doCelular = primeiro.de === "celular"; motivo = primeiro.de === "celular" ? "o celular leu antes da IA" : ""; }
+  else { console.error(primeiro.erro); motivo = String(primeiro.erro?.message || primeiro.erro).slice(0, 220); }
   if (!r) {
     const o = await peloCelular.catch((e) => { console.error(e); motivo += ` · celular: ${String(e?.message || e).slice(0, 80)}`; return null; });
     if (o) motivo += ` · celular achou ${o.itens.length} item(ns), total ${o.total > 0 ? "sim" : "não"}, número ${o.numero ? "sim" : "não"}, soma ${o.confere ? "bate" : "não bate"}`;
