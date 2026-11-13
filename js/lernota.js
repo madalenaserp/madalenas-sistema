@@ -22,8 +22,14 @@ async function carregar(progresso) {
 // Devolve o texto lido da imagem (dataURL ou arquivo).
 export async function lerTexto(imagem, progresso) {
   const w = await carregar(progresso);
-  const { data } = await w.recognize(imagem);
-  return data.text || "";
+  try {
+    const { data } = await Promise.race([w.recognize(imagem), new Promise((_, n) => setTimeout(() => n(new Error("a leitura no celular demorou demais")), 60000))]);
+    return data.text || "";
+  } catch (e) {
+    // Se o leitor travou (falta de memória no celular), joga fora e começa um novo na próxima foto.
+    worker = null; Promise.resolve().then(() => w.terminate()).catch(() => {});
+    throw e;
+  }
 }
 
 const sem = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -86,6 +92,7 @@ export async function prepararCupom(dataUrl) {
   // 2) recorte em boa resolução (largura do papel ~1300 px)
   const sx = xa / e0, sy = ya / e0, sw = (xb - xa + 1) / e0, sh = (yb - ya + 1) / e0;
   const esc = Math.min(2.5, 1300 / sw);
+  c0.width = c0.height = 0; // libera a memória (no iPhone, canvas esquecido faz a próxima foto sair em branco)
   const c = document.createElement('canvas'); c.width = Math.round(sw * esc); c.height = Math.round(sh * esc);
   const x = c.getContext('2d'); x.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
   const img = x.getImageData(0, 0, c.width, c.height), d = img.data;
@@ -94,7 +101,9 @@ export async function prepararCupom(dataUrl) {
   const gs = Array.from(g).sort((a, b) => a - b); const lo = gs[Math.floor(gs.length * 0.02)], hi = gs[Math.floor(gs.length * 0.9)];
   for (let i = 0, k = 0; i < d.length; i += 4, k++) { const v = Math.max(0, Math.min(255, ((g[k] - lo) / Math.max(1, hi - lo)) * 255)); d[i] = d[i + 1] = d[i + 2] = v; }
   x.putImageData(img, 0, 0);
-  return c.toDataURL('image/png');
+  const url = c.toDataURL('image/png');
+  c.width = c.height = 0; im.src = "";
+  return url;
 }
 
 // Comprovante de VENDA do Guappo (notas das empresas), a partir do texto lido no celular.

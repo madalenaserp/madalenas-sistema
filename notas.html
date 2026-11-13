@@ -126,6 +126,7 @@ function reduzir(arquivo) {
         c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
         url = c.toDataURL("image/jpeg", qualidade);
+        c.width = c.height = 0; // libera a memória já (o iPhone tem limite e a próxima foto sairia em branco)
         lado -= 200; qualidade -= 0.05;
       } while (url.length > 700000 && lado > 500);
       URL.revokeObjectURL(img.src);
@@ -240,7 +241,7 @@ async function folhaValor(empresa, arquivo) {
   // Leitura da nota: a IA do Google (melhor) e, ao mesmo tempo, a leitura no próprio celular (funciona sem internet boa).
   // Se a IA falhar ou demorar, usa o que o celular leu. Se nada der certo, preenche à mão como antes.
   const peloCelular = (async () => {
-    const m = await import("./js/lernota.js?v=2");
+    const m = await import("./js/lernota.js?v=3");
     const url = URL.createObjectURL(arquivo);
     try { return m.lerComprovanteGuappo(await m.lerTexto(await m.prepararCupom(url))); } finally { URL.revokeObjectURL(url); }
   })();
@@ -255,11 +256,14 @@ async function folhaValor(empresa, arquivo) {
     if (!r.itens.length && !r.total) { motivo = "a IA não achou os itens"; r = null; }
   } catch (err) { console.error(err); motivo = String(err?.message || err).slice(0, 220); }
   if (!r) {
-    const o = await peloCelular.catch((e) => { console.error(e); return null; });
+    const o = await peloCelular.catch((e) => { console.error(e); motivo += ` · celular: ${String(e?.message || e).slice(0, 80)}`; return null; });
     if (o && (o.itens.length || o.total)) { r = { ...o, escrito: "", empresa: "" }; doCelular = true; }
+    else if (o) motivo += " · o celular não achou o valor nas letras da foto";
   }
   clearInterval(rel);
   if (!document.body.contains($("#v-ok"))) return; // fechou a tela
+  // Avisa o monitor de erros (Sentry) como foi a leitura, sem foto nem valores: só o motivo e o tempo.
+  try { if (!r || doCelular) window.Sentry?.captureMessage(`Leitura da nota: ${r ? "lida pelo celular" : "não leu"} · ${motivo} · ${Math.round((Date.now() - t0) / 1000)}s`, r ? "warning" : "error"); } catch {}
   if (!r) {
     const p = $("#v-prep"); p.style.overflowWrap = "anywhere";
     p.textContent = `Não consegui ler a nota sozinho${motivo ? ` (${motivo})` : ""}. Coloque o valor à mão. Dica: foto de perto, com a nota reta e ocupando a tela.`;
