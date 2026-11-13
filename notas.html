@@ -251,29 +251,50 @@ async function folhaValor(empresa, arquivo) {
         <button type="button" data-tira="${k}" style="border:1px solid var(--linha);background:#fff;border-radius:6px;width:30px;height:30px">✕</button></div>`).join("")}</div>` : "";
     $("#v-itens").querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.tira, 1); desenharItens(); }));
   };
+  // O botão Salvar funciona desde o começo: dá para digitar o valor e salvar sem esperar a leitura terminar.
+  let salvou = false;
+  const meuOk = $("#v-ok");
+  const viva = () => meuOk.isConnected && !salvou && !fundo.hidden;
+  $("#v-ok").onclick = async (e) => {
+    const valor = numero($("#v-valor").value);
+    if (!foto) return ($("#v-e").textContent = "A foto não carregou.");
+    if (!(valor > 0)) return ($("#v-e").textContent = "Coloque o valor da nota.");
+    if (d > hoje()) return ($("#v-e").textContent = "O dia não pode ser depois de hoje.");
+    e.target.disabled = true;
+    try {
+      const base = { empresa, data: d, ...(d < hoje() ? { lancadaDepois: true } : {}), mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+      const fotoId = await acrescentar("notas_fotos", { ...base, foto });
+      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: $("#v-num").value.trim(), itens });
+      salvou = true; fundo.hidden = true;
+      if (d !== campoDia.value) { campoDia.value = d; }
+      mostrar();
+    } catch { $("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+  };
   try { foto = await reduzir(arquivo); const i = $("#v-img"); i.src = foto; i.hidden = false; }
   catch { $("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; return; }
-  // Leitura da nota: a IA do Google (melhor) e, ao mesmo tempo, a leitura no próprio celular (funciona sem internet boa).
-  // Se a IA falhar ou demorar, usa o que o celular leu. Se nada der certo, preenche à mão como antes.
-  const peloCelular = (async () => {
-    const m = await import("./js/lernota.js?v=4");
-    const url = URL.createObjectURL(arquivo);
-    try { return m.lerComprovanteGuappo(await m.lerTexto(await m.prepararCupom(url))); } finally { URL.revokeObjectURL(url); }
-  })();
-  peloCelular.catch(() => {});
+  // Primeiro a IA (rápida com o plano pago). A leitura do celular, que pesa no aparelho, só começa se a IA falhar ou passar de 8s.
   let r = null, motivo = "", doCelular = false, ia = null;
   const t0 = Date.now();
-  const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s${ia?.etapa ? ` (${ia.etapa})` : ""}. Se demorar, pode preencher à mão e salvar.`; }, 1000);
-  // Quem terminar primeiro com uma leitura boa ganha: não espera a IA se o celular já leu o comprovante certinho.
-  const bomCelular = (o) => o && o.total > 0 && (o.confere || o.numero);
+  const rel = setInterval(() => { const p = $("#v-prep"); if (p && viva()) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s. Se quiser, já pode digitar o valor e salvar, sem esperar.`; }, 1000);
+  let iaLeu = false;
   const daIA = (async () => {
     ia = await import("./js/ia.js?v=6");
     if (!ia.iaDisponivel) throw new Error("sem IA");
     const x = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 25s")), 25000))]);
     if (!x.itens.length && !x.total) throw new Error("a IA não achou os itens");
+    iaLeu = true;
     return x;
   })();
   daIA.catch(() => {});
+  const portao = Promise.race([daIA.then(() => new Promise(() => {}), () => {}), new Promise((ok) => setTimeout(ok, 8000))]);
+  const peloCelular = portao.then(async () => {
+    if (iaLeu || !viva()) return null;
+    const m = await import("./js/lernota.js?v=4");
+    const url = URL.createObjectURL(arquivo);
+    try { return m.lerComprovanteGuappo(await m.lerTexto(await m.prepararCupom(url))); } finally { URL.revokeObjectURL(url); }
+  });
+  peloCelular.catch(() => {});
+  const bomCelular = (o) => o && o.total > 0 && (o.confere || o.numero);
   const celularBom = peloCelular.then((o) => (bomCelular(o) ? o : new Promise(() => {})), () => new Promise(() => {}));
   const primeiro = await Promise.race([daIA.then((x) => ({ x, de: "ia" }), (e) => ({ erro: e })), celularBom.then((x) => ({ x, de: "celular" }))]);
   if (primeiro.x) { r = primeiro.de === "celular" ? { ...primeiro.x, escrito: "", empresa: "" } : primeiro.x; doCelular = primeiro.de === "celular"; motivo = primeiro.de === "celular" ? "o celular leu antes da IA" : ""; }
@@ -285,8 +306,9 @@ async function folhaValor(empresa, arquivo) {
     else if (o) motivo += " · o celular não achou o valor nas letras da foto";
   }
   clearInterval(rel);
-  if (!document.body.contains($("#v-ok"))) return; // fechou a tela
+  if (!viva()) return; // já salvou à mão, fechou ou abriu outra nota
   // Avisa o monitor de erros (Sentry) como foi a leitura, sem foto nem valores: só o motivo e o tempo.
+  try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
   try { if (!r || doCelular) window.Sentry?.captureMessage(`Leitura da nota: ${r ? "lida pelo celular" : "não leu"} · ${motivo} · ${Math.round((Date.now() - t0) / 1000)}s`, r ? "warning" : "error"); } catch {}
   if (!r) {
     const p = $("#v-prep"); p.style.overflowWrap = "anywhere";
@@ -305,21 +327,6 @@ async function folhaValor(empresa, arquivo) {
     if (avisos.length) { $("#v-aviso").innerHTML = avisos.join("<br>"); $("#v-aviso").hidden = false; }
     $("#v-prep").textContent = doCelular ? "Li a nota pelo celular. Confira os itens, o valor e o número antes de salvar." : itens.length ? "Li a nota. Confira os itens e o valor." : "Não consegui ler os itens. Confira o valor.";
   }
-  $("#v-ok").onclick = async (e) => {
-    const valor = numero($("#v-valor").value);
-    if (!foto) return ($("#v-e").textContent = "A foto não carregou.");
-    if (!(valor > 0)) return ($("#v-e").textContent = "Coloque o valor da nota.");
-    if (d > hoje()) return ($("#v-e").textContent = "O dia não pode ser depois de hoje.");
-    e.target.disabled = true;
-    try {
-      const base = { empresa, data: d, ...(d < hoje() ? { lancadaDepois: true } : {}), mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
-      const fotoId = await acrescentar("notas_fotos", { ...base, foto });
-      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: $("#v-num").value.trim(), itens });
-      fundo.hidden = true;
-      if (d !== campoDia.value) { campoDia.value = d; }
-      mostrar();
-    } catch { $("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
-  };
 }
 
 // Pedido do WhatsApp: anotado na noite anterior; de manhã quem separa confere e marca.
