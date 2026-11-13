@@ -12,7 +12,7 @@ export const CARDAPIO = [
     ["Coxinha de frango", 9.5], ["Coxinha de frango + Guaraná", 10], ["Coxinha frango com requeijão", 9.5], ["Coxinha frango com requeijão + Guaraná", 10],
     ["Coxinha frango com bacon", 9.5], ["Coxinha frango com bacon + Guaraná", 10], ["Coxinha de carne seca", 11], ["Coxinha de camarão", 11], ["Coxinha de costela", 11],
   ] },
-  { grupo: "Sucos naturais", itens: [["Suco de laranja", 7], ["Suco de abacaxi", 7], ["Suco de abacaxi com hortelã", 7.5], ["Suco de maracujá", 7.5], ["Limonada", 7], ["Suco de manga", 8], ["Suco de morango", 8.5], ["Suco de morango com laranja", 9]] },
+  { grupo: "Sucos naturais", itens: [["Suco de laranja", 7], ["Suco de abacaxi", 7], ["Suco de abacaxi com hortelã", 7.5], ["Suco de maracujá", 7.5], ["Limonada", 7], ["Suco de manga", 8], ["Suco de morango", 8.5], ["Suco de morango com laranja", 9], ["Morango ao leite", 8.5]] },
   { grupo: "Cafés e chocolate", itens: [["Pingado", 5], ["Café expresso", 5], ["Café em grãos", 7], ["Café coado", 4], ["Cappuccino", 8], ["Chocolate quente", 8]] },
 ].map((g) => ({ grupo: g.grupo, itens: g.itens.map(([nome, preco]) => ({ nome, preco })) }));
 
