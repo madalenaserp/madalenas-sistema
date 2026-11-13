@@ -114,6 +114,21 @@ function montar(registros, tipo = "nota") {
 const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
 
+// Versão menor da foto só para mandar à IA (envio mais rápido em internet fraca; o texto do cupom continua legível).
+function menorParaIA(dataUrl) {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => {
+      const e = Math.min(1, 1100 / Math.max(img.width, img.height));
+      if (e === 1) return ok(dataUrl);
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * e); c.height = Math.round(img.height * e);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL("image/jpeg", 0.75); c.width = c.height = 0; ok(url);
+    };
+    img.onerror = () => ok(dataUrl);
+    img.src = dataUrl;
+  });
+}
 // Reduz a foto para caber no banco (cerca de 150 KB) sem perder a leitura do número e da assinatura.
 function reduzir(arquivo) {
   return new Promise((ok, falha) => {
@@ -252,11 +267,12 @@ async function folhaValor(empresa, arquivo) {
   try {
     ia = await import("./js/ia.js?v=6");
     if (!ia.iaDisponivel) throw new Error("sem IA");
-    r = await Promise.race([ia.lerComprovanteIA(foto, EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 45s")), 45000))]);
+    r = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 45s")), 45000))]);
     if (!r.itens.length && !r.total) { motivo = "a IA não achou os itens"; r = null; }
   } catch (err) { console.error(err); motivo = String(err?.message || err).slice(0, 220); }
   if (!r) {
     const o = await peloCelular.catch((e) => { console.error(e); motivo += ` · celular: ${String(e?.message || e).slice(0, 80)}`; return null; });
+    if (o) motivo += ` · celular achou ${o.itens.length} item(ns), total ${o.total > 0 ? "sim" : "não"}, número ${o.numero ? "sim" : "não"}, soma ${o.confere ? "bate" : "não bate"}`;
     if (o && (o.itens.length || o.total)) { r = { ...o, escrito: "", empresa: "" }; doCelular = true; }
     else if (o) motivo += " · o celular não achou o valor nas letras da foto";
   }
