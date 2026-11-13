@@ -64,3 +64,64 @@ export function palpiteInsumo(descricao, insumos) {
   }
   return nota >= 0.5 ? melhor : "";
 }
+
+// Preparo da foto da nota para o OCR: acha o papel (parte clara), recorta, deixa em tons de cinza com contraste.
+export async function prepararCupom(dataUrl) {
+  const im = new Image(); im.src = dataUrl; await im.decode();
+  // 1) versão pequena para achar o papel
+  const W = 300, e0 = W / Math.max(im.width, im.height);
+  const c0 = document.createElement('canvas'); c0.width = Math.round(im.width * e0); c0.height = Math.round(im.height * e0);
+  const x0 = c0.getContext('2d'); x0.drawImage(im, 0, 0, c0.width, c0.height);
+  const d0 = x0.getImageData(0, 0, c0.width, c0.height).data;
+  const lum = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+  const claro = [];
+  for (let i = 0; i < d0.length; i += 4) claro.push(lum(d0, i));
+  const ord = [...claro].sort((a, b) => a - b); const lim = Math.max(150, ord[Math.floor(ord.length * 0.6)]);
+  const cols = new Array(c0.width).fill(0), rows = new Array(c0.height).fill(0);
+  for (let y = 0; y < c0.height; y++) for (let x = 0; x < c0.width; x++) if (claro[y * c0.width + x] >= lim) { cols[x]++; rows[y]++; }
+  const faixa = (arr, tot) => { const min = tot * 0.25; let a = arr.findIndex((v) => v >= min), b = arr.length - 1 - [...arr].reverse().findIndex((v) => v >= min); return a < 0 ? [0, arr.length - 1] : [a, b]; };
+  let [xa, xb] = faixa(cols, c0.height * 0.5), [ya, yb] = faixa(rows, c0.width * 0.3);
+  if ((xb - xa) < c0.width * 0.2 || (yb - ya) < c0.height * 0.2) { xa = 0; ya = 0; xb = c0.width - 1; yb = c0.height - 1; }
+  const m = 4; xa = Math.max(0, xa - m); ya = Math.max(0, ya - m); xb = Math.min(c0.width - 1, xb + m); yb = Math.min(c0.height - 1, yb + m);
+  // 2) recorte em boa resolução (largura do papel ~1300 px)
+  const sx = xa / e0, sy = ya / e0, sw = (xb - xa + 1) / e0, sh = (yb - ya + 1) / e0;
+  const esc = Math.min(2.5, 1300 / sw);
+  const c = document.createElement('canvas'); c.width = Math.round(sw * esc); c.height = Math.round(sh * esc);
+  const x = c.getContext('2d'); x.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const img = x.getImageData(0, 0, c.width, c.height), d = img.data;
+  const g = new Float32Array(c.width * c.height);
+  for (let i = 0, k = 0; i < d.length; i += 4, k++) g[k] = lum(d, i);
+  const gs = Array.from(g).sort((a, b) => a - b); const lo = gs[Math.floor(gs.length * 0.02)], hi = gs[Math.floor(gs.length * 0.9)];
+  for (let i = 0, k = 0; i < d.length; i += 4, k++) { const v = Math.max(0, Math.min(255, ((g[k] - lo) / Math.max(1, hi - lo)) * 255)); d[i] = d[i + 1] = d[i + 2] = v; }
+  x.putImageData(img, 0, 0);
+  return c.toDataURL('image/png');
+}
+
+// Comprovante de VENDA do Guappo (notas das empresas), a partir do texto lido no celular.
+// Formato: "001 173 BOLO PISCINA ESPECIAL" e na linha de baixo "1,000 UN 28,00 28,00"; depois "VALOR TOTAL R$ 34,00", "Numero: 244836", "Emissão: 01/11/2026".
+export function lerComprovanteGuappo(texto) {
+  const linhas = String(texto).split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const dinheiro = (l) => [...l.replace(/(\d,\d)[OoC€]/g, "$10").replace(/(\d),[OoC€](\d)/g, "$1,0$2").matchAll(/\d{1,3}(?:\.\d{3})*,\d{2}\b/g)].map((m) => num(m[0]));
+  const itens = [];
+  linhas.forEach((l, k) => {
+    const q = l.match(/(\d{1,4}[.,]\d{3})\s*(UN|KG|CX|PC|LT)\b(.*)$/i);
+    if (!q) return;
+    const qtd = num(q[1].replace(".", ",")), vals = dinheiro(q[3]);
+    if (!(qtd > 0) || !vals.length) return;
+    const total = vals.at(-1), preco = vals.length >= 2 ? vals.at(-2) : Math.round((total / qtd) * 100) / 100;
+    // descrição: a linha de cima que tem "001 173 NOME" (às vezes o OCR põe uma linha de sujeira no meio)
+    const cand = [linhas[k - 1], linhas[k - 2]].filter(Boolean);
+    const ant = cand.find((c) => /\b\d{3}\s+\d{1,14}\s+[A-ZÀ-Ü]{2}/.test(c)) || cand[0] || "";
+    const md = ant.match(/\b\d{3}\s+(?:\d{1,14}\s+)?([A-ZÀ-Ü].*)$/);
+    const descricao = (md ? md[1] : ant).replace(/[^A-Za-zÀ-ÿ0-9 +%/.,-]/g, "").replace(/\s+/g, " ").trim();
+    itens.push({ descricao: descricao || "Item", qtd, preco, total });
+  });
+  const achaValor = (re) => { const k = linhas.findIndex((l) => re.test(sem(l))); if (k < 0) return 0; const v = dinheiro(linhas[k]); if (v.length) return v.at(-1); const v2 = dinheiro(linhas[k + 1] || ""); return v2.length ? v2.at(-1) : 0; };
+  const soma = Math.round(itens.reduce((t, i) => t + i.total, 0) * 100) / 100;
+  const total = achaValor(/valor total/) || achaValor(/crediario/) || soma;
+  const n = linhas.map((l) => sem(l).match(/numero:?\s*([0-9oc€]{5,8})/)).find(Boolean);
+  const numero = n ? n[1].replace(/[o]/g, "0").replace(/\D/g, "") : "";
+  const e = linhas.map((l) => sem(l).match(/emiss\w*:?\s*(\d{2})\D{0,2}(\d{2})\D{0,2}(\d{4})/)).find(Boolean);
+  const emissao = e ? `${e[3]}-${e[2]}-${e[1]}` : "";
+  return { itens, total, numero, emissao: /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(emissao) ? emissao : "", confere: itens.length > 0 && Math.abs(soma - total) < 0.02 };
+}

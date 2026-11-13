@@ -237,13 +237,33 @@ async function folhaValor(empresa, arquivo) {
   };
   try { foto = await reduzir(arquivo); const i = $("#v-img"); i.src = foto; i.hidden = false; }
   catch { $("#v-prep").textContent = "Não consegui ler a foto. Feche e tente de novo."; return; }
-  // Leitura da nota pela IA: itens, total, número e dia da emissão. Se falhar, preenche à mão como antes.
+  // Leitura da nota: a IA do Google (melhor) e, ao mesmo tempo, a leitura no próprio celular (funciona sem internet boa).
+  // Se a IA falhar ou demorar, usa o que o celular leu. Se nada der certo, preenche à mão como antes.
+  const peloCelular = (async () => {
+    const m = await import("./js/lernota.js?v=2");
+    const url = URL.createObjectURL(arquivo);
+    try { return m.lerComprovanteGuappo(await m.lerTexto(await m.prepararCupom(url))); } finally { URL.revokeObjectURL(url); }
+  })();
+  peloCelular.catch(() => {});
+  let r = null, motivo = "", doCelular = false, ia = null;
+  const t0 = Date.now();
+  const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s${ia?.etapa ? ` (${ia.etapa})` : ""}. Se demorar, pode preencher à mão e salvar.`; }, 1000);
   try {
-    var ia = await import("./js/ia.js?v=6");
+    ia = await import("./js/ia.js?v=6");
     if (!ia.iaDisponivel) throw new Error("sem IA");
-    const t0 = Date.now(); const rel = setInterval(() => { const p = $("#v-prep"); if (p) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s${ia.etapa ? ` (${ia.etapa})` : ""}. Se demorar, pode preencher à mão e salvar.`; }, 1000);
-    const r = await ia.lerComprovanteIA(foto, EMPRESAS).finally(() => clearInterval(rel));
-    if (!document.body.contains($("#v-ok"))) return; // fechou a tela
+    r = await Promise.race([ia.lerComprovanteIA(foto, EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 45s")), 45000))]);
+    if (!r.itens.length && !r.total) { motivo = "a IA não achou os itens"; r = null; }
+  } catch (err) { console.error(err); motivo = String(err?.message || err).slice(0, 220); }
+  if (!r) {
+    const o = await peloCelular.catch((e) => { console.error(e); return null; });
+    if (o && (o.itens.length || o.total)) { r = { ...o, escrito: "", empresa: "" }; doCelular = true; }
+  }
+  clearInterval(rel);
+  if (!document.body.contains($("#v-ok"))) return; // fechou a tela
+  if (!r) {
+    const p = $("#v-prep"); p.style.overflowWrap = "anywhere";
+    p.textContent = `Não consegui ler a nota sozinho${motivo ? ` (${motivo})` : ""}. Coloque o valor à mão. Dica: foto de perto, com a nota reta e ocupando a tela.`;
+  } else {
     itens = r.itens; desenharItens();
     if (r.total > 0 && !$("#v-valor").value) $("#v-valor").value = r.total.toFixed(2).replace(".", ",");
     if (r.numero && !$("#v-num").value) $("#v-num").value = r.numero;
@@ -253,9 +273,10 @@ async function folhaValor(empresa, arquivo) {
       else avisos.push(`A nota diz emissão em <b>${dataBR(r.emissao)}</b>. Confira se é a nota certa.`);
     }
     if (r.empresa && r.empresa !== empresa) avisos.push(`No papel está escrito "${esc(r.escrito)}". Parece ser da <b>${esc(r.empresa)}</b>, não da ${esc(empresa)}. Confira antes de salvar.`);
+    if (doCelular && r.itens.length && !r.confere) avisos.push("A soma dos itens não bateu com o total: confira o valor com a nota.");
     if (avisos.length) { $("#v-aviso").innerHTML = avisos.join("<br>"); $("#v-aviso").hidden = false; }
-    $("#v-prep").textContent = itens.length ? "Li a nota. Confira os itens e o valor." : "Não consegui ler os itens. Coloque o valor à mão.";
-  } catch (err) { console.error(err); const p = $("#v-prep"); if (p) { p.style.overflowWrap = "anywhere"; p.textContent = `Não consegui ler a nota sozinho (${String(err?.message || err).slice(0, 220)}). Coloque o valor à mão.`; } }
+    $("#v-prep").textContent = doCelular ? "Li a nota pelo celular. Confira os itens, o valor e o número antes de salvar." : itens.length ? "Li a nota. Confira os itens e o valor." : "Não consegui ler os itens. Confira o valor.";
+  }
   $("#v-ok").onclick = async (e) => {
     const valor = numero($("#v-valor").value);
     if (!foto) return ($("#v-e").textContent = "A foto não carregou.");
