@@ -110,8 +110,10 @@ function montar(registros) {
   return registros.filter((r) => r.tipo === "encomenda").map((e) => {
     const meus = eventos.filter((r) => r.refId === e.id);
     const ultimoStatus = meus.filter((r) => r.tipo === "status").at(-1);
+    const novaHora = meus.filter((r) => r.tipo === "hora").at(-1); // horário mudado depois (fica o histórico)
     return {
       ...e,
+      ...(novaHora ? { horaEntrega: novaHora.horaEntrega, horaAntes: e.horaEntrega, horaPor: novaHora.registradoPor } : {}),
       status: ultimoStatus?.para || "anotada",
       motivo: ultimoStatus?.motivo,
       statusPor: ultimoStatus?.registradoPor,
@@ -180,6 +182,7 @@ function cartao(e) {
   div.innerHTML = `
     <div class="topo"><span><b>${esc(e.cliente)}</b>${e.telefone ? ` <a class="suave" href="tel:${esc(e.telefone)}">${esc(e.telefone)}</a>` : ""}</span>
       <span class="hora">${esc(e.horaEntrega || "")}</span></div>
+    ${e.horaAntes ? `<div class="suave" style="font-size:13px">Horário mudado de ${esc(e.horaAntes)} para ${esc(e.horaEntrega)} por ${esc(e.horaPor)}</div>` : ""}
     <div class="pedido">${itensEmHtml(e)}</div>
     <div><span class="selo ${e.status === "entregue" ? "ok" : e.status === "cancelada" ? "pendente" : e.status === "anotada" ? "pendente" : e.status}" style="margin-left:0">${ROTULO[e.status]}${e.statusPor ? ` · ${esc(e.statusPor)}` : ""}</span>
       ${e.unidade ? `<span class="selo pendente">${esc(e.unidade)}</span>` : ""}
@@ -195,11 +198,22 @@ function cartao(e) {
     if (m && !jaConferida(e, m)) acoes.append(botao(`Conferi (${m === "vespera" ? "véspera" : "abertura"})`, "conferir", () => registrar(e, { tipo: "conferida", momento: m })));
     acoes.append(botao(PROXIMA[e.status], "avancar", () => registrar(e, { tipo: "status", para: ETAPAS[ETAPAS.indexOf(e.status) + 1] })));
     acoes.append(botao("🖨 Imprimir", "", () => imprimir([e])));
+    acoes.append(botao("🕘 Mudar horário", "", () => {
+      const h = prompt(`Novo horário da encomenda de ${e.cliente} (ex.: 09:00)`, e.horaEntrega || "");
+      if (h === null) return;
+      const m = h.trim().match(/^(\d{1,2})(?:[:h.](\d{2}))?h?$/i);
+      if (!m || +m[1] > 23 || +(m[2] || 0) > 59) return alert("Horário inválido. Escreva assim: 09:00");
+      return registrar(e, { tipo: "hora", horaEntrega: `${m[1].padStart(2, "0")}:${m[2] || "00"}` });
+    }));
     if (podeCancelar) acoes.append(botao("Cancelar", "", () => {
       const motivo = prompt(`Por que cancelar a encomenda de ${e.cliente}?`);
       if (motivo?.trim()) registrar(e, { tipo: "status", para: "cancelada", motivo: motivo.trim() });
     }));
   }
+  // Cancelada por engano: a Daiane e as líderes podem trazer de volta (fica registrado quem fez).
+  if (e.status === "cancelada" && ["dona", "lider"].includes(eu.papel)) acoes.append(botao("↩ Reativar encomenda", "avancar", () => {
+    if (confirm(`Trazer de volta a encomenda de ${e.cliente}?`)) return registrar(e, { tipo: "status", para: "anotada" });
+  }));
   return div;
 }
 

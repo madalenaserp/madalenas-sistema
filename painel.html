@@ -53,7 +53,8 @@ async function mostrar() {
   const encBruto = await listarEntre("encomendas", "dataEntrega", campoDia.value, diaSeguinte);
   const encs = encBruto.filter((r) => r.tipo === "encomenda").map((e) => {
     const ev = encBruto.filter((r) => r.refId === e.id).sort((x, y) => (x.criadoEm || "").localeCompare(y.criadoEm || ""));
-    return { ...e, status: ev.filter((r) => r.tipo === "status").at(-1)?.para || "anotada", conf: ev.filter((r) => r.tipo === "conferida").map((r) => r.momento) };
+    const h = ev.filter((r) => r.tipo === "hora").at(-1);
+    return { ...e, ...(h ? { horaEntrega: h.horaEntrega } : {}), status: ev.filter((r) => r.tipo === "status").at(-1)?.para || "anotada", conf: ev.filter((r) => r.tipo === "conferida").map((r) => r.momento) };
   }).filter((e) => e.status !== "cancelada");
   const ETAPA = { anotada: "anotada", producao: "em produção", pronta: "pronta", entregue: "entregue" };
   const encDia = encs.filter((e) => e.dataEntrega === campoDia.value).sort((x, y) => (x.horaEntrega || "").localeCompare(y.horaEntrega || ""))

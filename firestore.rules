@@ -281,6 +281,10 @@ service cloud.firestore {
       allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
            request.resource.data.tipo in ["encomenda", "conferida", "visto"]
         || (request.resource.data.tipo == "status" && request.resource.data.para in ["producao", "pronta", "entregue"])
+        // Mudar o horário (registro novo; o horário antigo fica no histórico).
+        || (request.resource.data.tipo == "hora" && request.resource.data.horaEntrega is string && request.resource.data.horaEntrega.matches("^[0-2][0-9]:[0-5][0-9]$"))
+        // Reativar uma encomenda cancelada por engano: só a Daiane e as líderes (13/11/2026).
+        || (request.resource.data.tipo == "status" && request.resource.data.para == "anotada" && papel(["dona", "lider"]))
         // Cancelar: toda a equipe pode (Daiane, 09/11/2026), sempre com o motivo.
         || (request.resource.data.tipo == "status" && request.resource.data.para == "cancelada"
             && request.resource.data.motivo is string && request.resource.data.motivo.size() > 0));
