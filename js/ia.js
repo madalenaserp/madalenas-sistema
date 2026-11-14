@@ -6,7 +6,15 @@ const { firebaseConfig } = cfg;
 const appCheck = cfg.appCheck || null; // { tipo: "enterprise" | "v3", chave: "..." } em config.js
 
 const V = "https://www.gstatic.com/firebasejs/12.0.0";
-const MODELOS = ["gemini-3.8-flash", "gemini-flash-latest"]; // o segundo só se o primeiro não existir mais
+// Do mais rápido para o mais forte. Cada um tem no máximo POR_MODELO ms; se travar ou der erro, tenta o próximo.
+// "lite" sem raciocínio responde em poucos segundos e lê bem cupom impresso.
+const MODELOS = [
+  { nome: "gemini-flash-lite-latest", pensar: null },
+  { nome: "gemini-flash-latest", pensar: { thinkingBudget: 0 } },
+  { nome: "gemini-3.8-flash", pensar: { thinkingLevel: "low" } },
+];
+const POR_MODELO = 14000;
+export let modeloUsado = "";
 const LIMITE = 100000; // tempo máximo de espera (ms); depois disso desiste e avisa
 let base = null;
 export let etapa = ""; // onde parou (aparece na mensagem de erro, para achar o problema)
@@ -35,28 +43,27 @@ async function gerar(partes, json = true) {
   if (ac) { etapa = "proteção"; await comLimite(ac.mod.getToken(ac.inst), 20000, "proteção do site"); }
   let ultimoErro;
   const inicio = Date.now();
-  const tentativas = MODELOS.flatMap((nome) => [nome, nome]); // cada modelo tem 2 chances (a 2ª só se a internet falhou)
-  for (let k = 0; k < tentativas.length; k++) {
-    const nome = tentativas[k];
-    if (k % 2 === 1 && !ehRede(ultimoErro)) continue;
-    etapa = k % 2 ? "lendo de novo" : "lendo";
+  const erros = [];
+  for (const { nome, pensar } of MODELOS) {
+    const resta = LIMITE - (Date.now() - inicio);
+    if (resta < 4000) break;
+    etapa = `lendo (${nome})`;
+    const t1 = Date.now();
     try {
-      const resta = LIMITE - (Date.now() - inicio);
-      if (resta < 5000) break;
       const conf = json ? { responseMimeType: "application/json", temperature: 0 } : { temperature: 0.9 };
-      conf.thinkingConfig = { thinkingLevel: "low" }; // responde mais rápido
-      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: conf }, { timeout: resta });
-      // Resposta "aos pouquinhos" (stream): a conexão não fica parada esperando, o que no iPhone às vezes derruba o envio.
-      const r = await comLimite(m.generateContentStream(partes).then((s) => s.response), resta, "resposta");
-      etapa = "";
-      return json ? JSON.parse(r.text()) : r.text();
+      if (pensar) conf.thinkingConfig = pensar;
+      const lim = Math.min(resta, POR_MODELO);
+      const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: conf }, { timeout: lim });
+      const r = await comLimite(m.generateContent(partes), lim, `resposta ${nome}`);
+      etapa = ""; modeloUsado = `${nome} ${Math.round((Date.now() - t1) / 1000)}s`;
+      return json ? JSON.parse(r.response.text()) : r.response.text();
     } catch (e) {
-      ultimoErro = e; ultimoErro.segundos = Math.round((Date.now() - inicio) / 1000); console.warn("IA", nome, e?.message);
-      if (k % 2 === 0 && ehRede(e)) continue;
-      if (!/not found|404|no longer available|429|quota|RESOURCE_EXHAUSTED|503|overloaded|unavailable/i.test(String(e?.message))) break;
-      k += k % 2 ? 0 : 1; // erro do modelo: pula a 2ª chance e vai para o próximo
+      ultimoErro = e; console.warn("IA", nome, e?.message);
+      erros.push(`${nome}: ${String(e?.message || e).replace(/https?:\/\/\S+/g, "").slice(0, 60)}`);
+      if (/\[40[13]|App Check|PERMISSION_DENIED/i.test(String(e?.message))) break; // proteção/permissão: trocar de modelo não adianta
     }
   }
+  if (ultimoErro) { ultimoErro.segundos = Math.round((Date.now() - inicio) / 1000); ultimoErro.lista = erros.join(" | "); }
   throw explicar(ultimoErro);
 }
 
@@ -71,7 +78,7 @@ function explicar(e) {
   else if (cod === "401" || /App Check/i.test(t)) frase = "a proteção do site não foi aceita";
   else if (cod === "404") frase = "modelo da IA não encontrado";
   else if (/failed to fetch|load failed|network|aborted/i.test(t)) frase = "a internet caiu ou ficou lenta no envio da foto";
-  const err = new Error(`${frase ? frase + " · " : ""}${t}${e.segundos != null ? ` · ${e.segundos}s` : ""}`.slice(0, 220));
+  const err = new Error(`${frase ? frase + " · " : ""}${e.lista || t}${e.segundos != null ? ` · ${e.segundos}s` : ""}`.slice(0, 300));
   err.codigo = cod; return err;
 }
 

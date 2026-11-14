@@ -266,8 +266,9 @@ async function folhaValor(empresa, arquivo) {
       const fotoId = await acrescentar("notas_fotos", { ...base, foto });
       await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: $("#v-num").value.trim(), itens });
       salvou = true; fundo.hidden = true;
-      if (d !== campoDia.value) { campoDia.value = d; }
+      // A tela continua no dia em que a Daiane está; só avisa se a nota foi guardada em outro dia.
       mostrar();
+      if (d !== campoDia.value) avisoTopo(`Nota da ${empresa} salva no dia ${dataBR(d)} (o dia escrito na nota). Para ver, escolha ${dataBR(d)} lá em cima ou abra "Mês" → "Ver o mês dia a dia".`);
     } catch { $("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
   };
   try { foto = await reduzir(arquivo); const i = $("#v-img"); i.src = foto; i.hidden = false; }
@@ -278,9 +279,9 @@ async function folhaValor(empresa, arquivo) {
   const rel = setInterval(() => { const p = $("#v-prep"); if (p && viva()) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s. Se quiser, já pode digitar o valor e salvar, sem esperar.`; }, 1000);
   let iaLeu = false;
   const daIA = (async () => {
-    ia = await import("./js/ia.js?v=6");
+    ia = await import("./js/ia.js?v=7");
     if (!ia.iaDisponivel) throw new Error("sem IA");
-    const x = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error("a IA demorou mais de 40s")), 40000))]);
+    const x = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error(`a IA demorou mais de 48s (parou em: ${ia.etapa || "?"})`)), 48000))]);
     if (!x.itens.length && !x.total) throw new Error("a IA não achou os itens");
     iaLeu = true;
     return x;
@@ -306,7 +307,7 @@ async function folhaValor(empresa, arquivo) {
   clearInterval(rel);
   if (!viva()) return; // já salvou à mão, fechou ou abriu outra nota
   // Avisa o monitor de erros (Sentry) como foi a leitura, sem foto nem valores: só o motivo e o tempo.
-  try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
+  try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${ia?.modeloUsado || ""} · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
   try { if (!r || doCelular) window.Sentry?.captureMessage(`Leitura da nota: ${r ? "lida pelo celular" : "não leu"} · ${motivo} · ${Math.round((Date.now() - t0) / 1000)}s`, r ? "warning" : "error"); } catch {}
   if (!r) {
     const p = $("#v-prep"); p.style.overflowWrap = "anywhere";
@@ -329,6 +330,11 @@ async function folhaValor(empresa, arquivo) {
   }
 }
 
+function avisoTopo(texto) {
+  const a = document.createElement("div"); a.className = "aviso"; a.style.cssText = "position:fixed;left:12px;right:12px;top:12px;z-index:60";
+  a.innerHTML = `${esc(texto)} <button type="button" style="margin-left:6px">OK</button>`;
+  a.querySelector("button").onclick = () => a.remove(); document.body.append(a); setTimeout(() => a.remove(), 12000);
+}
 // Pedido do WhatsApp: anotado na noite anterior; de manhã quem separa confere e marca.
 function blocoPedido(p, temNota) {
   const div = document.createElement("div");
