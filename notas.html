@@ -501,7 +501,6 @@ async function mostrarMes() {
     div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
     const atraso = x.estado === "atrasado" ? Math.round((new Date(hoje()) - new Date(x.cobranca.vencimento)) / 86400000) : 0;
     div.innerHTML = `<div class="cab"><b style="font-size:17px">${esc(x.empresa)}</b><span class="selo ${ROT[x.estado][1]}">${ROT[x.estado][0]}${atraso ? ` há ${atraso} dia(s)` : ""}</span></div>
-      ${porSetor(x.ns)[0][0] !== null ? `<span class="suave">${porSetor(x.ns).map(([st, ns]) => `${esc(st || "Sem setor")}: ${ns.length} nota(s) · ${reais(soma(ns))}`).join(" · ")}</span>` : ""}
       ${x.de.slice(8) !== "01" ? `<span class="suave">Período: ${dataBR(x.de)} a ${dataBR(x.ate)}</span>` : ""}
       <span>${x.ns.length} nota(s) · <b>${reais(x.total)}</b>${x.pago ? ` · recebido ${reais(x.pago)}` : ""}${x.cobranca && x.falta > 0 ? ` · falta <b>${reais(x.falta)}</b>` : ""}</span>
       ${x.cobranca ? `<span class="suave">Cobrança de ${reais(x.cobranca.total)} enviada em ${dataBR(x.cobranca.criadoEm.slice(0, 10))}, vence ${dataBR(x.cobranca.vencimento)}</span>` : ""}
@@ -526,7 +525,7 @@ const PADARIA = "DAIANE ABILIO PADARIA E RESTAURANTE LTDA (Madalena's Coffee Sho
 const PADRAO_EMP = {
   ABG: { razao: "ABG SERVICES OFFSHORE GENERAL SOLUTIONS LTDA", cnpj: "42.597.739/0001-72", endereco: "Rua Magalhães Bastos, Boa Vista, 24466-250" },
   LANDSEAAIR: { razao: "LANDSEAAIR TECHNOLOGY LTDA", cnpj: "39.230.614/0001-03", endereco: "Rua Ponta Grossa, 3806, Boa Vista, São Gonçalo/RJ, 24466-180", corte: 20 },
-  TWAS: { razao: "TWAS REPAIR SERVICOS NAVAIS E INDUSTRIAIS LTDA", cnpj: "31.839.501/0001-90", endereco: "Travessa Frederico Marques, 84, Boa Vista, São Gonçalo/RJ, 24466-180 · (21) 99014-7162", setores: ["Mauá", "Base"] },
+  TWAS: { razao: "TWAS REPAIR SERVICOS NAVAIS E INDUSTRIAIS LTDA", cnpj: "31.839.501/0001-90", endereco: "Travessa Frederico Marques, 84, Boa Vista, São Gonçalo/RJ, 24466-180 · (21) 99014-7162" },
   Artemis: { razao: "ARTERMIS FORNECIMENTO DE SUPRIMENTOS LTDA", cnpj: "50.424.801/0001-52", endereco: "Rua Magalhães Bastos, 77, Boa Vista, São Gonçalo/RJ, 24466-250 · (21) 99202-1211" },
   TECMAR: { razao: "TECMAR SERVICOS NAVAIS OFFSHORE LTDA", cnpj: "12.795.238/0001-30", endereco: "Rua Professora Maria Joaquina, 340, Boa Vista, São Gonçalo/RJ, 24466-260" },
 };
@@ -566,19 +565,10 @@ function folhaDadosEmpresa(nome) {
   };
   fundo.hidden = false;
 }
-const soma = (ns) => Math.round(ns.reduce((a, n) => a + (n.valor || 0), 0) * 100) / 100;
-// Separa as notas por setor (Mauá, Base…) quando a empresa usa setor; senão, um grupo só (setor null).
-function porSetor(ns) {
-  if (!ns.some((n) => n.setor)) return [[null, ns]];
-  const g = {};
-  for (const n of ns) (g[n.setor || ""] ||= []).push(n);
-  return Object.entries(g).sort(([a], [b]) => (a === "") - (b === "") || a.localeCompare(b));
-}
 function textoCobranca(x, mes, venc, pix) {
   return `FECHAMENTO ${mesBR(mes)}${x.de.slice(8) !== "01" ? ` (notas de ${dataBR(x.de)} a ${dataBR(x.ate)})` : ""}\n\nDe:\n${PADARIA}\n\nPara:\n${blocoEmpresa(x.empresa)}\n\n`
-    + porSetor(x.ns).map(([st, ns]) => (st !== null ? `*${st || "Sem setor"}* (${ns.length} nota(s) · ${reais(soma(ns))})\n` : "")
-      + ns.map((n) => `${dataBR(n.data).slice(0, 5)}${n.pedidoGuappo ? ` · pedido ${n.pedidoGuappo}` : ""}: ${n.valor != null ? reais(n.valor) : "(sem valor)"}`
-      + (n.itens?.length ? "\n" + n.itens.map((i) => `   ${String(i.qtd).replace(".", ",")} ${i.descricao}${i.total ? ` (${reais(i.total)})` : ""}`).join("\n") : "")).join("\n")).join("\n\n")
+    + x.ns.map((n) => `${dataBR(n.data).slice(0, 5)}${n.pedidoGuappo ? ` · pedido ${n.pedidoGuappo}` : ""}: ${n.valor != null ? reais(n.valor) : "(sem valor)"}`
+      + (n.itens?.length ? "\n" + n.itens.map((i) => `   ${String(i.qtd).replace(".", ",")} ${i.descricao}${i.total ? ` (${reais(i.total)})` : ""}`).join("\n") : "")).join("\n")
     + `\n\nTotal: ${reais(x.total)}\nVencimento: ${dataBR(venc)}${pix ? `\nPIX: ${pix}` : ""}\n\nTodas as notas assinadas estão guardadas com foto. Qualquer dúvida, é só chamar. Obrigada!`;
 }
 function folhaCobranca(x, mes) {
