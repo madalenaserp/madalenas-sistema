@@ -88,7 +88,7 @@
 <script type="module">
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
-import { acrescentar, listar, ler, salvarComHistorico } from "./js/db.js";
+import { acrescentar, listar, listarEntre, ler, salvarComHistorico } from "./js/db.js";
 
 const eu = await exigirUsuario();
 if (!pode.notasEmpresas(eu)) location.href = "turno.html";
@@ -213,7 +213,7 @@ function linhaNota(n) {
     : `<span class="erro">✗ ${esc(PROBLEMAS[n.conferido.problema])}${n.conferido.detalhe ? `: ${esc(n.conferido.detalhe)}` : ""} (${esc(n.conferido.registradoPor)}, foi para o Livro)</span>`;
   const info = document.createElement("div");
   info.className = "info";
-  info.innerHTML = `${n.valor != null ? `<span style="font-size:16px"><b>${reais(n.valor)}</b>${n.pedidoGuappo ? ` <span class="suave">· Guappo nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>` : `<span class="erro">Sem valor</span>`}
+  info.innerHTML = `${n.valor != null ? `<span style="font-size:16px"><b>${reais(n.valor)}</b>${n.pedidoGuappo ? ` <span class="suave">· Guappo nº ${esc(n.pedidoGuappo)}</span>` : ""}${n.setor ? ` <span class="suave">· ${esc(n.setor)}</span>` : ""}</span>` : `<span class="erro">Sem valor</span>`}
     ${itensNota(n)}<span class="ok">✓ Foto por ${esc(n.registradoPor)} às ${esc(n.hora)}</span>${conf}<div class="acoes"></div>`;
   const acoes = info.querySelector(".acoes");
   if (podeConferir && !n.conferido && !n.cancelado && (campoDia.value === hoje() || eu.papel === "dona")) {
@@ -238,6 +238,7 @@ async function folhaValor(empresa, arquivo) {
     <div id="v-itens"></div>
     <label class="suave" for="v-valor">Valor da nota no Guappo (R$)</label><input id="v-valor" inputmode="decimal" placeholder="0,00">
     <label class="suave" for="v-num">Número do pedido no Guappo (se tiver)</label><input id="v-num" inputmode="numeric">
+    <div id="v-setor-box" hidden><label class="suave" for="v-setor">Setor escrito na nota</label><select id="v-setor"><option value="">Sem setor</option></select></div>
     <p class="msg-erro" id="v-e"></p>
     <button class="botao principal" id="v-ok">Salvar nota</button>
     <button class="botao" id="v-x" style="text-align:center;border:none">Cancelar</button>`;
@@ -245,6 +246,13 @@ async function folhaValor(empresa, arquivo) {
   const $ = (q) => folha.querySelector(q);
   $("#v-x").onclick = () => { fundo.hidden = true; };
   if (dona) $("#v-dia").onchange = () => { if ($("#v-dia").value) d = $("#v-dia").value; };
+  let setores = [];
+  const setoresProntos = carregarDadosEmp().then(() => {
+    setores = dadosEmp?.[empresa]?.setores || [];
+    if (!setores.length || !$("#v-setor")) return;
+    $("#v-setor").insertAdjacentHTML("beforeend", setores.map((x) => `<option>${esc(x)}</option>`).join(""));
+    $("#v-setor-box").hidden = false;
+  }).catch(() => {});
   const desenharItens = () => {
     $("#v-itens").innerHTML = itens.length ? `<div class="cartao" style="padding:10px"><b>Itens lidos da nota</b> <span class="suave" style="font-size:13px">(confira; toque no ✕ para tirar)</span>
       ${itens.map((i, k) => `<div style="display:flex;gap:6px;align-items:center;border-top:1px solid var(--linha);padding:4px 0;font-size:15px"><span style="flex:1">${esc(String(i.qtd).replace(".", ","))} × ${esc(i.descricao)} <span class="suave">(${reais(i.preco)})</span></span><b>${reais(i.total)}</b>
@@ -261,10 +269,21 @@ async function folhaValor(empresa, arquivo) {
     if (!(valor > 0)) return ($("#v-e").textContent = "Coloque o valor da nota.");
     if (d > hoje()) return ($("#v-e").textContent = "O dia não pode ser depois de hoje.");
     e.target.disabled = true;
+    // Número de pedido do Guappo não pode repetir (a mesma nota não entra duas vezes).
+    const num = $("#v-num").value.trim().replace(/\D/g, "");
+    if (num) {
+      try {
+        const mesmos = await listar("notas", "pedidoGuappo", num);
+        const canc = new Set();
+        for (const n of mesmos) { const evs = await listar("notas", "refId", n.id); if (evs.some((r) => r.tipo === "cancelado")) canc.add(n.id); }
+        const ja = mesmos.find((n) => n.tipo === "nota" && !canc.has(n.id));
+        if (ja) { e.target.disabled = false; return ($("#v-e").textContent = `A nota nº ${num} já foi lançada (${ja.empresa}, ${dataBR(ja.data)}, ${ja.valor != null ? reais(ja.valor) : "sem valor"}). Se a foto anterior estava errada, anule ela primeiro.`); }
+      } catch { /* sem internet para conferir: deixa salvar */ }
+    }
     try {
       const base = { empresa, data: d, ...(d < hoje() ? { lancadaDepois: true } : {}), mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
       const fotoId = await acrescentar("notas_fotos", { ...base, foto });
-      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: $("#v-num").value.trim(), itens });
+      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: num, itens, ...($("#v-setor").value ? { setor: $("#v-setor").value } : {}) });
       salvou = true; fundo.hidden = true;
       // A tela continua no dia em que a Daiane está; só avisa se a nota foi guardada em outro dia.
       mostrar();
@@ -279,7 +298,7 @@ async function folhaValor(empresa, arquivo) {
   const rel = setInterval(() => { const p = $("#v-prep"); if (p && viva()) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s. Se quiser, já pode digitar o valor e salvar, sem esperar.`; }, 1000);
   let iaLeu = false;
   const daIA = (async () => {
-    ia = await import("./js/ia.js?v=7");
+    ia = await import("./js/ia.js?v=8");
     if (!ia.iaDisponivel) throw new Error("sem IA");
     const x = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error(`a IA demorou mais de 48s (parou em: ${ia.etapa || "?"})`)), 48000))]);
     if (!x.itens.length && !x.total) throw new Error("a IA não achou os itens");
@@ -305,6 +324,7 @@ async function folhaValor(empresa, arquivo) {
     else if (o?.totalLido || o?.numero) { r = { ...o, itens: [], total: o.totalLido ? o.total : 0, escrito: "", empresa: "", parcial: true }; doCelular = true; }
   }
   clearInterval(rel);
+  await Promise.race([setoresProntos, new Promise((ok) => setTimeout(ok, 3000))]);
   if (!viva()) return; // já salvou à mão, fechou ou abriu outra nota
   // Avisa o monitor de erros (Sentry) como foi a leitura, sem foto nem valores: só o motivo e o tempo.
   try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${ia?.modeloUsado || ""} · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
@@ -317,6 +337,19 @@ async function folhaValor(empresa, arquivo) {
     if (r.total > 0 && !$("#v-valor").value) $("#v-valor").value = r.total.toFixed(2).replace(".", ",");
     if (r.numero && !$("#v-num").value) $("#v-num").value = r.numero;
     const avisos = [];
+    const semAcento = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    // Setor escrito à mão (ex.: MAUÁ / BASE da TWAS)
+    const st = setores.find((x) => semAcento(r.escrito).includes(semAcento(x)));
+    if (st && !$("#v-setor").value) $("#v-setor").value = st;
+    // Nota sem data (Guappo imprime 01/01/0001 quando sai como "consumidor não identificado"): vale o dia escrito à mão.
+    if (r.emissao && (r.emissao < "2020-01-01" || r.emissao > hoje())) {
+      const m = String(r.escrito || "").match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+      const mao = m ? `${hoje().slice(0, 4)}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
+      r.emissao = "";
+      if (mao && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(mao) && mao <= hoje() && mao !== d && dona) { d = mao; $("#v-dia").value = d; avisos.push(`A nota saiu sem data no Guappo. Usei o dia escrito à mão: <b>${dataBR(mao)}</b>.`); }
+      else avisos.push(`A nota saiu sem data no Guappo. Ficou o dia <b>${dataBR(d)}</b>: confira.`);
+      r.empresa = "";
+    }
     if (r.emissao && r.emissao !== d) {
       if (dona && r.emissao <= hoje()) { d = r.emissao; $("#v-dia").value = d; avisos.push(`A nota é do dia <b>${dataBR(r.emissao)}</b>: já troquei o dia.`); }
       else avisos.push(`A nota diz emissão em <b>${dataBR(r.emissao)}</b>. Confira se é a nota certa.`);
@@ -428,13 +461,17 @@ const FORMAS = ["PIX", "Dinheiro", "Transferência", "Boleto"];
 const mesBR = (m) => m.split("-").reverse().join("/");
 const proxDia10 = (m) => { const [a, mm] = m.split("-").map(Number); const d = new Date(a, mm, 10); return d.toISOString().slice(0, 10); };
 async function situacaoEmpresas(mes) {
-  const [regs, cobs] = await Promise.all([listar("notas", "mes", mes), listar("cobrancas", "mes", mes)]);
+  // Notas do mês anterior e deste: a empresa com "dia de corte" (ex.: LSA paga do dia 21 ao dia 20) pega o período dela.
+  const [a, m] = mes.split("-").map(Number);
+  const mesAnt = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
+  const [regs, cobs] = await Promise.all([listarEntre("notas", "data", `${mesAnt}-01`, `${mes}-31`), listar("cobrancas", "mes", mes)]);
   const notas = montar(regs).filter((n) => !n.cancelado);
   const pedidos = montar(regs, "pedido").filter((p) => !p.cancelado);
   const canc = new Set(cobs.filter((c) => c.tipo === "cancelamento").map((c) => c.refId));
   const ok = cobs.filter((c) => !canc.has(c.id)).sort((x, y) => x.criadoEm.localeCompare(y.criadoEm));
   return EMPRESAS.map((e) => {
-    const ns = notas.filter((n) => n.empresa === e).sort((x, y) => x.data.localeCompare(y.data));
+    const [de, ate] = periodoEmpresa(e, mes);
+    const ns = notas.filter((n) => n.empresa === e && n.data >= de && n.data <= ate).sort((x, y) => x.data.localeCompare(y.data));
     const total = ns.reduce((t, n) => t + (n.valor || 0), 0);
     const cobranca = ok.filter((c) => c.tipo === "cobranca" && c.empresa === e).at(-1);
     const pagos = ok.filter((c) => c.tipo === "pagamento" && c.empresa === e);
@@ -442,8 +479,8 @@ async function situacaoEmpresas(mes) {
     const devido = cobranca ? cobranca.total : total;
     const falta = Math.round((devido - pago) * 100) / 100;
     const estado = !ns.length && !cobranca ? "vazio" : falta <= 0.009 && (cobranca || pago) ? "pago" : cobranca && hoje() > cobranca.vencimento ? "atrasado" : cobranca ? "aberto" : "sem";
-    const pedidosSemNota = pedidos.filter((p) => p.empresa === e && p.data < hoje() && !ns.some((n) => n.data === p.data));
-    return { empresa: e, ns, total, cobranca, pagos, pago, falta, estado, semValor: ns.filter((n) => n.valor == null).length,
+    const pedidosSemNota = pedidos.filter((p) => p.empresa === e && p.data >= de && p.data <= ate && p.data < hoje() && !ns.some((n) => n.data === p.data));
+    return { empresa: e, de, ate, ns, total, cobranca, pagos, pago, falta, estado, semValor: ns.filter((n) => n.valor == null).length,
       problemas: ns.filter((n) => n.conferido && !n.conferido.ok).length, semConferir: ns.filter((n) => !n.conferido).length, pedidosSemNota };
   });
 }
@@ -464,6 +501,8 @@ async function mostrarMes() {
     div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
     const atraso = x.estado === "atrasado" ? Math.round((new Date(hoje()) - new Date(x.cobranca.vencimento)) / 86400000) : 0;
     div.innerHTML = `<div class="cab"><b style="font-size:17px">${esc(x.empresa)}</b><span class="selo ${ROT[x.estado][1]}">${ROT[x.estado][0]}${atraso ? ` há ${atraso} dia(s)` : ""}</span></div>
+      ${porSetor(x.ns)[0][0] !== null ? `<span class="suave">${porSetor(x.ns).map(([st, ns]) => `${esc(st || "Sem setor")}: ${ns.length} nota(s) · ${reais(soma(ns))}`).join(" · ")}</span>` : ""}
+      ${x.de.slice(8) !== "01" ? `<span class="suave">Período: ${dataBR(x.de)} a ${dataBR(x.ate)}</span>` : ""}
       <span>${x.ns.length} nota(s) · <b>${reais(x.total)}</b>${x.pago ? ` · recebido ${reais(x.pago)}` : ""}${x.cobranca && x.falta > 0 ? ` · falta <b>${reais(x.falta)}</b>` : ""}</span>
       ${x.cobranca ? `<span class="suave">Cobrança de ${reais(x.cobranca.total)} enviada em ${dataBR(x.cobranca.criadoEm.slice(0, 10))}, vence ${dataBR(x.cobranca.vencimento)}</span>` : ""}
       ${x.pagos.map((pg) => `<span class="ok">✓ ${reais(pg.valor)} em ${dataBR(pg.dataPagto)} (${esc(pg.forma)})</span>`).join("")}
@@ -486,12 +525,23 @@ async function mostrarMes() {
 const PADARIA = "DAIANE ABILIO PADARIA E RESTAURANTE LTDA (Madalena's Coffee Shop)\nCNPJ 55.612.496/0001-46 · IE 14.904.12-3\nRua Abílio José de Matos, 2544, Porto da Pedra, São Gonçalo/RJ, 24436-000\nTel. (21) 97209-8291";
 const PADRAO_EMP = {
   ABG: { razao: "ABG SERVICES OFFSHORE GENERAL SOLUTIONS LTDA", cnpj: "42.597.739/0001-72", endereco: "Rua Magalhães Bastos, Boa Vista, 24466-250" },
+  LANDSEAAIR: { razao: "LANDSEAAIR TECHNOLOGY LTDA", cnpj: "39.230.614/0001-03", endereco: "Rua Ponta Grossa, 3806, Boa Vista, São Gonçalo/RJ, 24466-180", corte: 20 },
+  TWAS: { razao: "TWAS REPAIR SERVICOS NAVAIS E INDUSTRIAIS LTDA", cnpj: "31.839.501/0001-90", endereco: "Travessa Frederico Marques, 84, Boa Vista, São Gonçalo/RJ, 24466-180 · (21) 99014-7162", setores: ["Mauá", "Base"] },
+  Artemis: { razao: "ARTERMIS FORNECIMENTO DE SUPRIMENTOS LTDA", cnpj: "50.424.801/0001-52", endereco: "Rua Magalhães Bastos, 77, Boa Vista, São Gonçalo/RJ, 24466-250 · (21) 99202-1211" },
   TECMAR: { razao: "TECMAR SERVICOS NAVAIS OFFSHORE LTDA", cnpj: "12.795.238/0001-30", endereco: "Rua Professora Maria Joaquina, 340, Boa Vista, São Gonçalo/RJ, 24466-260" },
 };
 let dadosEmp = null;
 async function carregarDadosEmp() {
   if (!dadosEmp) { const c = await ler("config", "empresas").catch(() => null); dadosEmp = { ...PADRAO_EMP, ...(c?.lista || {}) }; }
   return dadosEmp;
+}
+// Período de cobrança: mês fechado, ou do dia (corte+1) do mês anterior até o dia "corte" deste mês.
+function periodoEmpresa(nome, mes) {
+  const corte = Number(dadosEmp?.[nome]?.corte) || 0;
+  if (!corte) return [`${mes}-01`, `${mes}-31`];
+  const [a, m] = mes.split("-").map(Number);
+  const ant = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
+  return [`${ant}-${String(corte + 1).padStart(2, "0")}`, `${mes}-${String(corte).padStart(2, "0")}`];
 }
 const blocoEmpresa = (nome) => { const e = dadosEmp?.[nome] || {}; return [e.razao || nome, e.cnpj && `CNPJ ${e.cnpj}`, e.endereco].filter(Boolean).join("\n"); };
 function folhaDadosEmpresa(nome) {
@@ -500,6 +550,8 @@ function folhaDadosEmpresa(nome) {
     <label class="suave" for="de-r">Razão social</label><input id="de-r" value="${esc(e.razao || "")}">
     <label class="suave" for="de-c">CNPJ</label><input id="de-c" inputmode="numeric" value="${esc(e.cnpj || "")}">
     <label class="suave" for="de-e">Endereço</label><input id="de-e" value="${esc(e.endereco || "")}">
+    <label class="suave" for="de-s">Setores (separados por vírgula, se a empresa marca na nota; ex.: Mauá, Base)</label><input id="de-s" value="${esc((e.setores || []).join(", "))}">
+    <label class="suave" for="de-k">Paga até o dia (deixe vazio se for o mês fechado, de 1 a 31)</label><input id="de-k" inputmode="numeric" placeholder="ex.: 20 = do dia 21 ao dia 20" value="${esc(e.corte || "")}">
     <p class="suave" style="margin:0;font-size:13px">Fica no fechamento/cobrança. Está escrito no rodapé das notas do Guappo (CONSUMIDOR).</p>
     <p class="msg-erro" id="de-x2"></p>
     <button class="botao principal" id="de-ok">Salvar</button>
@@ -507,16 +559,26 @@ function folhaDadosEmpresa(nome) {
   folha.querySelector("#de-x").onclick = () => { fundo.hidden = true; };
   folha.querySelector("#de-ok").onclick = async (ev) => {
     ev.target.disabled = true;
-    const novo = { ...dadosEmp, [nome]: { razao: folha.querySelector("#de-r").value.trim(), cnpj: folha.querySelector("#de-c").value.trim(), endereco: folha.querySelector("#de-e").value.trim() } };
-    try { await salvarComHistorico("config", "empresas", { lista: novo, alteradoPor: eu.nome, alteradoPorUid: eu.uid, em: new Date().toISOString() }); dadosEmp = novo; fundo.hidden = true; }
+    const novo = { ...dadosEmp, [nome]: { razao: folha.querySelector("#de-r").value.trim(), cnpj: folha.querySelector("#de-c").value.trim(), endereco: folha.querySelector("#de-e").value.trim(), corte: Math.min(28, Math.max(0, parseInt(folha.querySelector("#de-k").value, 10) || 0)),
+      setores: folha.querySelector("#de-s").value.split(",").map((x) => x.trim()).filter(Boolean) } };
+    try { await salvarComHistorico("config", "empresas", { lista: novo, alteradoPor: eu.nome, alteradoPorUid: eu.uid, em: new Date().toISOString() }); dadosEmp = novo; fundo.hidden = true; mostrarMes(); }
     catch { folha.querySelector("#de-x2").textContent = "Não consegui salvar."; ev.target.disabled = false; }
   };
   fundo.hidden = false;
 }
+const soma = (ns) => Math.round(ns.reduce((a, n) => a + (n.valor || 0), 0) * 100) / 100;
+// Separa as notas por setor (Mauá, Base…) quando a empresa usa setor; senão, um grupo só (setor null).
+function porSetor(ns) {
+  if (!ns.some((n) => n.setor)) return [[null, ns]];
+  const g = {};
+  for (const n of ns) (g[n.setor || ""] ||= []).push(n);
+  return Object.entries(g).sort(([a], [b]) => (a === "") - (b === "") || a.localeCompare(b));
+}
 function textoCobranca(x, mes, venc, pix) {
-  return `FECHAMENTO ${mesBR(mes)}\n\nDe:\n${PADARIA}\n\nPara:\n${blocoEmpresa(x.empresa)}\n\n`
-    + x.ns.map((n) => `${dataBR(n.data).slice(0, 5)}${n.pedidoGuappo ? ` · pedido ${n.pedidoGuappo}` : ""}: ${n.valor != null ? reais(n.valor) : "(sem valor)"}`
-      + (n.itens?.length ? "\n" + n.itens.map((i) => `   ${String(i.qtd).replace(".", ",")} ${i.descricao}${i.total ? ` (${reais(i.total)})` : ""}`).join("\n") : "")).join("\n")
+  return `FECHAMENTO ${mesBR(mes)}${x.de.slice(8) !== "01" ? ` (notas de ${dataBR(x.de)} a ${dataBR(x.ate)})` : ""}\n\nDe:\n${PADARIA}\n\nPara:\n${blocoEmpresa(x.empresa)}\n\n`
+    + porSetor(x.ns).map(([st, ns]) => (st !== null ? `*${st || "Sem setor"}* (${ns.length} nota(s) · ${reais(soma(ns))})\n` : "")
+      + ns.map((n) => `${dataBR(n.data).slice(0, 5)}${n.pedidoGuappo ? ` · pedido ${n.pedidoGuappo}` : ""}: ${n.valor != null ? reais(n.valor) : "(sem valor)"}`
+      + (n.itens?.length ? "\n" + n.itens.map((i) => `   ${String(i.qtd).replace(".", ",")} ${i.descricao}${i.total ? ` (${reais(i.total)})` : ""}`).join("\n") : "")).join("\n")).join("\n\n")
     + `\n\nTotal: ${reais(x.total)}\nVencimento: ${dataBR(venc)}${pix ? `\nPIX: ${pix}` : ""}\n\nTodas as notas assinadas estão guardadas com foto. Qualquer dúvida, é só chamar. Obrigada!`;
 }
 function folhaCobranca(x, mes) {

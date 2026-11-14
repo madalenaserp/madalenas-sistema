@@ -110,7 +110,7 @@ export async function lerComprovanteIA(dataUrl, empresas) {
 Leia TODOS os itens da tabela de produtos. Cada item tem uma linha com número, código e DESCRIÇÃO (ex.: "173 BOLO PISCINA ESPECIAL"; tire o código do começo) e embaixo "QTDE UN x VALOR UNITÁRIO ... VALOR TOTAL".
 Para cada item devolva: descricao (sem o código), qtd (número; "10,000 UN" = 10), preco (valor unitário), total (valor total do item).
 Leia também: total ("VALOR TOTAL R$"), numero ("Numero:"), emissao (data de "Emissão:" no formato AAAA-MM-DD).
-Em escrito, copie o que estiver ESCRITO À MÃO no papel (data, nome da empresa), ou "".
+Em escrito, copie o que estiver ESCRITO À MÃO no papel (data, nome da empresa, setor como MAUÁ ou BASE), ou "". Se a emissão impressa for 01/01/0001, deixe emissao "" (vale a data escrita à mão). "CONSUMIDOR NÃO IDENTIFICADO" é normal (ex.: Secretaria/Prefeitura, Bruno): a empresa é a escrita à mão.
 Em empresa, escolha da lista o nome que combina com o escrito à mão, ou "": ${empresas.join(", ")}.
 Números usam vírgula decimal na nota; devolva como número JSON.
 Devolva só JSON: {"itens": [{"descricao": "", "qtd": 0, "preco": 0, "total": 0}], "total": 0, "numero": "", "emissao": "", "escrito": "", "empresa": ""}`]);
