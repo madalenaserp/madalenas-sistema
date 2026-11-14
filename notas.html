@@ -109,7 +109,7 @@ function montar(registros, tipo = "nota") {
   const passos = registros.filter((r) => r.refId);
   const ultimo = (id, t) => passos.filter((r) => r.refId === id && r.tipo === t).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
   return registros.filter((r) => r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
-    .map((n) => ({ ...n, conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }));
+    .map((n) => { const it = ultimo(n.id, "itens"); return { ...n, ...(it ? { itens: it.itens } : {}), conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }; });
 }
 const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
@@ -154,6 +154,7 @@ function reduzir(arquivo) {
 
 const miniaturas = {};
 async function miniatura(fotoId, el) {
+  if (!fotoId) { el.alt = "Sem foto"; el.style.background = "var(--linha)"; return; }
   miniaturas[fotoId] ??= ler("notas_fotos", fotoId).then((d) => d?.foto || "");
   el.src = await miniaturas[fotoId];
 }
@@ -492,10 +493,14 @@ async function mostrarMes() {
   const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
   const box = document.getElementById("tabela");
   box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="botao principal" id="m-todas" style="flex:1">📋 Conferir todas as notas</button>
+      ${eu.papel === "dona" ? `<button class="botao" id="m-lancar" style="flex:1">⬆ Lançar notas transcritas</button>` : ""}</div>
     <details class="cartao" style="margin-bottom:8px"><summary><b>Ver o mês dia a dia</b> <span class="suave">(dia 1, 2, 3…)</span></summary>${diaADia(sit)}</details>
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
     <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar. As fotos de cada dia ficam na aba Dia.</p>`
-    : `<p class="suave">Nenhuma nota neste mês.</p>`;
+    : `<p class="suave">Nenhuma nota neste mês.</p>${eu.papel === "dona" ? `<button class="botao" id="m-lancar">⬆ Lançar notas transcritas</button>` : ""}`;
+  box.querySelector("#m-todas")?.addEventListener("click", () => folhaTodas(sit, mes));
+  box.querySelector("#m-lancar")?.addEventListener("click", () => folhaLancar());
   for (const x of sit) {
     const div = document.createElement("div");
     div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
@@ -635,6 +640,117 @@ function diaADia(sit) {
   for (const x of sit) for (const n of x.ns) (por[n.data] ||= []).push(n);
   return Object.keys(por).sort().map((d) => `<div style="border-top:1px solid var(--linha);padding:6px 0"><b>Dia ${Number(d.slice(8))}</b> <span class="suave">(${dataBR(d)})</span> · ${reais(por[d].reduce((t, n) => t + (n.valor || 0), 0))}
     <div class="suave" style="font-size:14px">${por[d].map((n) => `${esc(n.empresa)}: ${n.valor != null ? reais(n.valor) : "sem valor"}`).join(" · ")}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`;
+}
+// Todas as notas do mês numa lista só (todos os dias e empresas), para a Daiane conferir. Nota sem itens: "Ler itens de novo".
+function folhaTodas(sit, mes) {
+  const ns = sit.flatMap((x) => x.ns).sort((a, b) => a.data.localeCompare(b.data) || a.empresa.localeCompare(b.empresa));
+  const semItens = ns.filter((n) => !n.itens?.length && n.fotoId);
+  const podeReler = ["dona", "lider"].includes(eu.papel);
+  const total = ns.reduce((s, n) => s + (n.valor || 0), 0);
+  let dia = "";
+  folha.innerHTML = `<h2>Todas as notas · ${mesBR(mes)}</h2>
+    <p class="suave" style="margin:0">${ns.length} nota(s) · ${reais(total)}${semItens.length ? ` · <b>${semItens.length} sem descrição</b>` : ""}</p>
+    ${podeReler && semItens.length ? `<button class="botao principal" id="t-reler">Ler os itens das ${semItens.length} nota(s) sem descrição</button><p class="suave" id="t-prog" style="margin:0"></p>` : ""}
+    <div style="display:flex;flex-direction:column;gap:6px">${ns.map((n) => (n.data !== dia ? `<h3 style="margin:10px 0 0">${dataBR((dia = n.data))}</h3>` : "")
+      + `<div class="nota" data-id="${esc(n.id)}"><img data-foto="${esc(n.fotoId || "")}" alt="Nota"><div class="info"><span><b>${esc(n.empresa)}</b> · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.pedidoGuappo ? ` <span class="suave">· nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>
+        <span class="itens">${itensNota(n) || `<span class="falta">sem descrição</span>`}</span>
+        ${podeReler && !n.itens?.length && n.fotoId ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler itens de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
+    <button class="botao" id="t-x" style="text-align:center">Fechar</button>`;
+  folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (!img.dataset.foto) return; const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
+  folha.querySelector("#t-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
+  const porId = Object.fromEntries(ns.map((n) => [n.id, n]));
+  const umaNota = async (n, salvarSempre = false) => {
+    const caixa = folha.querySelector(`.nota[data-id="${CSS.escape(n.id)}"] .info`);
+    const b = caixa?.querySelector("[data-reler]"); if (b) { b.disabled = true; b.textContent = "Lendo…"; }
+    try {
+      const r = await lerItensDeNovo(n);
+      const soma = Math.round(r.itens.reduce((s, i) => s + (i.total || 0), 0) * 100) / 100;
+      const bate = n.valor == null || Math.abs(soma - n.valor) < 0.05;
+      if (bate || salvarSempre) {
+        await acrescentar("notas", { tipo: "itens", refId: n.id, empresa: n.empresa, data: n.data, mes: n.mes, itens: r.itens, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+        n.itens = r.itens;
+        caixa.querySelector(".itens").innerHTML = itensNota(n) + (bate ? "" : ` <span class="falta">(soma ${reais(soma)}, diferente do valor: confira)</span>`);
+        b?.remove(); return true;
+      }
+      caixa.querySelector(".itens").innerHTML = `<span class="falta">Li ${r.itens.length} item(ns) somando ${reais(soma)}, mas a nota é de ${reais(n.valor)}. Não salvei.</span> ${itensNota({ itens: r.itens })}`;
+      if (b) { b.disabled = false; b.textContent = "Salvar assim mesmo"; b.onclick = () => umaNota(n, true); }
+    } catch (e) {
+      caixa.querySelector(".itens").innerHTML = `<span class="falta">Não consegui ler (${esc(String(e?.message || e).slice(0, 120))}).</span>`;
+      if (b) { b.disabled = false; b.textContent = "Tentar de novo"; }
+    }
+    return false;
+  };
+  folha.querySelectorAll("[data-reler]").forEach((b) => (b.onclick = () => umaNota(porId[b.dataset.reler])));
+  const tb = folha.querySelector("#t-reler");
+  if (tb) tb.onclick = async () => {
+    tb.disabled = true; let ok = 0, k = 0;
+    for (const n of semItens) { if (fundo.hidden) return; folha.querySelector("#t-prog").textContent = `Lendo ${++k} de ${semItens.length}…`; if (await umaNota(n)) ok++; }
+    folha.querySelector("#t-prog").textContent = `Pronto: ${ok} de ${semItens.length} nota(s) ganharam descrição. As outras mostram o motivo.`;
+  };
+  fundo.hidden = false;
+}
+async function lerItensDeNovo(n) {
+  const f = await ler("notas_fotos", n.fotoId);
+  if (!f?.foto) throw new Error("a foto não foi encontrada");
+  const ia = await import("./js/ia.js?v=8");
+  const r = await Promise.race([ia.lerComprovanteIA(await menorParaIA(f.foto), EMPRESAS), new Promise((_, no) => setTimeout(() => no(new Error("a IA demorou mais de 48s")), 48000))]);
+  if (!r?.itens?.length) throw new Error("a IA não achou itens na foto");
+  return r;
+}
+
+// Lançar de uma vez as notas que o Claude transcreveu das fotos (uma linha por nota: EMPRESA;dd/mm;número;valor;itens).
+function folhaLancar() {
+  folha.innerHTML = `<h2>Lançar notas transcritas</h2>
+    <p class="suave" style="margin:0">Cole aqui o texto do arquivo "para-lancar" que o Claude mandou. Antes de lançar, eu mostro a lista para você conferir. Número que já existe no sistema não entra de novo.</p>
+    <textarea id="l-t" rows="8" placeholder="ABG;01/11;244392;18,00;30 PÃO FRANCÊS=18,00"></textarea>
+    <label class="suave" for="l-f">Foto das notas juntas (opcional, fica guardada como comprovante)</label><input type="file" id="l-f" accept="image/*">
+    <button class="botao" id="l-ver" style="text-align:center">Conferir a lista</button>
+    <div id="l-lista"></div><p class="msg-erro" id="l-e"></p>
+    <button class="botao" id="l-x" style="text-align:center;border:none">Fechar</button>`;
+  const $ = (q) => folha.querySelector(q);
+  $("#l-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
+  $("#l-ver").onclick = async () => {
+    $("#l-e").textContent = ""; $("#l-lista").innerHTML = "Conferindo…";
+    const ano = hoje().slice(0, 4), linhas = [], erros = [];
+    for (const [k, l] of $("#l-t").value.split("\n").entries()) {
+      const c = l.split(";"); if (c.length < 4) continue;
+      const [emp, dm, num, val, its = ""] = c.map((x) => x.trim());
+      const m = dm.match(/^(\d{1,2})\/(\d{1,2})$/), valor = numero(val);
+      const data = m ? `${ano}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
+      if (!EMPRESAS.includes(emp) || !data || !(valor > 0) || data > hoje()) { erros.push(`linha ${k + 1}: ${l.slice(0, 40)}`); continue; }
+      const itens = its ? its.split("|").map((x) => { const r = x.match(/^([\d.,]+)\s*(kg)?\s+(.+?)=([\d.,]+)$/i); if (!r) return null; const qtd = numero(r[1]), total = numero(r[4]); return { descricao: r[3].trim(), qtd, preco: Math.round((total / qtd) * 100) / 100, total }; }).filter(Boolean) : [];
+      linhas.push({ empresa: emp, data, pedidoGuappo: num.replace(/\D/g, ""), valor, itens });
+    }
+    // Números que já estão no sistema (consulta por mês das datas coladas)
+    const meses = [...new Set(linhas.map((x) => x.data.slice(0, 7)))];
+    const existentes = new Set();
+    try {
+      for (const mes of meses) { const regs = await listar("notas", "mes", mes); for (const n of montar(regs)) if (!n.cancelado && n.pedidoGuappo) existentes.add(n.pedidoGuappo); }
+    } catch { $("#l-lista").innerHTML = ""; return ($("#l-e").textContent = "Sem internet para conferir. Tente de novo."); }
+    const vistos = new Set();
+    for (const x of linhas) { x.repetida = existentes.has(x.pedidoGuappo) || vistos.has(x.pedidoGuappo); if (x.pedidoGuappo) vistos.add(x.pedidoGuappo); }
+    const novas = linhas.filter((x) => !x.repetida);
+    const tot = novas.reduce((s, x) => s + x.valor, 0);
+    $("#l-lista").innerHTML = `<p style="margin:6px 0"><b>${novas.length} nota(s) novas · ${reais(tot)}</b>${linhas.length - novas.length ? ` · ${linhas.length - novas.length} já lançada(s), ficam de fora` : ""}${erros.length ? `<br><span class="falta">${erros.length} linha(s) que não entendi: ${esc(erros.slice(0, 3).join(" · "))}</span>` : ""}</p>
+      <div style="max-height:40vh;overflow:auto;border:1px solid var(--linha);border-radius:8px;padding:6px;font-size:14px">${linhas.map((x) => `<div style="padding:3px 0;border-bottom:1px solid var(--linha)${x.repetida ? ";opacity:.45;text-decoration:line-through" : ""}">${dataBR(x.data).slice(0, 5)} · <b>${esc(x.empresa)}</b> · nº ${esc(x.pedidoGuappo)} · <b>${reais(x.valor)}</b><br><span class="suave">${esc(x.itens.map((i) => `${String(i.qtd).replace(".", ",")} ${i.descricao}`).join(" · "))}</span></div>`).join("")}</div>
+      ${novas.length ? `<button class="botao principal" id="l-ok">Lançar ${novas.length} nota(s)</button>` : ""}`;
+    const ok = $("#l-ok"); if (!ok) return;
+    ok.onclick = async () => {
+      ok.disabled = true;
+      try {
+        let fotoId = null;
+        const arq = $("#l-f").files[0];
+        if (arq) fotoId = await acrescentar("notas_fotos", { empresa: "várias", data: hoje(), mes: hoje().slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(), foto: await reduzir(arq) });
+        let k = 0;
+        for (const { repetida, ...x } of novas) {
+          ok.textContent = `Lançando ${++k} de ${novas.length}…`;
+          await acrescentar("notas", { ...x, tipo: "nota", fotoId, mes: x.data.slice(0, 7), lancadaDepois: true, transcrita: true, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+        }
+        $("#l-lista").innerHTML = `<p class="ok">Pronto: ${novas.length} nota(s) lançadas. Veja em "Conferir todas as notas".</p>`;
+      } catch (e) { $("#l-e").textContent = "Parou no meio por falta de internet. Toque em Conferir a lista de novo: as que já entraram ficam de fora."; ok.disabled = false; }
+    };
+  };
+  fundo.hidden = false;
 }
 function verNotasMes(x) {
   folha.innerHTML = `<h2>${esc(x.empresa)} · notas do mês</h2>
