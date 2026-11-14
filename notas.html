@@ -545,14 +545,11 @@ async function mostrarMes() {
   const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
   const box = document.getElementById("tabela");
   box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
-    ${eu.papel === "dona" ? `<div id="m-fotos"></div><button class="botao" id="m-lancar" style="margin-bottom:8px">⬆ Lançar notas transcritas</button>` : ""}
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
     <div id="todas" class="cartao" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
     <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar.</p>`
-    : `<p class="suave">Nenhuma nota neste mês.</p>${eu.papel === "dona" ? `<button class="botao" id="m-lancar">⬆ Lançar notas transcritas</button>` : ""}`;
+    : `<p class="suave">Nenhuma nota neste mês.</p>`;
   if (box.querySelector("#todas")) folhaTodas(sit, mes, box.querySelector("#todas"));
-  if (box.querySelector("#m-fotos")) cartaoFotosGrupo(sit, box.querySelector("#m-fotos"));
-  box.querySelector("#m-lancar")?.addEventListener("click", () => folhaLancar());
   for (const x of sit) {
     const div = document.createElement("div");
     div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
@@ -687,33 +684,6 @@ function folhaPagamento(x, mes) {
   fundo.hidden = false;
 }
 // Todas as notas do mês em ordem de dia, para conferir se falta algum dia.
-// Notas sem foto (vieram da transcrição): a Daiane escolhe, de uma vez, as fotos do grupo de notas de cada empresa.
-function cartaoFotosGrupo(sit, alvo) {
-  const grupos = sit.map((x) => [x.empresa, x.ns.filter((n) => !n.fotoId)]).filter(([, ns]) => ns.length);
-  if (!grupos.length) return;
-  alvo.className = "cartao"; alvo.style.cssText = "margin-bottom:8px;display:flex;flex-direction:column;gap:8px";
-  alvo.innerHTML = `<b>📷 Notas sem foto</b><span class="suave" style="font-size:14px">Escolha na galeria as fotos que você tirou das notas de cada empresa (pode marcar várias de uma vez). Elas ficam ligadas a todas as notas daquela empresa.</span>
-    ${grupos.map(([e, ns], k) => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1"><b>${esc(e)}</b> · ${ns.length} nota(s) sem foto</span>
-      <label class="botao" style="padding:6px 10px;cursor:pointer">Escolher fotos<input type="file" accept="image/*" multiple hidden data-g="${k}"></label><span class="suave" data-st="${k}"></span></div>`).join("")}`;
-  alvo.querySelectorAll("input[data-g]").forEach((inp) => (inp.onchange = async () => {
-    const [empresa, ns] = grupos[+inp.dataset.g], st = alvo.querySelector(`[data-st="${inp.dataset.g}"]`);
-    const arqs = [...inp.files].slice(0, 10); if (!arqs.length) return;
-    inp.disabled = true;
-    try {
-      const fotoIds = [];
-      for (const [k, a] of arqs.entries()) {
-        st.textContent = `enviando foto ${k + 1} de ${arqs.length}…`;
-        fotoIds.push(await acrescentar("notas_fotos", { empresa, data: hoje(), mes: hoje().slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(), grupo: true, foto: await reduzir(a) }));
-      }
-      for (const [k, n] of ns.entries()) {
-        st.textContent = `ligando às notas ${k + 1} de ${ns.length}…`;
-        await acrescentar("notas", { tipo: "foto", refId: n.id, empresa, data: n.data, mes: n.mes, fotoIds, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
-      }
-      st.textContent = "✓ pronto"; setTimeout(mostrarMes, 800);
-    } catch (e) { console.error(e); st.textContent = "Parou por falta de internet. Escolha de novo."; inp.disabled = false; }
-  }));
-}
-
 // Todas as notas do mês numa lista só (todos os dias e empresas), para a Daiane conferir. Nota sem itens: "Ler itens de novo".
 function folhaTodas(sit, mes, alvo = folha) {
   const solta = alvo === folha;
