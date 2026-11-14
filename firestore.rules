@@ -76,6 +76,7 @@ service cloud.firestore {
       allow create: if caixaOuLiderEdita() && request.resource.data.registradoPorUid == request.auth.uid && (
            request.resource.data.tipo in ["nota", "pedido", "separado"]
         || (request.resource.data.tipo in ["conferido", "cancelado"] && papel(["dona", "lider"]))
+        || (request.resource.data.tipo == "foto" && papel(["dona"]) && request.resource.data.refId is string && request.resource.data.fotoIds is list && request.resource.data.fotoIds.size() <= 10)
         || (request.resource.data.tipo == "itens" && request.resource.data.refId is string && request.resource.data.itens is list));
     }
     // Cobrança e pagamento das empresas: só a dona registra; o gestor vê.

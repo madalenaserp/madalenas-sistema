@@ -32,6 +32,8 @@
   .acoes button.problema { color:var(--alerta); border-color:var(--alerta); }
   .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
   .zoom img { max-width:100%; max-height:100%; }
+  .zoom.varias { flex-direction:column; justify-content:flex-start; overflow:auto; gap:10px; }
+  .zoom.varias img { max-height:none; }
   .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
   .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
   .folha h2 { margin:0; font-size:19px; }
@@ -109,7 +111,8 @@ function montar(registros, tipo = "nota") {
   const passos = registros.filter((r) => r.refId);
   const ultimo = (id, t) => passos.filter((r) => r.refId === id && r.tipo === t).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
   return registros.filter((r) => r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
-    .map((n) => { const it = ultimo(n.id, "itens"); return { ...n, ...(it ? { itens: it.itens, itensConfere: it.confere !== false } : {}), conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }; });
+    .map((n) => { const it = ultimo(n.id, "itens"); const ft = ultimo(n.id, "foto");
+      return { ...n, ...(it ? { itens: it.itens, itensConfere: it.confere !== false } : {}), ...(ft && !n.fotoId ? { fotoId: ft.fotoIds[0], fotoIds: ft.fotoIds, fotoGrupo: true } : {}), conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }; });
 }
 const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
@@ -153,6 +156,14 @@ function reduzir(arquivo) {
 }
 
 const miniaturas = {};
+// Abre a foto grande; nota com foto do grupo mostra todas as fotos (role para ver).
+async function verFotos(ids) {
+  const z = document.getElementById("zoom");
+  const srcs = await Promise.all(ids.map((id) => (miniaturas[id] ??= ler("notas_fotos", id).then((d) => d?.foto || ""))));
+  z.classList.toggle("varias", srcs.length > 1);
+  z.innerHTML = srcs.map((src) => `<img src="${src}" alt="Nota assinada">`).join("");
+  z.hidden = false;
+}
 async function miniatura(fotoId, el) {
   if (!fotoId) { el.alt = "Sem foto"; el.style.background = "var(--linha)"; return; }
   miniaturas[fotoId] ??= ler("notas_fotos", fotoId).then((d) => d?.foto || "");
@@ -209,7 +220,7 @@ function linhaNota(n) {
   div.className = "nota" + (n.cancelado ? " cancelada" : "");
   const img = document.createElement("img");
   img.alt = `Nota ${n.empresa}`;
-  img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; };
+  img.onclick = () => { if (n.fotoId) verFotos(n.fotoIds || [n.fotoId]); };
   miniatura(n.fotoId, img);
   const conf = n.cancelado ? `<span class="falta">Cancelada por ${esc(n.cancelado.registradoPor)}: ${esc(n.cancelado.motivo)}</span>`
     : !n.conferido ? `<span class="falta">○ Falta a conferência da Dara</span>`
@@ -226,7 +237,7 @@ function linhaNota(n) {
     b("Problema", "problema", () => folhaProblema(n));
     b("Foto errada", "", () => { const m = prompt("Por que anular esta foto?"); if (m?.trim()) gravar(n, { tipo: "cancelado", motivo: m.trim() }); });
   }
-  if (["dona", "lider"].includes(eu.papel) && !n.cancelado && n.fotoId) {
+  if (["dona", "lider"].includes(eu.papel) && !n.cancelado && n.fotoId && !n.fotoGrupo) {
     const x = document.createElement("button"); x.textContent = "Ler nota de novo"; x.className = "conferir";
     x.onclick = async () => {
       x.disabled = true; x.textContent = "Lendo a foto…";
@@ -514,12 +525,13 @@ async function mostrarMes() {
   const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
   const box = document.getElementById("tabela");
   box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
-    ${eu.papel === "dona" ? `<button class="botao" id="m-lancar" style="margin-bottom:8px">⬆ Lançar notas transcritas</button>` : ""}
+    ${eu.papel === "dona" ? `<div id="m-fotos"></div><button class="botao" id="m-lancar" style="margin-bottom:8px">⬆ Lançar notas transcritas</button>` : ""}
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
     <div id="todas" class="cartao" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
     <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar.</p>`
     : `<p class="suave">Nenhuma nota neste mês.</p>${eu.papel === "dona" ? `<button class="botao" id="m-lancar">⬆ Lançar notas transcritas</button>` : ""}`;
   if (box.querySelector("#todas")) folhaTodas(sit, mes, box.querySelector("#todas"));
+  if (box.querySelector("#m-fotos")) cartaoFotosGrupo(sit, box.querySelector("#m-fotos"));
   box.querySelector("#m-lancar")?.addEventListener("click", () => folhaLancar());
   for (const x of sit) {
     const div = document.createElement("div");
@@ -655,6 +667,33 @@ function folhaPagamento(x, mes) {
   fundo.hidden = false;
 }
 // Todas as notas do mês em ordem de dia, para conferir se falta algum dia.
+// Notas sem foto (vieram da transcrição): a Daiane escolhe, de uma vez, as fotos do grupo de notas de cada empresa.
+function cartaoFotosGrupo(sit, alvo) {
+  const grupos = sit.map((x) => [x.empresa, x.ns.filter((n) => !n.fotoId)]).filter(([, ns]) => ns.length);
+  if (!grupos.length) return;
+  alvo.className = "cartao"; alvo.style.cssText = "margin-bottom:8px;display:flex;flex-direction:column;gap:8px";
+  alvo.innerHTML = `<b>📷 Notas sem foto</b><span class="suave" style="font-size:14px">Escolha na galeria as fotos que você tirou das notas de cada empresa (pode marcar várias de uma vez). Elas ficam ligadas a todas as notas daquela empresa.</span>
+    ${grupos.map(([e, ns], k) => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1"><b>${esc(e)}</b> · ${ns.length} nota(s) sem foto</span>
+      <label class="botao" style="padding:6px 10px;cursor:pointer">Escolher fotos<input type="file" accept="image/*" multiple hidden data-g="${k}"></label><span class="suave" data-st="${k}"></span></div>`).join("")}`;
+  alvo.querySelectorAll("input[data-g]").forEach((inp) => (inp.onchange = async () => {
+    const [empresa, ns] = grupos[+inp.dataset.g], st = alvo.querySelector(`[data-st="${inp.dataset.g}"]`);
+    const arqs = [...inp.files].slice(0, 10); if (!arqs.length) return;
+    inp.disabled = true;
+    try {
+      const fotoIds = [];
+      for (const [k, a] of arqs.entries()) {
+        st.textContent = `enviando foto ${k + 1} de ${arqs.length}…`;
+        fotoIds.push(await acrescentar("notas_fotos", { empresa, data: hoje(), mes: hoje().slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString(), grupo: true, foto: await reduzir(a) }));
+      }
+      for (const [k, n] of ns.entries()) {
+        st.textContent = `ligando às notas ${k + 1} de ${ns.length}…`;
+        await acrescentar("notas", { tipo: "foto", refId: n.id, empresa, data: n.data, mes: n.mes, fotoIds, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      }
+      st.textContent = "✓ pronto"; setTimeout(mostrarMes, 800);
+    } catch (e) { console.error(e); st.textContent = "Parou por falta de internet. Escolha de novo."; inp.disabled = false; }
+  }));
+}
+
 // Todas as notas do mês numa lista só (todos os dias e empresas), para a Daiane conferir. Nota sem itens: "Ler itens de novo".
 function folhaTodas(sit, mes, alvo = folha) {
   const solta = alvo === folha;
@@ -667,11 +706,11 @@ function folhaTodas(sit, mes, alvo = folha) {
     <p class="suave" style="margin:0">${ns.length} nota(s) · ${reais(total)}${semItens.length ? ` · <b>${semItens.length} sem descrição</b>` : ""}</p>
     ${podeReler && semItens.length ? `<button class="botao principal" id="t-reler">Ler os itens das ${semItens.length} nota(s) sem descrição</button><p class="suave" id="t-prog" style="margin:0"></p>` : ""}
     <div style="display:flex;flex-direction:column;gap:6px">${ns.map((n) => (n.data !== dia ? `<h3 style="margin:10px 0 0">${dataBR((dia = n.data))}</h3>` : "")
-      + `<div class="nota" data-id="${esc(n.id)}"><img data-foto="${esc(n.fotoId || "")}" alt="Nota"><div class="info"><span><b>${esc(n.empresa)}</b> · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.pedidoGuappo ? ` <span class="suave">· nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>
+      + `<div class="nota" data-id="${esc(n.id)}"><img data-foto="${esc(n.fotoId || "")}" data-fotos="${esc((n.fotoIds || [n.fotoId || ""]).join(","))}" alt="Nota"><div class="info"><span><b>${esc(n.empresa)}</b> · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.pedidoGuappo ? ` <span class="suave">· nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>
         <span class="itens">${itensNota(n) || `<span class="falta">sem descrição</span>`}</span>
-        ${podeReler && n.fotoId ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler nota de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
+        ${podeReler && n.fotoId && !n.fotoGrupo ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler nota de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
     ${solta ? `<button class="botao" id="t-x" style="text-align:center">Fechar</button>` : ""}`;
-  alvo.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (!img.dataset.foto) return; const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
+  alvo.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (img.dataset.foto) verFotos(img.dataset.fotos.split(",")); }; });
   if (solta) alvo.querySelector("#t-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
   const porId = Object.fromEntries(ns.map((n) => [n.id, n]));
   const umaNota = async (n) => {
@@ -768,10 +807,10 @@ function folhaLancar(texto = "") {
 }
 function verNotasMes(x) {
   folha.innerHTML = `<h2>${esc(x.empresa)} · notas do mês</h2>
-    <div style="display:flex;flex-direction:column;gap:8px">${x.ns.map((n) => `<div class="nota"><img data-foto="${esc(n.fotoId)}" alt="Nota"><div class="info"><b>${dataBR(n.data)} · ${n.valor != null ? reais(n.valor) : "sem valor"}</b>
+    <div style="display:flex;flex-direction:column;gap:8px">${x.ns.map((n) => `<div class="nota"><img data-foto="${esc(n.fotoId || "")}" data-fotos="${esc((n.fotoIds || [n.fotoId || ""]).join(","))}" alt="Nota"><div class="info"><b>${dataBR(n.data)} · ${n.valor != null ? reais(n.valor) : "sem valor"}</b>
       ${itensNota(n)}<span class="suave">${n.conferido ? (n.conferido.ok ? "✓ conferida" : "✗ " + esc(PROBLEMAS[n.conferido.problema])) : "sem conferir"}</span></div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
     <button class="botao" id="n-x" style="text-align:center">Fechar</button>`;
-  folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
+  folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (img.dataset.foto) verFotos(img.dataset.fotos.split(",")); }; });
   folha.querySelector("#n-x").onclick = () => { fundo.hidden = true; };
   fundo.hidden = false;
 }
