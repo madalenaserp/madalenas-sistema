@@ -133,10 +133,12 @@ export function lerComprovanteGuappo(texto) {
   });
   const achaValor = (re) => { const k = linhas.findIndex((l) => re.test(sem(l))); if (k < 0) return 0; const v = dinheiro(linhas[k]); if (v.length) return v.at(-1); const v2 = dinheiro(linhas[k + 1] || ""); return v2.length ? v2.at(-1) : 0; };
   const soma = Math.round(itens.reduce((t, i) => t + i.total, 0) * 100) / 100;
-  const total = achaValor(/valor total/) || achaValor(/crediario/) || soma;
-  const n = linhas.map((l) => sem(l).match(/numero:?\s*([0-9oc€]{5,8})/)).find(Boolean);
+  const lido = achaValor(/valor total/) || achaValor(/crediario/);
+  const total = lido || soma;
+  const n = linhas.map((l) => sem(l).match(/(?:nu|n|u)?mero[:.]?\s*([0-9oc€]{5,8})\b/)).find(Boolean);
   const numero = n ? n[1].replace(/[o]/g, "0").replace(/\D/g, "") : "";
   const e = linhas.map((l) => sem(l).match(/emiss\w*:?\s*(\d{2})\D{0,2}(\d{2})\D{0,2}(\d{4})/)).find(Boolean);
-  const emissao = e ? `${e[3]}-${e[2]}-${e[1]}` : "";
-  return { itens, total, numero, emissao: /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(emissao) ? emissao : "", confere: itens.length > 0 && Math.abs(soma - total) < 0.02 };
+  const e2 = e || linhas.map((l) => l.match(/(\d{2})\/(\d{2})\/(20\d{2})\s+\d{2}[:.]\d{2}/)).find(Boolean); // "11/11/2026 15:01:54"
+  const emissao = e2 ? `${e2[3]}-${e2[2]}-${e2[1]}` : "";
+  return { itens, total, numero, emissao: /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(emissao) ? emissao : "", totalLido: lido > 0, confere: lido > 0 && itens.length > 0 && Math.abs(soma - lido) < 0.02 };
 }
