@@ -546,26 +546,27 @@ async function mostrarMes() {
   const box = document.getElementById("tabela");
   box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
-    <div id="todas" class="cartao" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
     <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar.</p>`
     : `<p class="suave">Nenhuma nota neste mês.</p>`;
-  if (box.querySelector("#todas")) folhaTodas(sit, mes, box.querySelector("#todas"));
   for (const x of sit) {
     const div = document.createElement("div");
     div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
     const atraso = x.estado === "atrasado" ? Math.round((new Date(hoje()) - new Date(x.cobranca.vencimento)) / 86400000) : 0;
     div.innerHTML = `<div class="cab"><b style="font-size:17px">${esc(x.empresa)}</b><span class="selo ${ROT[x.estado][1]}">${ROT[x.estado][0]}${atraso ? ` há ${atraso} dia(s)` : ""}</span></div>
       ${x.de.slice(8) !== "01" ? `<span class="suave">Período: ${dataBR(x.de)} a ${dataBR(x.ate)}</span>` : ""}
-      <span>${x.ns.length} nota(s) · <b>${reais(x.total)}</b>${x.pago ? ` · recebido ${reais(x.pago)}` : ""}${x.cobranca && x.falta > 0 ? ` · falta <b>${reais(x.falta)}</b>` : ""}</span>
+      <span><b style="font-size:17px">${reais(x.total)}</b> · ${x.ns.length} nota(s)${x.pago ? ` · recebido ${reais(x.pago)}` : ""}${x.cobranca && x.falta > 0 ? ` · falta <b>${reais(x.falta)}</b>` : ""}</span>
       ${x.cobranca ? `<span class="suave">Cobrança de ${reais(x.cobranca.total)} enviada em ${dataBR(x.cobranca.criadoEm.slice(0, 10))}, vence ${dataBR(x.cobranca.vencimento)}</span>` : ""}
       ${x.pagos.map((pg) => `<span class="ok">✓ ${reais(pg.valor)} em ${dataBR(pg.dataPagto)} (${esc(pg.forma)})</span>`).join("")}
       ${x.semValor ? `<span class="alerta-linha">${x.semValor} nota(s) sem valor: o total está incompleto</span>` : ""}
       ${x.problemas ? `<span class="alerta-linha">${x.problemas} nota(s) com problema na conferência</span>` : ""}
       ${x.pedidosSemNota.length ? `<span class="alerta-linha">Pedido sem nota assinada em: ${x.pedidosSemNota.map((p) => dataBR(p.data).slice(0, 5)).join(", ")}</span>` : ""}
+      <div style="display:flex;flex-direction:column">${x.ns.map((n) => `<div class="linha-nota" data-fotos="${esc((n.fotoIds || [n.fotoId || ""]).join(","))}" style="border-top:1px dashed var(--linha);padding:6px 0;font-size:15px${n.fotoId ? ";cursor:pointer" : ""}">
+        <b>${dataBR(n.data).slice(0, 5)}</b>${n.pedidoGuappo ? ` · nº ${esc(n.pedidoGuappo)}` : ""} · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.fotoId ? " 📷" : ""}
+        <div class="suave" style="font-size:14px">${n.itens?.length ? esc(n.itens.map((i) => `${String(i.qtd).replace(".", ",")} ${i.descricao}`).join(" · ")) : "sem descrição"}${n.itensConfere === false ? " (conferir)" : ""}</div></div>`).join("")}</div>
       <div class="acoes"></div>`;
+    div.querySelectorAll(".linha-nota").forEach((l) => (l.onclick = () => { const ids = l.dataset.fotos.split(",").filter(Boolean); if (ids.length) verFotos(ids); }));
     const ac = div.querySelector(".acoes");
     const bt = (txt, cls, fn) => { const b = document.createElement("button"); b.textContent = txt; if (cls) b.className = cls; b.onclick = fn; ac.append(b); };
-    bt("Ver notas do mês", "", () => verNotasMes(x));
     if (cobra) bt("Dados da empresa", "", () => folhaDadosEmpresa(x.empresa));
     if (cobra && x.estado !== "pago") {
       bt(x.cobranca ? "Cobrar de novo" : "Gerar cobrança", x.cobranca ? "" : "principal", () => folhaCobranca(x, mes));
@@ -684,53 +685,6 @@ function folhaPagamento(x, mes) {
   fundo.hidden = false;
 }
 // Todas as notas do mês em ordem de dia, para conferir se falta algum dia.
-// Todas as notas do mês numa lista só (todos os dias e empresas), para a Daiane conferir. Nota sem itens: "Ler itens de novo".
-function folhaTodas(sit, mes, alvo = folha) {
-  const solta = alvo === folha;
-  const ns = sit.flatMap((x) => x.ns).sort((a, b) => a.data.localeCompare(b.data) || a.empresa.localeCompare(b.empresa));
-  const semItens = ns.filter((n) => !n.itens?.length && n.fotoId);
-  const podeReler = ["dona", "lider"].includes(eu.papel);
-  const total = ns.reduce((s, n) => s + (n.valor || 0), 0);
-  let dia = "";
-  alvo.innerHTML = `<h2 style="margin:0">Todas as notas · ${mesBR(mes)}</h2>
-    <p class="suave" style="margin:0">${ns.length} nota(s) · ${reais(total)}${semItens.length ? ` · <b>${semItens.length} sem descrição</b>` : ""}</p>
-    ${podeReler && semItens.length ? `<button class="botao principal" id="t-reler">Ler os itens das ${semItens.length} nota(s) sem descrição</button><p class="suave" id="t-prog" style="margin:0"></p>` : ""}
-    <div style="display:flex;flex-direction:column;gap:6px">${ns.map((n) => (n.data !== dia ? `<h3 style="margin:10px 0 0">${dataBR((dia = n.data))}</h3>` : "")
-      + `<div class="nota" data-id="${esc(n.id)}"><img data-foto="${esc(n.fotoId || "")}" data-fotos="${esc((n.fotoIds || [n.fotoId || ""]).join(","))}" alt="Nota"><div class="info"><span><b>${esc(n.empresa)}</b> · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.pedidoGuappo ? ` <span class="suave">· nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>
-        <span class="itens">${itensNota(n) || `<span class="falta">sem descrição</span>`}</span>
-        ${podeReler && n.fotoId && !n.fotoGrupo ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler nota de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
-    ${solta ? `<button class="botao" id="t-x" style="text-align:center">Fechar</button>` : ""}`;
-  alvo.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (img.dataset.foto) verFotos(img.dataset.fotos.split(",")); }; });
-  if (solta) alvo.querySelector("#t-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
-  const porId = Object.fromEntries(ns.map((n) => [n.id, n]));
-  const umaNota = async (n) => {
-    const caixa = alvo.querySelector(`.nota[data-id="${CSS.escape(n.id)}"] .info`);
-    const b = caixa?.querySelector("[data-reler]"); if (b) { b.disabled = true; b.textContent = "Lendo…"; }
-    try {
-      const r = await lerItensDeNovo(n);
-      const soma = Math.round(r.itens.reduce((s, i) => s + (i.total || 0), 0) * 100) / 100;
-      const bate = n.valor == null || Math.abs(soma - n.valor) < 0.05;
-      {
-        await acrescentar("notas", { tipo: "itens", refId: n.id, empresa: n.empresa, data: n.data, mes: n.mes, itens: r.itens, confere: bate, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
-        n.itens = r.itens; n.itensConfere = bate;
-        caixa.querySelector(".itens").innerHTML = itensNota(n);
-        if (b) { b.disabled = false; b.textContent = "Ler nota de novo"; b.onclick = () => umaNota(n); } return true;
-      }
-    } catch (e) {
-      caixa.querySelector(".itens").innerHTML = `<span class="falta">Não consegui ler (${esc(String(e?.message || e).slice(0, 120))}).</span>`;
-      if (b) { b.disabled = false; b.textContent = "Tentar de novo"; }
-    }
-    return false;
-  };
-  alvo.querySelectorAll("[data-reler]").forEach((b) => (b.onclick = () => umaNota(porId[b.dataset.reler])));
-  const tb = alvo.querySelector("#t-reler");
-  if (tb) tb.onclick = async () => {
-    tb.disabled = true; let ok = 0, k = 0;
-    for (const n of semItens) { if (solta && fundo.hidden) return; alvo.querySelector("#t-prog").textContent = `Lendo ${++k} de ${semItens.length}…`; if (await umaNota(n)) ok++; }
-    alvo.querySelector("#t-prog").textContent = `Pronto: ${ok} de ${semItens.length} nota(s) ganharam descrição. As outras mostram o motivo.`;
-  };
-  if (solta) fundo.hidden = false;
-}
 async function lerItensDeNovo(n) {
   const f = await ler("notas_fotos", n.fotoId);
   if (!f?.foto) throw new Error("a foto não foi encontrada");
@@ -793,15 +747,6 @@ function folhaLancar(texto = "") {
       } catch (e) { $("#l-e").textContent = "Parou no meio por falta de internet. Toque em Conferir a lista de novo: as que já entraram ficam de fora."; ok.disabled = false; }
     };
   };
-  fundo.hidden = false;
-}
-function verNotasMes(x) {
-  folha.innerHTML = `<h2>${esc(x.empresa)} · notas do mês</h2>
-    <div style="display:flex;flex-direction:column;gap:8px">${x.ns.map((n) => `<div class="nota"><img data-foto="${esc(n.fotoId || "")}" data-fotos="${esc((n.fotoIds || [n.fotoId || ""]).join(","))}" alt="Nota"><div class="info"><b>${dataBR(n.data)} · ${n.valor != null ? reais(n.valor) : "sem valor"}</b>
-      ${itensNota(n)}<span class="suave">${n.conferido ? (n.conferido.ok ? "✓ conferida" : "✗ " + esc(PROBLEMAS[n.conferido.problema])) : "sem conferir"}</span></div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
-    <button class="botao" id="n-x" style="text-align:center">Fechar</button>`;
-  folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (img.dataset.foto) verFotos(img.dataset.fotos.split(",")); }; });
-  folha.querySelector("#n-x").onclick = () => { fundo.hidden = true; };
   fundo.hidden = false;
 }
 campoMes.onchange = mostrarMes;
