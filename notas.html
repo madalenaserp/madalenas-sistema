@@ -514,13 +514,12 @@ async function mostrarMes() {
   const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
   const box = document.getElementById("tabela");
   box.innerHTML = sit.length ? `<p style="margin:0 0 8px">Total do mês: <b>${reais(t((x) => x.total))}</b> · recebido ${reais(t((x) => x.pago))} · falta <b>${reais(t((x) => Math.max(0, x.falta)))}</b></p>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="botao principal" id="m-todas" style="flex:1">📋 Conferir todas as notas</button>
-      ${eu.papel === "dona" ? `<button class="botao" id="m-lancar" style="flex:1">⬆ Lançar notas transcritas</button>` : ""}</div>
-    <details class="cartao" style="margin-bottom:8px"><summary><b>Ver o mês dia a dia</b> <span class="suave">(dia 1, 2, 3…)</span></summary>${diaADia(sit)}</details>
+    ${eu.papel === "dona" ? `<button class="botao" id="m-lancar" style="margin-bottom:8px">⬆ Lançar notas transcritas</button>` : ""}
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
-    <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar. As fotos de cada dia ficam na aba Dia.</p>`
+    <div id="todas" class="cartao" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
+    <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar.</p>`
     : `<p class="suave">Nenhuma nota neste mês.</p>${eu.papel === "dona" ? `<button class="botao" id="m-lancar">⬆ Lançar notas transcritas</button>` : ""}`;
-  box.querySelector("#m-todas")?.addEventListener("click", () => folhaTodas(sit, mes));
+  if (box.querySelector("#todas")) folhaTodas(sit, mes, box.querySelector("#todas"));
   box.querySelector("#m-lancar")?.addEventListener("click", () => folhaLancar());
   for (const x of sit) {
     const div = document.createElement("div");
@@ -656,32 +655,27 @@ function folhaPagamento(x, mes) {
   fundo.hidden = false;
 }
 // Todas as notas do mês em ordem de dia, para conferir se falta algum dia.
-function diaADia(sit) {
-  const por = {};
-  for (const x of sit) for (const n of x.ns) (por[n.data] ||= []).push(n);
-  return Object.keys(por).sort().map((d) => `<div style="border-top:1px solid var(--linha);padding:6px 0"><b>Dia ${Number(d.slice(8))}</b> <span class="suave">(${dataBR(d)})</span> · ${reais(por[d].reduce((t, n) => t + (n.valor || 0), 0))}
-    <div class="suave" style="font-size:14px">${por[d].map((n) => `${esc(n.empresa)}: ${n.valor != null ? reais(n.valor) : "sem valor"}`).join(" · ")}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`;
-}
 // Todas as notas do mês numa lista só (todos os dias e empresas), para a Daiane conferir. Nota sem itens: "Ler itens de novo".
-function folhaTodas(sit, mes) {
+function folhaTodas(sit, mes, alvo = folha) {
+  const solta = alvo === folha;
   const ns = sit.flatMap((x) => x.ns).sort((a, b) => a.data.localeCompare(b.data) || a.empresa.localeCompare(b.empresa));
   const semItens = ns.filter((n) => !n.itens?.length && n.fotoId);
   const podeReler = ["dona", "lider"].includes(eu.papel);
   const total = ns.reduce((s, n) => s + (n.valor || 0), 0);
   let dia = "";
-  folha.innerHTML = `<h2>Todas as notas · ${mesBR(mes)}</h2>
+  alvo.innerHTML = `<h2 style="margin:0">Todas as notas · ${mesBR(mes)}</h2>
     <p class="suave" style="margin:0">${ns.length} nota(s) · ${reais(total)}${semItens.length ? ` · <b>${semItens.length} sem descrição</b>` : ""}</p>
     ${podeReler && semItens.length ? `<button class="botao principal" id="t-reler">Ler os itens das ${semItens.length} nota(s) sem descrição</button><p class="suave" id="t-prog" style="margin:0"></p>` : ""}
     <div style="display:flex;flex-direction:column;gap:6px">${ns.map((n) => (n.data !== dia ? `<h3 style="margin:10px 0 0">${dataBR((dia = n.data))}</h3>` : "")
       + `<div class="nota" data-id="${esc(n.id)}"><img data-foto="${esc(n.fotoId || "")}" alt="Nota"><div class="info"><span><b>${esc(n.empresa)}</b> · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.pedidoGuappo ? ` <span class="suave">· nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>
         <span class="itens">${itensNota(n) || `<span class="falta">sem descrição</span>`}</span>
         ${podeReler && n.fotoId ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler nota de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
-    <button class="botao" id="t-x" style="text-align:center">Fechar</button>`;
-  folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (!img.dataset.foto) return; const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
-  folha.querySelector("#t-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
+    ${solta ? `<button class="botao" id="t-x" style="text-align:center">Fechar</button>` : ""}`;
+  alvo.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (!img.dataset.foto) return; const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
+  if (solta) alvo.querySelector("#t-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
   const porId = Object.fromEntries(ns.map((n) => [n.id, n]));
   const umaNota = async (n) => {
-    const caixa = folha.querySelector(`.nota[data-id="${CSS.escape(n.id)}"] .info`);
+    const caixa = alvo.querySelector(`.nota[data-id="${CSS.escape(n.id)}"] .info`);
     const b = caixa?.querySelector("[data-reler]"); if (b) { b.disabled = true; b.textContent = "Lendo…"; }
     try {
       const r = await lerItensDeNovo(n);
@@ -699,14 +693,14 @@ function folhaTodas(sit, mes) {
     }
     return false;
   };
-  folha.querySelectorAll("[data-reler]").forEach((b) => (b.onclick = () => umaNota(porId[b.dataset.reler])));
-  const tb = folha.querySelector("#t-reler");
+  alvo.querySelectorAll("[data-reler]").forEach((b) => (b.onclick = () => umaNota(porId[b.dataset.reler])));
+  const tb = alvo.querySelector("#t-reler");
   if (tb) tb.onclick = async () => {
     tb.disabled = true; let ok = 0, k = 0;
-    for (const n of semItens) { if (fundo.hidden) return; folha.querySelector("#t-prog").textContent = `Lendo ${++k} de ${semItens.length}…`; if (await umaNota(n)) ok++; }
-    folha.querySelector("#t-prog").textContent = `Pronto: ${ok} de ${semItens.length} nota(s) ganharam descrição. As outras mostram o motivo.`;
+    for (const n of semItens) { if (solta && fundo.hidden) return; alvo.querySelector("#t-prog").textContent = `Lendo ${++k} de ${semItens.length}…`; if (await umaNota(n)) ok++; }
+    alvo.querySelector("#t-prog").textContent = `Pronto: ${ok} de ${semItens.length} nota(s) ganharam descrição. As outras mostram o motivo.`;
   };
-  fundo.hidden = false;
+  if (solta) fundo.hidden = false;
 }
 async function lerItensDeNovo(n) {
   const f = await ler("notas_fotos", n.fotoId);
@@ -718,7 +712,7 @@ async function lerItensDeNovo(n) {
 }
 
 // Lançar de uma vez as notas que o Claude transcreveu das fotos (uma linha por nota: EMPRESA;dd/mm;número;valor;itens).
-function folhaLancar() {
+function folhaLancar(texto = "") {
   folha.innerHTML = `<h2>Lançar notas transcritas</h2>
     <p class="suave" style="margin:0">Cole aqui o texto do arquivo "para-lancar" que o Claude mandou. Antes de lançar, eu mostro a lista para você conferir. Número que já existe no sistema não entra de novo.</p>
     <textarea id="l-t" rows="8" placeholder="ABG;01/11;244392;18,00;30 PÃO FRANCÊS=18,00"></textarea>
@@ -728,6 +722,7 @@ function folhaLancar() {
     <button class="botao" id="l-x" style="text-align:center;border:none">Fechar</button>`;
   const $ = (q) => folha.querySelector(q);
   $("#l-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
+  if (texto) { $("#l-t").value = texto; $("#l-t").hidden = true; folha.querySelector("p.suave").textContent = "Estas são as notas que você mandou para o Claude. Confira a lista e toque em Lançar. Número que já está no sistema fica de fora."; setTimeout(() => $("#l-ver").click(), 0); }
   $("#l-ver").onclick = async () => {
     $("#l-e").textContent = ""; $("#l-lista").innerHTML = "Conferindo…";
     const ano = hoje().slice(0, 4), linhas = [], erros = [];
@@ -744,10 +739,10 @@ function folhaLancar() {
     const meses = [...new Set(linhas.map((x) => x.data.slice(0, 7)))];
     const existentes = new Set();
     try {
-      for (const mes of meses) { const regs = await listar("notas", "mes", mes); for (const n of montar(regs)) if (!n.cancelado && n.pedidoGuappo) existentes.add(n.pedidoGuappo); }
+      for (const mes of meses) { const regs = await listar("notas", "mes", mes); for (const n of montar(regs)) if (!n.cancelado) { if (n.pedidoGuappo) existentes.add(n.pedidoGuappo); existentes.add(`${n.empresa}|${n.data}|${Number(n.valor).toFixed(2)}`); } }
     } catch { $("#l-lista").innerHTML = ""; return ($("#l-e").textContent = "Sem internet para conferir. Tente de novo."); }
     const vistos = new Set();
-    for (const x of linhas) { x.repetida = existentes.has(x.pedidoGuappo) || vistos.has(x.pedidoGuappo); if (x.pedidoGuappo) vistos.add(x.pedidoGuappo); }
+    for (const x of linhas) { x.repetida = existentes.has(x.pedidoGuappo) || existentes.has(`${x.empresa}|${x.data}|${x.valor.toFixed(2)}`) || vistos.has(x.pedidoGuappo); if (x.pedidoGuappo) vistos.add(x.pedidoGuappo); }
     const novas = linhas.filter((x) => !x.repetida);
     const tot = novas.reduce((s, x) => s + x.valor, 0);
     $("#l-lista").innerHTML = `<p style="margin:6px 0"><b>${novas.length} nota(s) novas · ${reais(tot)}</b>${linhas.length - novas.length ? ` · ${linhas.length - novas.length} já lançada(s), ficam de fora` : ""}${erros.length ? `<br><span class="falta">${erros.length} linha(s) que não entendi: ${esc(erros.slice(0, 3).join(" · "))}</span>` : ""}</p>
@@ -793,6 +788,20 @@ if (veMes) {
     document.getElementById("aba-mes").hidden = aba !== "mes";
     if (aba === "mes") mostrarMes();
   };
+  // A Daiane abre direto no mês, com todas as notas na tela.
+  if (eu.papel === "dona") abas.querySelector('[data-aba="mes"]').click();
+}
+// Link "Lançar as notas" que o Claude manda: as notas vêm no próprio link (depois do #, não passa por nenhum servidor).
+if (eu.papel === "dona" && location.hash.startsWith("#lancar=")) {
+  (async () => {
+    try {
+      const b64 = location.hash.slice(8).replace(/-/g, "+").replace(/_/g, "/");
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const texto = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"))).text();
+      history.replaceState(null, "", location.pathname + location.search);
+      folhaLancar(texto);
+    } catch (e) { console.error(e); alert("Não consegui abrir as notas do link. Peça um link novo ao Claude."); }
+  })();
 }
 mostrar();
 // Liga o leitor de notas do celular logo que a tela abre, para a primeira foto não esperar o download.
