@@ -88,7 +88,7 @@
 <script type="module">
 import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
 import { pode } from "./js/equipe.js";
-import { acrescentar, listar, ler } from "./js/db.js";
+import { acrescentar, listar, ler, salvarComHistorico } from "./js/db.js";
 
 const eu = await exigirUsuario();
 if (!pode.notasEmpresas(eu)) location.href = "turno.html";
@@ -449,6 +449,7 @@ async function situacaoEmpresas(mes) {
 }
 async function mostrarMes() {
   const mes = campoMes.value;
+  await carregarDadosEmp();
   const sit = (await situacaoEmpresas(mes)).filter((x) => x.estado !== "vazio");
   const t = (f) => sit.reduce((s, x) => s + f(x), 0);
   const ROT = { pago: ["Pago", "ok"], aberto: ["Cobrado, esperando", "pendente"], atrasado: ["ATRASADO", "alerta"], sem: ["Falta cobrar", "pendente"] };
@@ -473,6 +474,7 @@ async function mostrarMes() {
     const ac = div.querySelector(".acoes");
     const bt = (txt, cls, fn) => { const b = document.createElement("button"); b.textContent = txt; if (cls) b.className = cls; b.onclick = fn; ac.append(b); };
     bt("Ver notas do mês", "", () => verNotasMes(x));
+    if (cobra) bt("Dados da empresa", "", () => folhaDadosEmpresa(x.empresa));
     if (cobra && x.estado !== "pago") {
       bt(x.cobranca ? "Cobrar de novo" : "Gerar cobrança", x.cobranca ? "" : "principal", () => folhaCobranca(x, mes));
       bt("Recebi pagamento", x.cobranca ? "principal" : "", () => folhaPagamento(x, mes));
@@ -480,8 +482,39 @@ async function mostrarMes() {
     box.querySelector("#emps").append(div);
   }
 }
+// Dados que saem no fechamento (como no ERP anterior): a padaria e a empresa cliente.
+const PADARIA = "DAIANE ABILIO PADARIA E RESTAURANTE LTDA (Madalena's Coffee Shop)\nCNPJ 55.612.496/0001-46 · IE 14.904.12-3\nRua Abílio José de Matos, 2544, Porto da Pedra, São Gonçalo/RJ, 24436-000\nTel. (21) 97209-8291";
+const PADRAO_EMP = {
+  ABG: { razao: "ABG SERVICES OFFSHORE GENERAL SOLUTIONS LTDA", cnpj: "42.597.739/0001-72", endereco: "Rua Magalhães Bastos, Boa Vista, 24466-250" },
+  TECMAR: { razao: "TECMAR SERVICOS NAVAIS OFFSHORE LTDA", cnpj: "12.795.238/0001-30", endereco: "Rua Professora Maria Joaquina, 340, Boa Vista, São Gonçalo/RJ, 24466-260" },
+};
+let dadosEmp = null;
+async function carregarDadosEmp() {
+  if (!dadosEmp) { const c = await ler("config", "empresas").catch(() => null); dadosEmp = { ...PADRAO_EMP, ...(c?.lista || {}) }; }
+  return dadosEmp;
+}
+const blocoEmpresa = (nome) => { const e = dadosEmp?.[nome] || {}; return [e.razao || nome, e.cnpj && `CNPJ ${e.cnpj}`, e.endereco].filter(Boolean).join("\n"); };
+function folhaDadosEmpresa(nome) {
+  const e = dadosEmp?.[nome] || {};
+  folha.innerHTML = `<h2>Dados da empresa · ${esc(nome)}</h2>
+    <label class="suave" for="de-r">Razão social</label><input id="de-r" value="${esc(e.razao || "")}">
+    <label class="suave" for="de-c">CNPJ</label><input id="de-c" inputmode="numeric" value="${esc(e.cnpj || "")}">
+    <label class="suave" for="de-e">Endereço</label><input id="de-e" value="${esc(e.endereco || "")}">
+    <p class="suave" style="margin:0;font-size:13px">Fica no fechamento/cobrança. Está escrito no rodapé das notas do Guappo (CONSUMIDOR).</p>
+    <p class="msg-erro" id="de-x2"></p>
+    <button class="botao principal" id="de-ok">Salvar</button>
+    <button class="botao" id="de-x" style="text-align:center;border:none">Cancelar</button>`;
+  folha.querySelector("#de-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#de-ok").onclick = async (ev) => {
+    ev.target.disabled = true;
+    const novo = { ...dadosEmp, [nome]: { razao: folha.querySelector("#de-r").value.trim(), cnpj: folha.querySelector("#de-c").value.trim(), endereco: folha.querySelector("#de-e").value.trim() } };
+    try { await salvarComHistorico("config", "empresas", { lista: novo, alteradoPor: eu.nome, alteradoPorUid: eu.uid, em: new Date().toISOString() }); dadosEmp = novo; fundo.hidden = true; }
+    catch { folha.querySelector("#de-x2").textContent = "Não consegui salvar."; ev.target.disabled = false; }
+  };
+  fundo.hidden = false;
+}
 function textoCobranca(x, mes, venc, pix) {
-  return `Olá! Segue o fechamento de ${mesBR(mes)} da ${x.empresa} na Madalena's Coffee Shop:\n\n`
+  return `FECHAMENTO ${mesBR(mes)}\n\nDe:\n${PADARIA}\n\nPara:\n${blocoEmpresa(x.empresa)}\n\n`
     + x.ns.map((n) => `${dataBR(n.data).slice(0, 5)}${n.pedidoGuappo ? ` · pedido ${n.pedidoGuappo}` : ""}: ${n.valor != null ? reais(n.valor) : "(sem valor)"}`
       + (n.itens?.length ? "\n" + n.itens.map((i) => `   ${String(i.qtd).replace(".", ",")} ${i.descricao}${i.total ? ` (${reais(i.total)})` : ""}`).join("\n") : "")).join("\n")
     + `\n\nTotal: ${reais(x.total)}\nVencimento: ${dataBR(venc)}${pix ? `\nPIX: ${pix}` : ""}\n\nTodas as notas assinadas estão guardadas com foto. Qualquer dúvida, é só chamar. Obrigada!`;
