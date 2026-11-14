@@ -6,14 +6,13 @@ const { firebaseConfig } = cfg;
 const appCheck = cfg.appCheck || null; // { tipo: "enterprise" | "v3", chave: "..." } em config.js
 
 const V = "https://www.gstatic.com/firebasejs/12.0.0";
-// Do mais rápido para o mais forte. Cada um tem no máximo POR_MODELO ms; se travar ou der erro, tenta o próximo.
+// Do mais rápido para o mais forte; se travar ou der erro, tenta o próximo.
 // "lite" sem raciocínio responde em poucos segundos e lê bem cupom impresso.
+// Na internet da loja, enviar a foto pode levar mais de 10s: o primeiro modelo tem tempo de sobra (trocar de modelo envia a foto de novo).
 const MODELOS = [
-  { nome: "gemini-flash-lite-latest", pensar: null },
-  { nome: "gemini-flash-latest", pensar: { thinkingBudget: 0 } },
-  { nome: "gemini-3.8-flash", pensar: { thinkingLevel: "low" } },
+  { nome: "gemini-flash-lite-latest", pensar: null, ms: 28000 },
+  { nome: "gemini-flash-latest", pensar: { thinkingBudget: 0 }, ms: 16000 },
 ];
-const POR_MODELO = 14000;
 export let modeloUsado = "";
 const LIMITE = 100000; // tempo máximo de espera (ms); depois disso desiste e avisa
 let base = null;
@@ -44,7 +43,7 @@ async function gerar(partes, json = true) {
   let ultimoErro;
   const inicio = Date.now();
   const erros = [];
-  for (const { nome, pensar } of MODELOS) {
+  for (const { nome, pensar, ms } of MODELOS) {
     const resta = LIMITE - (Date.now() - inicio);
     if (resta < 4000) break;
     etapa = `lendo (${nome})`;
@@ -52,7 +51,7 @@ async function gerar(partes, json = true) {
     try {
       const conf = json ? { responseMimeType: "application/json", temperature: 0 } : { temperature: 0.9 };
       if (pensar) conf.thinkingConfig = pensar;
-      const lim = Math.min(resta, POR_MODELO);
+      const lim = Math.min(resta, ms);
       const m = ai.getGenerativeModel(motor, { model: nome, generationConfig: conf }, { timeout: lim });
       const r = await comLimite(m.generateContent(partes), lim, `resposta ${nome}`);
       etapa = ""; modeloUsado = `${nome} ${Math.round((Date.now() - t1) / 1000)}s`;

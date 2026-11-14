@@ -118,15 +118,34 @@ const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency
 const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
 
 // Versão menor da foto só para mandar à IA (envio mais rápido em internet fraca; o texto do cupom continua legível).
+// Foto para a IA: recorta só o papel (parte clara), deixa em tons de cinza e pequena (~100 KB), para subir rápido na internet da loja.
 function menorParaIA(dataUrl) {
   return new Promise((ok) => {
     const img = new Image();
     img.onload = () => {
-      const e = Math.min(1, 1600 / Math.max(img.width, img.height));
-      if (e === 1) return ok(dataUrl);
-      const c = document.createElement("canvas"); c.width = Math.round(img.width * e); c.height = Math.round(img.height * e);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      const url = c.toDataURL("image/jpeg", 0.75); c.width = c.height = 0; ok(url);
+      try {
+        // 1) acha o papel numa versão pequena
+        const W = 240, e0 = W / Math.max(img.width, img.height);
+        const c0 = document.createElement("canvas"); c0.width = Math.round(img.width * e0); c0.height = Math.round(img.height * e0);
+        const x0 = c0.getContext("2d"); x0.drawImage(img, 0, 0, c0.width, c0.height);
+        const d0 = x0.getImageData(0, 0, c0.width, c0.height).data, w0 = c0.width, h0 = c0.height; c0.width = c0.height = 0;
+        const lum = []; for (let k = 0; k < d0.length; k += 4) lum.push(0.299 * d0[k] + 0.587 * d0[k + 1] + 0.114 * d0[k + 2]);
+        const ord = [...lum].sort((a, b) => a - b), lim = Math.max(140, ord[Math.floor(ord.length * 0.97)] * 0.82);
+        const cols = new Array(w0).fill(0), rows = new Array(h0).fill(0);
+        for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) if (lum[y * w0 + x] >= lim) { cols[x]++; rows[y]++; }
+        const faixa = (arr, min) => { const a = arr.findIndex((v) => v >= min), b = arr.length - 1 - [...arr].reverse().findIndex((v) => v >= min); return a < 0 ? [0, arr.length - 1] : [a, b]; };
+        let [xa, xb] = faixa(cols, Math.max(...cols) * 0.45), [ya, yb] = faixa(rows, Math.max(...rows) * 0.35);
+        if (xb - xa < w0 * 0.25 || yb - ya < h0 * 0.25) { xa = 0; ya = 0; xb = w0 - 1; yb = h0 - 1; }
+        const m = 6; xa = Math.max(0, xa - m); ya = Math.max(0, ya - m); xb = Math.min(w0 - 1, xb + m); yb = Math.min(h0 - 1, yb + m);
+        // 2) recorte em até 1400 px no lado maior, cinza, JPEG
+        const sx = xa / e0, sy = ya / e0, sw = (xb - xa + 1) / e0, sh = (yb - ya + 1) / e0;
+        const e = Math.min(1.6, 1400 / Math.max(sw, sh));
+        const c = document.createElement("canvas"); c.width = Math.round(sw * e); c.height = Math.round(sh * e);
+        const x = c.getContext("2d"); x.filter = "grayscale(1) contrast(1.25)"; x.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        let url = c.toDataURL("image/jpeg", 0.7);
+        if (url.length > 260000) url = c.toDataURL("image/jpeg", 0.55);
+        c.width = c.height = 0; ok(url);
+      } catch { ok(dataUrl); }
     };
     img.onerror = () => ok(dataUrl);
     img.src = dataUrl;
@@ -323,11 +342,12 @@ async function folhaValor(empresa, arquivo) {
   let r = null, motivo = "", doCelular = false, ia = null;
   const t0 = Date.now();
   const rel = setInterval(() => { const p = $("#v-prep"); if (p && viva()) p.textContent = `Lendo a nota… ${Math.round((Date.now() - t0) / 1000)}s. Se quiser, já pode digitar o valor e salvar, sem esperar.`; }, 1000);
-  let iaLeu = false;
+  let iaLeu = false, kb = 0;
   const daIA = (async () => {
-    ia = await import("./js/ia.js?v=8");
+    ia = await import("./js/ia.js?v=9");
     if (!ia.iaDisponivel) throw new Error("sem IA");
-    const x = await Promise.race([ia.lerComprovanteIA(await menorParaIA(foto), EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error(`a IA demorou mais de 48s (parou em: ${ia.etapa || "?"})`)), 48000))]);
+    const pequena = await menorParaIA(foto); kb = Math.round(pequena.length * 0.75 / 1024);
+    const x = await Promise.race([ia.lerComprovanteIA(pequena, EMPRESAS), new Promise((_, n) => setTimeout(() => n(new Error(`a IA demorou mais de 48s (parou em: ${ia.etapa || "?"})`)), 48000))]);
     if (!x.itens.length && !x.total) throw new Error("a IA não achou os itens");
     iaLeu = true;
     return x;
@@ -360,8 +380,8 @@ async function folhaValor(empresa, arquivo) {
   }
   if (!viva()) return; // fechou ou abriu outra nota
   // Avisa o monitor de erros (Sentry) como foi a leitura, sem foto nem valores: só o motivo e o tempo.
-  try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${ia?.modeloUsado || ""} · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
-  try { if (!r || doCelular) window.Sentry?.captureMessage(`Leitura da nota: ${r ? "lida pelo celular" : "não leu"} · ${motivo} · ${Math.round((Date.now() - t0) / 1000)}s`, r ? "warning" : "error"); } catch {}
+  try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${ia?.modeloUsado || ""} · ${kb} KB · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
+  try { if (!r || doCelular) window.Sentry?.captureMessage(`Leitura da nota: ${r ? "lida pelo celular" : "não leu"} · ${motivo} · foto ${kb} KB · ${Math.round((Date.now() - t0) / 1000)}s`, r ? "warning" : "error"); } catch {}
   if (!r) {
     const p = $("#v-prep"); p.style.overflowWrap = "anywhere";
     p.textContent = `Não consegui ler a nota sozinho${motivo ? ` (${motivo})` : ""}. Coloque o valor à mão. Dica: foto de perto, com a nota reta e ocupando a tela.`;
@@ -744,7 +764,7 @@ function folhaTodas(sit, mes, alvo = folha) {
 async function lerItensDeNovo(n) {
   const f = await ler("notas_fotos", n.fotoId);
   if (!f?.foto) throw new Error("a foto não foi encontrada");
-  const ia = await import("./js/ia.js?v=8");
+  const ia = await import("./js/ia.js?v=9");
   const r = await Promise.race([ia.lerComprovanteIA(await menorParaIA(f.foto), EMPRESAS), new Promise((_, no) => setTimeout(() => no(new Error("a IA demorou mais de 48s")), 48000))]);
   if (!r?.itens?.length) throw new Error("a IA não achou itens na foto");
   return r;
