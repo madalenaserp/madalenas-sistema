@@ -109,7 +109,7 @@ function montar(registros, tipo = "nota") {
   const passos = registros.filter((r) => r.refId);
   const ultimo = (id, t) => passos.filter((r) => r.refId === id && r.tipo === t).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1);
   return registros.filter((r) => r.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
-    .map((n) => { const it = ultimo(n.id, "itens"); return { ...n, ...(it ? { itens: it.itens } : {}), conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }; });
+    .map((n) => { const it = ultimo(n.id, "itens"); return { ...n, ...(it ? { itens: it.itens, itensConfere: it.confere !== false } : {}), conferido: ultimo(n.id, "conferido"), cancelado: ultimo(n.id, "cancelado"), separado: ultimo(n.id, "separado") }; });
 }
 const reais = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
@@ -159,6 +159,7 @@ async function miniatura(fotoId, el) {
   el.src = await miniaturas[fotoId];
 }
 
+const diaAntes = (d) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() - 1); return x.toISOString().slice(0, 10); };
 async function mostrar() {
   const d = campoDia.value;
   const regsDia = await listar("notas", "data", d);
@@ -172,7 +173,9 @@ async function mostrar() {
     (semConferir ? ` · <span class="selo pendente">${semConferir} sem conferir</span>` : "") +
     (pedidos.filter((p) => !p.separado).length ? ` · <span class="selo pendente">${pedidos.filter((p) => !p.separado).length} pedido(s) sem separar</span>` : "") +
     (problemas ? ` · <span class="selo alerta">${problemas} com problema</span>` : "") +
-    (ativas.length && !semConferir && !problemas ? ` · <span class="selo ok">tudo conferido</span>` : "");
+    (ativas.length && !semConferir && !problemas ? ` · <span class="selo ok">tudo conferido</span>` : "") +
+    (!ativas.length ? `<br><b>Nenhuma nota neste dia${d === hoje() ? " ainda (o dia virou à meia-noite)" : ""}.</b> <button class="botao" id="dia-ant" style="padding:6px 10px;margin-top:6px">← Ver dia ${dataBR(diaAntes(d)).slice(0, 5)}</button>` : "");
+  document.getElementById("dia-ant")?.addEventListener("click", () => { campoDia.value = diaAntes(d); mostrar(); });
 
   const box = document.getElementById("empresas");
   box.innerHTML = "";
@@ -200,7 +203,7 @@ async function mostrar() {
   }
 }
 
-const itensNota = (n) => n.itens?.length ? `<span style="font-size:14px">${n.itens.map((i) => `${esc(String(i.qtd).replace(".", ","))} ${esc(i.descricao)}`).join(" · ")}</span>` : "";
+const itensNota = (n) => n.itens?.length ? `<span style="font-size:14px">${n.itens.map((i) => `${esc(String(i.qtd).replace(".", ","))} ${esc(i.descricao)}`).join(" · ")}${n.itensConfere === false ? ` <span class="falta">(conferir: a soma dos itens não bate com o valor)</span>` : ""}</span>` : "";
 function linhaNota(n) {
   const div = document.createElement("div");
   div.className = "nota" + (n.cancelado ? " cancelada" : "");
@@ -222,6 +225,18 @@ function linhaNota(n) {
     b("Na pasta, certo", "conferir", () => gravar(n, { tipo: "conferido", ok: true }));
     b("Problema", "problema", () => folhaProblema(n));
     b("Foto errada", "", () => { const m = prompt("Por que anular esta foto?"); if (m?.trim()) gravar(n, { tipo: "cancelado", motivo: m.trim() }); });
+  }
+  if (["dona", "lider"].includes(eu.papel) && !n.cancelado && n.fotoId) {
+    const x = document.createElement("button"); x.textContent = "Ler nota de novo"; x.className = "conferir";
+    x.onclick = async () => {
+      x.disabled = true; x.textContent = "Lendo a foto…";
+      try {
+        const r = await lerItensDeNovo(n);
+        const soma = Math.round(r.itens.reduce((t, i) => t + (i.total || 0), 0) * 100) / 100;
+        await gravar(n, { tipo: "itens", itens: r.itens, confere: n.valor == null || Math.abs(soma - n.valor) < 0.05 });
+      } catch (e) { x.disabled = false; x.textContent = "Tentar ler de novo"; alert(`Não consegui ler: ${String(e?.message || e).slice(0, 150)}`); }
+    };
+    acoes.append(x);
   }
   div.append(img, info);
   return div;
@@ -261,7 +276,7 @@ async function folhaValor(empresa, arquivo) {
     $("#v-itens").querySelectorAll("[data-tira]").forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.tira, 1); desenharItens(); }));
   };
   // O botão Salvar funciona desde o começo: dá para digitar o valor e salvar sem esperar a leitura terminar.
-  let salvou = false;
+  let salvou = false, notaSalva = null;
   const meuOk = $("#v-ok");
   const viva = () => meuOk.isConnected && !salvou && !fundo.hidden;
   $("#v-ok").onclick = async (e) => {
@@ -284,7 +299,7 @@ async function folhaValor(empresa, arquivo) {
     try {
       const base = { empresa, data: d, ...(d < hoje() ? { lancadaDepois: true } : {}), mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
       const fotoId = await acrescentar("notas_fotos", { ...base, foto });
-      await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: num, itens, ...($("#v-setor").value ? { setor: $("#v-setor").value } : {}) });
+      notaSalva = { ...base, id: await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: num, itens, ...($("#v-setor").value ? { setor: $("#v-setor").value } : {}) }), valor, semItens: !itens.length };
       salvou = true; fundo.hidden = true;
       // A tela continua no dia em que a Daiane está; só avisa se a nota foi guardada em outro dia.
       mostrar();
@@ -326,7 +341,13 @@ async function folhaValor(empresa, arquivo) {
   }
   clearInterval(rel);
   await Promise.race([setoresProntos, new Promise((ok) => setTimeout(ok, 3000))]);
-  if (!viva()) return; // já salvou à mão, fechou ou abriu outra nota
+  // Salvaram antes de a leitura terminar: os itens lidos vão para a nota já salva (nada se perde).
+  if (salvou && notaSalva?.semItens && r?.itens?.length && !r.parcial) {
+    const soma = Math.round(r.itens.reduce((t, i) => t + (i.total || 0), 0) * 100) / 100;
+    try { await acrescentar("notas", { tipo: "itens", refId: notaSalva.id, empresa: notaSalva.empresa, data: notaSalva.data, mes: notaSalva.mes, itens: r.itens, confere: Math.abs(soma - notaSalva.valor) < 0.05, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() }); mostrar(); } catch (e) { console.error(e); }
+    return;
+  }
+  if (!viva()) return; // fechou ou abriu outra nota
   // Avisa o monitor de erros (Sentry) como foi a leitura, sem foto nem valores: só o motivo e o tempo.
   try { if (r && !doCelular) window.Sentry?.captureMessage(`Leitura da nota: lida pela IA · ${ia?.modeloUsado || ""} · ${Math.round((Date.now() - t0) / 1000)}s`, "info"); } catch {}
   try { if (!r || doCelular) window.Sentry?.captureMessage(`Leitura da nota: ${r ? "lida pelo celular" : "não leu"} · ${motivo} · ${Math.round((Date.now() - t0) / 1000)}s`, r ? "warning" : "error"); } catch {}
@@ -654,26 +675,24 @@ function folhaTodas(sit, mes) {
     <div style="display:flex;flex-direction:column;gap:6px">${ns.map((n) => (n.data !== dia ? `<h3 style="margin:10px 0 0">${dataBR((dia = n.data))}</h3>` : "")
       + `<div class="nota" data-id="${esc(n.id)}"><img data-foto="${esc(n.fotoId || "")}" alt="Nota"><div class="info"><span><b>${esc(n.empresa)}</b> · <b>${n.valor != null ? reais(n.valor) : "sem valor"}</b>${n.pedidoGuappo ? ` <span class="suave">· nº ${esc(n.pedidoGuappo)}</span>` : ""}</span>
         <span class="itens">${itensNota(n) || `<span class="falta">sem descrição</span>`}</span>
-        ${podeReler && !n.itens?.length && n.fotoId ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler itens de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
+        ${podeReler && n.fotoId ? `<button class="botao" data-reler="${esc(n.id)}" style="padding:6px">Ler nota de novo</button>` : ""}</div></div>`).join("") || `<p class="suave">Nenhuma nota.</p>`}</div>
     <button class="botao" id="t-x" style="text-align:center">Fechar</button>`;
   folha.querySelectorAll("img[data-foto]").forEach((img) => { miniatura(img.dataset.foto, img); img.onclick = () => { if (!img.dataset.foto) return; const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; });
   folha.querySelector("#t-x").onclick = () => { fundo.hidden = true; mostrarMes(); };
   const porId = Object.fromEntries(ns.map((n) => [n.id, n]));
-  const umaNota = async (n, salvarSempre = false) => {
+  const umaNota = async (n) => {
     const caixa = folha.querySelector(`.nota[data-id="${CSS.escape(n.id)}"] .info`);
     const b = caixa?.querySelector("[data-reler]"); if (b) { b.disabled = true; b.textContent = "Lendo…"; }
     try {
       const r = await lerItensDeNovo(n);
       const soma = Math.round(r.itens.reduce((s, i) => s + (i.total || 0), 0) * 100) / 100;
       const bate = n.valor == null || Math.abs(soma - n.valor) < 0.05;
-      if (bate || salvarSempre) {
-        await acrescentar("notas", { tipo: "itens", refId: n.id, empresa: n.empresa, data: n.data, mes: n.mes, itens: r.itens, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
-        n.itens = r.itens;
-        caixa.querySelector(".itens").innerHTML = itensNota(n) + (bate ? "" : ` <span class="falta">(soma ${reais(soma)}, diferente do valor: confira)</span>`);
-        b?.remove(); return true;
+      {
+        await acrescentar("notas", { tipo: "itens", refId: n.id, empresa: n.empresa, data: n.data, mes: n.mes, itens: r.itens, confere: bate, hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+        n.itens = r.itens; n.itensConfere = bate;
+        caixa.querySelector(".itens").innerHTML = itensNota(n);
+        if (b) { b.disabled = false; b.textContent = "Ler nota de novo"; b.onclick = () => umaNota(n); } return true;
       }
-      caixa.querySelector(".itens").innerHTML = `<span class="falta">Li ${r.itens.length} item(ns) somando ${reais(soma)}, mas a nota é de ${reais(n.valor)}. Não salvei.</span> ${itensNota({ itens: r.itens })}`;
-      if (b) { b.disabled = false; b.textContent = "Salvar assim mesmo"; b.onclick = () => umaNota(n, true); }
     } catch (e) {
       caixa.querySelector(".itens").innerHTML = `<span class="falta">Não consegui ler (${esc(String(e?.message || e).slice(0, 120))}).</span>`;
       if (b) { b.disabled = false; b.textContent = "Tentar de novo"; }
