@@ -147,27 +147,28 @@ const folha = document.getElementById("folha");
 fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
 const botoes = (id, lista, classe = "") => `<div class="opcoes ${classe}" id="${id}">${lista.map((k) => `<button type="button" data-v="${esc(k)}" aria-pressed="false">${esc(k)}</button>`).join("")}</div>`;
 
+// Uma lista com os pães de todo dia: ele só coloca a quantidade dos que fez. Produto novo: "+ Outro produto".
 function abrir() {
-  const sel = { unidade: "unidade", onde: eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora", quem: PESSOAS.includes(eu.nome) ? [eu.nome] : [] };
+  const sel = { onde: eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora", quem: PESSOAS.includes(eu.nome) ? [eu.nome] : [] };
+  const unSel = (k) => `<select data-un="${k}" style="font-size:15px;padding:8px 4px;border:1px solid var(--linha);border-radius:10px;background:#fff">${UNIDADES.map((u) => `<option>${u}</option>`).join("")}</select>`;
+  const linha = (k, nome) => `<div class="linha-prod" style="display:grid;grid-template-columns:1fr 84px 92px;gap:6px;align-items:center;border-top:1px solid var(--linha);padding:6px 0">
+      ${nome == null ? `<input type="text" data-nome="${k}" list="produtos" placeholder="Nome do produto" autocomplete="off" style="font-size:16px;padding:8px;border:1px solid var(--linha);border-radius:10px">` : `<span style="font-size:15px" data-nome="${k}" data-fixo="${esc(nome)}">${esc(nome)}</span>`}
+      <input data-qtd="${k}" inputmode="decimal" placeholder="0" style="font-size:17px;padding:8px;text-align:right;border:1px solid var(--linha);border-radius:10px;width:100%;box-sizing:border-box">${unSel(k)}</div>`;
   folha.innerHTML = `<h2>Registrar produção</h2>
-    <label class="rot" for="f-prod">Produto</label>
-    <input type="text" id="f-prod" list="produtos" placeholder="Ex.: Pão francês" autocomplete="off">
-    <div class="duas">
-      <div style="display:flex;flex-direction:column;gap:6px"><label class="rot" for="f-qtd">Quantidade</label><input id="f-qtd" inputmode="decimal" placeholder="0"></div>
-      <div style="display:flex;flex-direction:column;gap:6px"><label class="rot">Unidade</label>${botoes("f-un", UNIDADES)}</div>
-    </div>
     <label class="rot">Onde</label>${botoes("f-onde", ONDE)}
     <label class="rot">Quem fez (pode marcar mais de um)</label>${botoes("f-quem", PESSOAS, "tres")}
+    <label class="rot">Coloque a quantidade só do que fez hoje</label>
+    <div id="f-lista">${PRODUTOS.map((nome, k) => linha(k, nome)).join("")}</div>
+    <button class="botao" id="f-outro" style="text-align:center">+ Outro produto</button>
     <input type="text" id="f-obs" placeholder="Observação (opcional)" autocomplete="off">
     <p class="msg-erro" id="f-erro"></p>
     <button class="botao principal" id="f-ok">Salvar</button>
     <button class="botao" id="f-x" style="text-align:center;border:none">Cancelar</button>`;
+  let extra = PRODUTOS.length;
+  folha.querySelector("#f-outro").onclick = () => { folha.querySelector("#f-lista").insertAdjacentHTML("beforeend", linha(extra, null)); folha.querySelector(`[data-nome="${extra++}"]`).focus(); };
   const pinta = (id, ativo) => folha.querySelectorAll(`${id} button`).forEach((b) => b.setAttribute("aria-pressed", ativo(b.dataset.v)));
-  const um = (id, chave) => {
-    folha.querySelector(id).onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (v) { sel[chave] = v; pinta(id, (x) => x === sel[chave]); } };
-    pinta(id, (x) => x === sel[chave]);
-  };
-  um("#f-un", "unidade"); um("#f-onde", "onde");
+  folha.querySelector("#f-onde").onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (v) { sel.onde = v; pinta("#f-onde", (x) => x === sel.onde); } };
+  pinta("#f-onde", (x) => x === sel.onde);
   folha.querySelector("#f-quem").onclick = (e) => {
     const v = e.target.closest("button")?.dataset.v; if (!v) return;
     sel.quem = sel.quem.includes(v) ? sel.quem.filter((x) => x !== v) : [...sel.quem, v];
@@ -177,19 +178,24 @@ function abrir() {
   folha.querySelector("#f-x").onclick = () => { fundo.hidden = true; };
   folha.querySelector("#f-ok").onclick = async (e) => {
     const erro = folha.querySelector("#f-erro");
-    const produto = folha.querySelector("#f-prod").value.trim();
-    const quantidade = numero(folha.querySelector("#f-qtd").value);
-    if (!produto) return (erro.textContent = "Escreva o produto.");
-    if (!(quantidade > 0)) return (erro.textContent = "Coloque a quantidade.");
+    const itens = [...folha.querySelectorAll(".linha-prod")].map((l) => {
+      const nome = l.querySelector("[data-nome]"); const produto = (nome.dataset.fixo ?? nome.value ?? "").trim();
+      return { produto, txt: l.querySelector("[data-qtd]").value.trim(), quantidade: numero(l.querySelector("[data-qtd]").value), unidade: l.querySelector("[data-un]").value };
+    }).filter((x) => x.txt);
+    if (!itens.length) return (erro.textContent = "Coloque a quantidade de pelo menos um produto.");
+    const ruim = itens.find((x) => !x.produto || !(x.quantidade > 0));
+    if (ruim) return (erro.textContent = ruim.produto ? `Confira a quantidade de ${ruim.produto}.` : "Escreva o nome do produto novo.");
     if (!sel.quem.length) return (erro.textContent = "Marque quem fez.");
     e.target.disabled = true;
     try {
-      const d = hoje();
-      await acrescentar("producao", { tipo: "producao", produto, quantidade, unidade: sel.unidade, onde: sel.onde, quem: sel.quem,
-        obs: folha.querySelector("#f-obs").value.trim(), data: d, mes: d.slice(0, 7), hora: agora(),
-        registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      const d = hoje(), obs = folha.querySelector("#f-obs").value.trim();
+      for (const [k, x] of itens.entries()) {
+        e.target.textContent = `Salvando ${k + 1} de ${itens.length}…`;
+        await acrescentar("producao", { tipo: "producao", produto: x.produto, quantidade: x.quantidade, unidade: x.unidade, onde: sel.onde, quem: sel.quem,
+          obs, data: d, mes: d.slice(0, 7), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() });
+      }
       fundo.hidden = true; campoDia.value = d; mostrar();
-    } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; e.target.disabled = false; }
+    } catch { erro.textContent = "Não consegui salvar tudo. Verifique a internet: o que já foi salvo aparece na lista."; e.target.disabled = false; e.target.textContent = "Salvar"; mostrar(); }
   };
   fundo.hidden = false;
 }
