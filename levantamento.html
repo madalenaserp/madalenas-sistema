@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madalena's · Levantamento do estoque</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Amaranth:ital,wght@1,700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2c180e">
+<link rel="icon" href="icone.png"><link rel="apple-touch-icon" href="icone.png"><link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  [hidden] { display:none !important; }
+  .abas { display:flex; gap:6px; }
+  .abas button { flex:1; padding:10px; border-radius:10px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; }
+  .abas button[aria-pressed="true"] { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .mov { background:var(--cartao); border:1px solid var(--linha); border-radius:12px; padding:12px 14px; display:flex; gap:10px; }
+  .mov.cancelada { opacity:.5; }
+  .mov.cancelada .prod { text-decoration:line-through; }
+  .mov img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--linha); cursor:zoom-in; background:#eee; flex-shrink:0; }
+  .mov .info { display:flex; flex-direction:column; gap:3px; flex:1; font-size:14px; }
+  .mov .prod { font-size:17px; font-weight:700; }
+  .mov button { align-self:flex-start; font-size:13px; padding:4px 10px; border-radius:8px; border:1px solid var(--linha); background:#fff; color:var(--suave); cursor:pointer; }
+  .fundo-folha { position:fixed; inset:0; background:#0006; display:flex; align-items:flex-end; justify-content:center; z-index:10; }
+  .folha { background:var(--cartao); width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; max-height:92vh; overflow-y:auto; }
+  .folha h2 { margin:0; font-size:19px; }
+  .folha label.rot { font-size:14px; color:var(--suave); margin-bottom:-4px; }
+  .folha input[type=text], .folha input[inputmode] { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; box-sizing:border-box; }
+  .duas { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .opcoes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .opcoes.tres { grid-template-columns:1fr 1fr 1fr; }
+  .opcoes button { padding:11px 6px; border-radius:10px; border:1px solid var(--linha); background:#fff; font-size:14px; cursor:pointer; }
+  .opcoes button[aria-pressed="true"] { background:var(--laranja); color:#fff; border-color:var(--laranja); font-weight:600; }
+  .camera { display:flex; align-items:center; gap:10px; border:1px dashed var(--linha); border-radius:10px; padding:10px; cursor:pointer; font-size:15px; }
+  .camera input { display:none; }
+  .camera img { width:64px; height:64px; object-fit:cover; border-radius:8px; }
+  .msg-erro { color:var(--alerta); font-size:14px; margin:0; min-height:1em; }
+  table.mes { width:100%; border-collapse:collapse; font-size:14px; }
+  table.mes th, table.mes td { text-align:left; padding:7px 4px; border-bottom:1px solid var(--linha); }
+  table.mes .n { text-align:right; white-space:nowrap; }
+  .zoom { position:fixed; inset:0; background:#000d; z-index:20; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .zoom img { max-width:100%; max-height:100%; }
+  .abas.quatro { flex-wrap:wrap; }
+  .abas.quatro button { flex:1 1 40%; }
+  .ins { background:var(--cartao); border:1px solid var(--linha); border-left:4px solid var(--ok); border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:15px; }
+  .ins.baixo { border-left-color:var(--alerta); background:#fff5f4; }
+  .ins .q { font-weight:700; white-space:nowrap; text-align:right; }
+  .acoes-est { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .acoes-est button { padding:14px 8px; border-radius:12px; border:1px solid var(--linha); background:var(--cartao); font-size:15px; cursor:pointer; text-align:left; }
+  .acoes-est button b { display:block; font-size:16px; margin-bottom:2px; }
+  .cont { display:grid; grid-template-columns:1fr 90px; gap:6px; align-items:center; font-size:15px; padding:4px 0; border-bottom:1px solid var(--linha); }
+  .cont input { font-size:16px; padding:8px; border:1px solid var(--linha); border-radius:8px; width:100%; box-sizing:border-box; }
+  select.sel { font-size:17px; padding:10px; border:1px solid var(--linha); border-radius:10px; background:#fff; width:100%; }
+  .cad { display:grid; grid-template-columns:1fr 92px 64px 26px; gap:4px; align-items:center; }
+  .cad input { font-size:14px; padding:7px 5px; border:1px solid var(--linha); border-radius:8px; width:100%; box-sizing:border-box; }
+  .cad button { border:none; background:none; font-size:18px; color:var(--suave); cursor:pointer; }
+</style>
+<script src="https://browser.sentry-cdn.com/11.1.0/bundle.min.js" crossorigin="anonymous"></script>
+<script src="js/sentry.js"></script>
+</head>
+<body>
+<header><div data-logo="pequeno"></div><h1>Levantamento</h1><a href="estoque.html">Voltar</a></header>
+<main>
+  <div class="abas" id="abas">
+    <button aria-pressed="true" data-aba="lancar">Lançar itens</button>
+    <button aria-pressed="false" data-aba="guappo">Lista para o Guappo</button>
+  </div>
+  <section id="sec" style="display:flex;flex-direction:column;gap:10px"></section>
+</main>
+<div class="fundo-folha" id="fundo" hidden><div class="folha" id="folha"></div></div>
+<div class="zoom" id="zoom" hidden><img alt="Foto"></div>
+
+<script type="module" src="js/marca.js"></script>
+<script type="module">
+// Levantamento do estoque: passar em cada prateleira, ler o código de barras (ou escrever o nome), contar e tirar foto.
+// No fim, a aba "Lista para o Guappo" junta tudo (um item por produto, com a quantidade de cada unidade) para cadastrar no Guappo.
+import { exigirUsuario, hoje, dataBR } from "./js/sessao.js";
+import { pode } from "./js/equipe.js";
+import { acrescentar, listar, ler } from "./js/db.js";
+
+const eu = await exigirUsuario();
+const lanca = !pode.somenteLeitura(eu);
+const podeCancelar = ["dona", "lider"].includes(eu.papel);
+const LOTE = "inicial";
+const ONDE = ["Panificadora", "Confeitaria"];
+const AREAS = ["Estoque seco", "Geladeira", "Freezer / câmara fria", "Embalagens", "Limpeza", "Balcão / vitrine", "Outro"];
+const CATEGORIAS = ["Insumo", "Revenda", "Embalagem", "Limpeza"];
+const UNIDADES = ["un", "kg", "L", "pacote", "caixa", "saco", "fardo"];
+const sec = document.getElementById("sec"), fundo = document.getElementById("fundo"), folha = document.getElementById("folha");
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const numero = (t) => { t = String(t ?? "").trim(); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t); };
+const n = (v) => String(Math.round(v * 1000) / 1000).replace(".", ",");
+const agora = () => new Date().toTimeString().slice(0, 5);
+fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+document.getElementById("zoom").onclick = (e) => { e.currentTarget.hidden = true; };
+// Fica marcado de um item para o outro (a pessoa está na mesma prateleira).
+const ultimo = { onde: eu.setor === "Confeitaria" ? "Confeitaria" : "Panificadora", area: "Estoque seco", categoria: "Insumo" };
+
+function reduzir(arquivo) {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onload = () => {
+      const e = Math.min(1, 1000 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * e); c.height = Math.round(img.height * e);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL("image/jpeg", 0.65); c.width = c.height = 0; URL.revokeObjectURL(img.src); ok(url);
+    };
+    img.onerror = falha; img.src = URL.createObjectURL(arquivo);
+  });
+}
+async function itens() {
+  const regs = await listar("levantamento", "lote", LOTE);
+  const canc = Object.fromEntries(regs.filter((r) => r.tipo === "cancelamento").map((r) => [r.refId, r]));
+  return regs.filter((r) => r.tipo === "item").map((r) => ({ ...r, cancelamento: canc[r.id] })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+}
+const chave = (r) => r.codigo || r.nome.trim().toLowerCase();
+// Sugestão fiscal pelo nome (só para ajudar no cadastro do Guappo; a contabilidade confere antes de valer).
+// st: costuma ter substituição tributária do ICMS (já pago pelo fornecedor). mono: PIS/COFINS monofásico (já pago na indústria).
+const FISCAL = [
+  [/refrigerante|\bcoca\b|guaran[aá]|fanta|sprite|soda|pepsi|tubaina/i, { ncm: "2202.10.00", st: true, mono: true }],
+  [/energ[eé]tico|red ?bull|monster/i, { ncm: "2202.99.00", st: true, mono: true }],
+  [/[aá]gua (mineral|sem g[aá]s|com g[aá]s)|^[aá]gua\b/i, { ncm: "2201.10.00", st: true, mono: true }],
+  [/cerveja/i, { ncm: "2203.00.00", st: true, mono: true }],
+  [/ch[aá] gelado|isot[oô]nico|gatorade/i, { ncm: "2202.99.00", st: true, mono: true }],
+  [/suco|n[eé]ctar/i, { ncm: "2009 ou 2202 (conferir)", st: true, mono: false }],
+  [/sorvete|picol[eé]/i, { ncm: "2105.00.10", st: true, mono: false }],
+  [/chocolate|bombom|kit ?kat|bis\b|baton/i, { ncm: "1806.xx (conferir)", st: true, mono: false }],
+  [/bala|chiclete|pirulito|jujuba/i, { ncm: "1704.xx (conferir)", st: true, mono: false }],
+  [/biscoito|bolacha|wafer/i, { ncm: "1905.xx (conferir)", st: true, mono: false }],
+  [/salgadinho|batata (frita|chips)|doritos|ruffles|cheetos/i, { ncm: "2005.20 ou 1904 (conferir)", st: true, mono: false }],
+  [/farinha de trigo/i, { ncm: "1101.00.10" }],
+  [/a[cç][uú]car/i, { ncm: "1701.99.00" }],
+  [/\bovos?\b/i, { ncm: "0407.21.00" }],
+  [/manteiga/i, { ncm: "0405.10.00" }],
+  [/margarina/i, { ncm: "1517.10.00" }],
+  [/leite condensado/i, { ncm: "0402.99.00" }],
+  [/creme de leite/i, { ncm: "0401.50.10 ou 0402 (conferir)" }],
+  [/leite em p[oó]/i, { ncm: "0402.21.10" }],
+  [/\bleite\b/i, { ncm: "0401.20.10" }],
+  [/mu[cç]arela|mussarela|queijo/i, { ncm: "0406.xx (conferir)" }],
+  [/presunto/i, { ncm: "1602.41.00" }],
+  [/caf[eé]/i, { ncm: "0901.21.00" }],
+  [/[oó]leo de soja/i, { ncm: "1507.90.11" }],
+  [/\bsal\b/i, { ncm: "2501.00.20" }],
+  [/fermento/i, { ncm: "2102.xx (conferir)" }],
+  [/saco|sacola|filme pl[aá]stico|copo descart/i, { ncm: "3923 ou 3924 (conferir)" }],
+  [/caixa (de papel|papel[aã]o)|embalagem de papel|guardanapo/i, { ncm: "4819 ou 4818 (conferir)" }],
+];
+function sugestaoFiscal(l) {
+  const f = FISCAL.find(([re]) => re.test(l.nome))?.[1];
+  const ncm = f?.ncm || "";
+  if (l.categoria !== "Revenda") return { ncm, imposto: l.categoria === "Insumo" ? "Insumo: não vende, só NCM" : "Uso e consumo" };
+  if (!f) return { ncm, imposto: "Perguntar à contabilidade" };
+  const partes = [];
+  partes.push(f.st ? "ICMS já pago (ST): CSOSN 500 · CFOP 5405" : "CSOSN 102 · CFOP 5102");
+  if (f.mono) partes.push("PIS/COFINS monofásico (não paga de novo)");
+  return { ncm, imposto: partes.join(" · ") };
+}
+
+/* ---------- Lançar ---------- */
+async function abaLancar() {
+  sec.innerHTML = `<p class="suave">Carregando…</p>`;
+  const todos = await itens(), ok = todos.filter((r) => !r.cancelamento);
+  const por = (o) => ok.filter((r) => r.onde === o).length;
+  sec.innerHTML = `<div class="cartao"><b>${ok.length} item(ns) lançado(s)</b> <span class="suave">· Panificadora ${por("Panificadora")} · Confeitaria ${por("Confeitaria")}</span>
+      <p class="suave" style="margin:6px 0 0;font-size:14px">Passe prateleira por prateleira. Para cada produto: leia o código de barras (ou escreva o nome), conte e tire a foto.</p></div>
+    ${lanca ? `<button class="botao principal" id="novo">+ Lançar item</button>` : ""}
+    <div id="lista" style="display:flex;flex-direction:column;gap:8px"></div>`;
+  sec.querySelector("#novo")?.addEventListener("click", () => formulario(todos));
+  const lista = sec.querySelector("#lista");
+  for (const r of todos) {
+    const div = document.createElement("div");
+    div.className = "mov" + (r.cancelamento ? " cancelada" : "");
+    div.innerHTML = `${r.fotoId ? `<img alt="Foto" data-foto="${esc(r.fotoId)}">` : ""}<div class="info"><span class="prod">${esc(r.nome)} · ${esc(n(r.qtd))} ${esc(r.unidade)}</span>
+      <span>${esc(r.onde)} · ${esc(r.area)} · ${esc(r.categoria)}${r.embalagem ? ` · ${esc(r.embalagem)}` : ""}${r.codigo ? ` · <span class="suave">cód. ${esc(r.codigo)}</span>` : ""}</span>
+      <span class="suave">${esc(r.registradoPor)} · ${dataBR(r.data)} às ${esc(r.hora)}</span>
+      ${r.cancelamento ? `<span class="suave">Cancelado por ${esc(r.cancelamento.registradoPor)}: ${esc(r.cancelamento.motivo)}</span>` : ""}</div>`;
+    const img = div.querySelector("img[data-foto]");
+    if (img) { ler("levantamento_fotos", img.dataset.foto).then((f) => { if (f?.foto) img.src = f.foto; }).catch(() => {}); img.onclick = () => { const z = document.getElementById("zoom"); z.querySelector("img").src = img.src; z.hidden = false; }; }
+    if (!r.cancelamento && podeCancelar) {
+      const b = document.createElement("button"); b.textContent = "Cancelar";
+      b.onclick = async () => {
+        const m = prompt("Por que cancelar este item?"); if (!m?.trim()) return;
+        await acrescentar("levantamento", { tipo: "cancelamento", refId: r.id, motivo: m.trim(), lote: LOTE, data: hoje(), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() }).catch(() => alert("Não consegui salvar."));
+        abaLancar();
+      };
+      div.querySelector(".info").append(b);
+    }
+    lista.append(div);
+  }
+}
+
+const botoes = (id, lista, atual, classe = "") => `<div class="opcoes ${classe}" id="${id}">${lista.map((k) => `<button type="button" data-v="${esc(k)}" aria-pressed="${k === atual}">${esc(k)}</button>`).join("")}</div>`;
+function formulario(todos) {
+  const conhecidos = {};
+  for (const r of [...todos].reverse()) if (!r.cancelamento && r.codigo) conhecidos[r.codigo] = r;
+  const sel = { onde: ultimo.onde, area: ultimo.area, categoria: ultimo.categoria, unidade: "un" };
+  let foto = null;
+  folha.innerHTML = `<h2>Lançar item</h2>
+    <label class="rot" for="l-cod">Código de barras <span class="suave">(passe o leitor ou digite; se não tiver, deixe em branco)</span></label>
+    <input id="l-cod" inputmode="numeric" autocomplete="off" placeholder="▮▯▮▮▯ toque aqui e passe o leitor" style="font-size:17px;padding:10px;border:2px dashed var(--linha);border-radius:10px;width:100%;box-sizing:border-box">
+    <p class="suave" id="l-cod-msg" style="margin:0;font-size:13px"></p>
+    <label class="rot" for="l-nome">Nome do produto (com a marca)</label><input type="text" id="l-nome" placeholder="Ex.: Farinha de trigo Dona Benta" autocomplete="off">
+    <label class="rot" for="l-emb">Embalagem <span class="suave">(opcional)</span></label><input type="text" id="l-emb" placeholder="Ex.: saco 25 kg, caixa com 12" autocomplete="off">
+    <label class="rot">O que é</label>${botoes("l-cat", CATEGORIAS, sel.categoria)}
+    <label class="rot">Onde está</label>${botoes("l-onde", ONDE, sel.onde)}
+    ${botoes("l-area", AREAS, sel.area)}
+    <div class="duas"><div style="display:flex;flex-direction:column;gap:6px"><label class="rot" for="l-qtd">Quantidade que tem</label><input id="l-qtd" inputmode="decimal" placeholder="0"></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><label class="rot">Contado em</label>${botoes("l-un", UNIDADES, sel.unidade, "tres")}</div></div>
+    <label class="camera" id="l-cam"><span>📷 Foto do produto</span><input type="file" accept="image/*" capture="environment"></label>
+    <p class="msg-erro" id="l-erro"></p>
+    <button class="botao principal" id="l-ok">Salvar e lançar outro</button>
+    <button class="botao" id="l-fim" style="text-align:center">Salvar e fechar</button>
+    <button class="botao" id="l-x" style="text-align:center;border:none">Cancelar</button>`;
+  const $ = (q) => folha.querySelector(q);
+  for (const [id, k] of [["#l-cat", "categoria"], ["#l-onde", "onde"], ["#l-area", "area"], ["#l-un", "unidade"]])
+    $(id).onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; sel[k] = v; $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
+  const marca = (id, v) => { sel[id.slice(3) === "cat" ? "categoria" : id === "#l-un" ? "unidade" : id.slice(3)] = v; $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
+  // Leitor de código funciona como teclado: digita e aperta Enter.
+  const lerCodigo = () => {
+    const v = $("#l-cod").value.trim(); if (!v) return;
+    const r = conhecidos[v];
+    if (r) { $("#l-nome").value = r.nome; $("#l-emb").value = r.embalagem || ""; marca("#l-cat", r.categoria); marca("#l-un", r.unidade); $("#l-cod-msg").textContent = `✓ Já lançado antes: ${r.nome}. Só conte o que tem aqui.`; $("#l-qtd").focus(); }
+    else { $("#l-cod-msg").textContent = "Código novo: escreva o nome do produto."; $("#l-nome").focus(); }
+  };
+  $("#l-cod").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); lerCodigo(); } };
+  $("#l-cod").onchange = lerCodigo;
+  $("#l-cam input").onchange = async (e) => {
+    const a = e.target.files[0]; if (!a) return;
+    try { foto = await reduzir(a); $("#l-cam span").innerHTML = `<img src="${foto}" alt="Foto"> Foto pronta. Toque para trocar.`; } catch { $("#l-erro").textContent = "Não consegui ler a foto."; }
+  };
+  $("#l-x").onclick = () => { fundo.hidden = true; };
+  const salvar = async (botao, outro) => {
+    const erro = $("#l-erro"), nome = $("#l-nome").value.trim(), qtd = numero($("#l-qtd").value), codigo = $("#l-cod").value.trim();
+    if (!nome) return (erro.textContent = "Escreva o nome do produto.");
+    if (!($("#l-qtd").value.trim() !== "" && qtd >= 0)) return (erro.textContent = "Coloque a quantidade (pode ser 0).");
+    botao.disabled = true;
+    try {
+      const base = { lote: LOTE, data: hoje(), hora: agora(), registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+      const fotoId = foto ? await acrescentar("levantamento_fotos", { ...base, foto }) : null;
+      const item = { ...base, tipo: "item", codigo: codigo || null, nome, embalagem: $("#l-emb").value.trim(), categoria: sel.categoria, onde: sel.onde, area: sel.area, qtd, unidade: sel.unidade, fotoId };
+      const id = await acrescentar("levantamento", item);
+      Object.assign(ultimo, { onde: sel.onde, area: sel.area, categoria: sel.categoria });
+      todos.unshift({ ...item, id });
+      if (outro) { formulario(todos); folha.querySelector("#l-cod-msg").textContent = `✓ ${nome} salvo. Próximo item:`; folha.querySelector("#l-cod").focus(); }
+      else { fundo.hidden = true; abaLancar(); }
+    } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; botao.disabled = false; }
+  };
+  $("#l-ok").onclick = (e) => salvar(e.target, true);
+  $("#l-fim").onclick = (e) => { salvar(e.target, false); };
+  fundo.hidden = false;
+  setTimeout(() => $("#l-cod").focus(), 50);
+}
+
+/* ---------- Lista para o Guappo ---------- */
+async function abaGuappo() {
+  sec.innerHTML = `<p class="suave">Carregando…</p>`;
+  const ok = (await itens()).filter((r) => !r.cancelamento).reverse();
+  const g = {};
+  for (const r of ok) {
+    const k = chave(r) + "|" + r.unidade;
+    const x = (g[k] ||= { codigo: r.codigo || "", nome: r.nome, categoria: r.categoria, embalagem: r.embalagem || "", unidade: r.unidade, Panificadora: 0, Confeitaria: 0 });
+    x[r.onde] += r.qtd; if (!x.embalagem && r.embalagem) x.embalagem = r.embalagem;
+  }
+  const linhas = Object.values(g).sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nome.localeCompare(b.nome));
+  for (const l of linhas) Object.assign(l, sugestaoFiscal(l));
+  const COLS = ["Código de barras", "Nome", "Tipo", "Embalagem", "Unidade", "Panificadora", "Confeitaria", "Total", "NCM sugerido", "Imposto (sugestão)"];
+  const valores = (l) => [l.codigo, l.nome, l.categoria, l.embalagem, l.unidade, n(l.Panificadora), n(l.Confeitaria), n(l.Panificadora + l.Confeitaria), l.ncm, l.imposto];
+  sec.innerHTML = linhas.length ? `<div class="cartao"><b>${linhas.length} produto(s) para cadastrar no Guappo</b>
+      <p class="suave" style="margin:6px 0 0;font-size:14px">O mesmo produto lançado em lugares diferentes aparece uma vez só, com a quantidade de cada unidade somada.</p>
+      <p style="margin:6px 0 0;font-size:14px;background:#fff6dd;color:#5a4300;padding:8px;border-radius:8px">⚠️ NCM e imposto são <b>sugestões</b> pelo nome do produto. Mande a planilha para a contabilidade conferir antes de cadastrar no Guappo. Os da revenda (bebidas, doces, biscoitos) são os que mais ajudam a pagar menos: o imposto já foi pago antes e não deve ser pago de novo.</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="botao" id="g-copiar">Copiar para planilha</button><button class="botao" id="g-csv">Baixar planilha</button><button class="botao" id="g-imp">Imprimir</button></div><p class="suave" id="g-msg" style="margin:4px 0 0"></p></div>
+    <div class="cartao" style="overflow-x:auto"><table class="mes"><tr>${["Nome", "Tipo", "Embalagem", "Panif.", "Conf.", "Total"].map((c) => `<th${/Panif|Conf|Total/.test(c) ? ' class="n"' : ""}>${c}</th>`).join("")}</tr>
+      ${linhas.map((l) => `<tr><td><b>${esc(l.nome)}</b>${l.codigo ? `<br><span class="suave" style="font-size:12px">${esc(l.codigo)}</span>` : ""}</td><td>${esc(l.categoria)}</td><td>${esc(l.embalagem)}</td>
+        <td class="n">${n(l.Panificadora)}</td><td class="n">${n(l.Confeitaria)}</td><td class="n"><b>${n(l.Panificadora + l.Confeitaria)}</b> ${esc(l.unidade)}</td></tr>
+        <tr><td colspan="6" class="suave" style="font-size:12px;border-top:none;padding-top:0">NCM ${esc(l.ncm || "?")} · ${esc(l.imposto)}</td></tr>`).join("")}</table></div>`
+    : `<p class="suave">Nada lançado ainda.</p>`;
+  if (!linhas.length) return;
+  const tsv = [COLS, ...linhas.map(valores)].map((r) => r.join("\t")).join("\n");
+  sec.querySelector("#g-copiar").onclick = async () => { try { await navigator.clipboard.writeText(tsv); sec.querySelector("#g-msg").textContent = "Copiado. Cole numa planilha."; } catch { sec.querySelector("#g-msg").textContent = "Não consegui copiar neste aparelho. Use Baixar planilha."; } };
+  sec.querySelector("#g-csv").onclick = () => {
+    const csv = "﻿" + [COLS, ...linhas.map(valores)].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = `levantamento-estoque-${hoje()}.csv`; a.click();
+  };
+  sec.querySelector("#g-imp").onclick = () => window.print();
+}
+
+const ABAS = { lancar: abaLancar, guappo: abaGuappo };
+document.getElementById("abas").onclick = (e) => {
+  const aba = e.target.closest("button")?.dataset.aba; if (!aba) return;
+  document.querySelectorAll("#abas button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.aba === aba));
+  ABAS[aba]();
+};
+abaLancar();
+</script>
+</body>
+</html>

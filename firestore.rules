@@ -241,6 +241,21 @@ service cloud.firestore {
         && request.resource.data.unidade is string && request.resource.data.unidade.size() > 0;
       allow update, delete: if false;
     }
+    // Levantamento do estoque (cadastrar tudo antes de passar para o Guappo): a equipe lança; cancelar só dona e líderes.
+    match /levantamento/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
+           (request.resource.data.tipo == "item" && request.resource.data.nome is string && request.resource.data.nome.size() > 0
+            && request.resource.data.qtd is number && request.resource.data.qtd >= 0)
+        || (request.resource.data.tipo == "cancelamento" && papel(["dona", "lider"])));
+      allow update, delete: if false;
+    }
+    match /levantamento_fotos/{id} {
+      allow read: if ativo();
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid
+        && request.resource.data.foto is string && request.resource.data.foto.size() < 1000000;
+      allow update, delete: if false;
+    }
     match /estoque_cadastro/{id} {
       allow read: if ativo();
       allow create, update: if papel(["dona"]) && request.resource.data.alteradoPorUid == request.auth.uid;
