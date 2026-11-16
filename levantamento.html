@@ -114,6 +114,9 @@ async function itens() {
 }
 // Busca nome, marca e embalagem pelo código de barras na Open Food Facts (grátis e pública). Sem resposta em 6 s, desiste.
 async function buscarCodigo(codigo) {
+  return (await buscarUm(codigo)) || (/^\d{12}$/.test(codigo) ? await buscarUm("0" + codigo) : null);
+}
+async function buscarUm(codigo) {
   try {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 6000);
     const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(codigo)}.json?fields=product_name_pt,product_name,generic_name_pt,brands,quantity`, { signal: ctl.signal });
@@ -216,7 +219,7 @@ function formulario(todos) {
     <label class="rot">O que é</label>${botoes("l-cat", CATEGORIAS, sel.categoria)}
     <label class="rot">Onde está</label>${botoes("l-onde", ONDE, sel.onde)}
     ${botoes("l-area", AREAS, sel.area)}
-    <div class="duas"><div style="display:flex;flex-direction:column;gap:6px"><label class="rot" for="l-qtd">Quantidade que tem</label><input id="l-qtd" inputmode="decimal" placeholder="0"></div>
+    <div class="duas"><div style="display:flex;flex-direction:column;gap:6px"><label class="rot" for="l-qtd">Quantidade que tem</label><div style="display:flex;gap:6px;align-items:center"><button type="button" class="botao" id="l-menos" style="width:52px;text-align:center;font-size:22px;padding:6px">−</button><input id="l-qtd" inputmode="decimal" placeholder="0" style="text-align:center;font-size:22px;font-weight:700;min-width:0;flex:1"><button type="button" class="botao" id="l-mais" style="width:52px;text-align:center;font-size:22px;padding:6px">+</button></div></div>
       <div style="display:flex;flex-direction:column;gap:6px"><label class="rot">Contado em</label>${botoes("l-un", UNIDADES, sel.unidade, "tres")}</div></div>
     <label class="camera" id="l-cam"><span>📷 Foto do produto</span><input type="file" accept="image/*" capture="environment"></label>
     <p class="msg-erro" id="l-erro"></p>
@@ -246,11 +249,14 @@ function formulario(todos) {
       $("#l-qtd").value ||= "1"; msg.textContent = "✓ Encontrei. Confira o nome. Quantidade: 1. Passe o leitor nas outras unidades para somar."; $("#l-cod").focus();
     } else { $("#l-qtd").value ||= "1"; msg.textContent = "Não achei esse código na internet: escreva o nome do produto. Quantidade: 1 (cada leitura soma 1)."; $("#l-nome").focus(); }
   };
-  $("#l-cod").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); lerCodigo(); $("#l-cod").select(); } };
-  $("#l-cod").onchange = lerCodigo;
+  // Depois de cada leitura o campo do código esvazia: a próxima leitura entra limpa (mesmo código soma 1, código diferente é outro produto).
+  const leuNoCampo = () => { const v = $("#l-cod").value.trim(); if (!v) return; $("#l-cod").value = ""; $("#l-cod").placeholder = `Lido: ${v} · passe de novo para somar`; lido = ""; $("#l-cod").value = v; lerCodigo(); $("#l-cod").value = ""; };
+  $("#l-cod").onkeydown = (e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); leuNoCampo(); } };
+  $("#l-cod").onchange = leuNoCampo;
+  $("#l-mais").onclick = () => somaUm();
+  $("#l-menos").onclick = () => { const q = $("#l-qtd"); q.value = String(Math.max(0, (numero(q.value) || 0) - 1)); };
   // O leitor digita por cima: se o campo já tem o código, a nova leitura vira "códigocódigo". Ajeita isso.
-  $("#l-cod").oninput = () => { lido = ""; const v = $("#l-cod").value.trim(); if (atual && v.length === atual.length * 2 && v === atual + atual) $("#l-cod").value = atual; };
-  $("#l-cod").onfocus = () => { if (atual) $("#l-cod").select(); };
+
   // Se o leitor for passado com o cursor no nome, o código vai para o campo certo.
   // Também quando o leitor escreve o código no fim do nome já digitado.
   const codigoNoNome = (e) => {
@@ -267,7 +273,7 @@ function formulario(todos) {
   };
   $("#l-x").onclick = () => { fundo.hidden = true; };
   const salvar = async (botao, outro) => {
-    const erro = $("#l-erro"), nome = $("#l-nome").value.trim(), qtd = numero($("#l-qtd").value), codigo = $("#l-cod").value.trim();
+    const erro = $("#l-erro"), nome = $("#l-nome").value.trim(), qtd = numero($("#l-qtd").value), codigo = $("#l-cod").value.trim() || atual;
     if (!nome) return (erro.textContent = "Escreva o nome do produto.");
     if (!($("#l-qtd").value.trim() !== "" && qtd >= 0)) return (erro.textContent = "Coloque a quantidade (pode ser 0).");
     botao.disabled = true;
