@@ -15,6 +15,8 @@ export const TAREFAS_BALCAO = [
   { id: "contar_estoque", texto: "Contar o estoque", fotos: null },
   { id: "mercadorias_expostas", texto: "Verificar mercadorias expostas (qualidade, identificação e preço)", fotos: null },
   { id: "maquininhas", texto: "Verificar se as maquininhas estão carregadas", fotos: "uma" },
+  // Daiane, 16/11/2026: alguém do balcão confere o que a produção lançou com o que chegou.
+  { id: "conferir_producao", texto: "Conferir a produção: abrir \"Produção do dia\" e ver se o que chegou no balcão bate com o que a produção lançou (avisar a líder se faltar)", fotos: "uma", fora: ["Maurina"] },
   { id: "embalar", texto: "Embalar produtos (com etiqueta de validade e etiqueta da balança)", fotos: "uma" },
   // Limpezas da semana (Daiane, 08/11/2026): um dia fixo para cada.
   { id: "lixeiras", texto: "Lavar todas as lixeiras", fotos: "antes_depois", dias: [1] },
@@ -40,7 +42,9 @@ export async function distribuir(dia) {
   const trabalham = PESSOAS_BALCAO.filter((n) => !folgas.includes(n));
   const giro = diasDesde(dia);
   const [a, m, d] = dia.split("-").map(Number), semana = new Date(a, m - 1, d).getDay();
-  const rodizio = TAREFAS_BALCAO.filter((t) => !t.dias || t.dias.includes(semana)).map((t, i) => ({ tarefa: t, pessoa: trabalham.length ? trabalham[(i + giro) % trabalham.length] : "" }));
+  // fora: quem não pega aquela tarefa (ex.: Maurina é supervisora e não confere a produção); passa para a próxima pessoa.
+  const quem = (t, i) => { for (let k = 0; k < trabalham.length; k++) { const p = trabalham[(i + giro + k) % trabalham.length]; if (!t.fora?.includes(p)) return p; } return ""; };
+  const rodizio = TAREFAS_BALCAO.filter((t) => !t.dias || t.dias.includes(semana)).map((t, i) => ({ tarefa: t, pessoa: quem(t, i) }));
   const fixas = TAREFAS_FIXAS.filter((t) => !folgas.includes(t.pessoa)).map((t) => ({ tarefa: t, pessoa: t.pessoa, fixa: true }));
   return [...fixas, ...rodizio];
 }

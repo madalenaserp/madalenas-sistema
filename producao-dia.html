@@ -71,7 +71,7 @@ import { acrescentar, listar } from "./js/db.js";
 import { PRODUTOS_PRODUCAO as PRODUTOS, UNIDADES, chaveProduto } from "./js/produtos.js";
 
 const eu = await exigirUsuario();
-if (!pode.producao(eu)) location.href = "turno.html";
+if (!pode.verProducao(eu)) location.href = "turno.html";
 const lanca = pode.lancarProducao(eu);
 const podeCancelar = eu.papel === "dona";
 const veMes = pode.verPainel(eu);

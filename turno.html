@@ -43,6 +43,7 @@ const secoes = [
   { titulo: "🥖 Estoque e perdas", desc: "Perdas e sobras, compras, tirar do estoque e contagem", link: pode.producao(eu) && !pode.verPainel(eu) ? "estoque.html" : "perdas.html" },
   // Produção e confeitaria: tudo dentro de "Produção" (produção do dia, limpeza, estoque, perdas, encomendas, fichas).
   { titulo: "🍞 Produção", desc: "Produção do dia, limpeza da cozinha, encomendas e fichas técnicas", link: "producao.html", mostrar: pode.producao(eu) },
+  { titulo: "🍞 Produção do dia", desc: "O que a produção fez hoje, para conferir o que chegou no balcão", link: "producao-dia.html", mostrar: pode.verProducao(eu) && !pode.producao(eu) },
   { titulo: "RH", desc: "Escala da semana, logins, salários e folha", link: "rh.html", mostrar: pode.rh(eu) },
   { titulo: "Painel da Daiane", desc: "Resumo do que precisa de atenção", link: "painel.html", mostrar: pode.verPainel(eu) },
 ];
