@@ -151,12 +151,13 @@ function menorParaIA(dataUrl) {
     img.src = dataUrl;
   });
 }
-// Reduz a foto para caber no banco (cerca de 150 KB) sem perder a leitura do número e da assinatura.
+// Reduz a foto para caber no banco (até ~250 KB) sem perder a leitura do número e da assinatura.
+// Menor = envia rápido no Wi-Fi fraco da loja (Dara, 16/11/2026).
 function reduzir(arquivo) {
   return new Promise((ok, falha) => {
     const img = new Image();
     img.onload = () => {
-      let lado = 1400, qualidade = 0.7, url;
+      let lado = 1200, qualidade = 0.62, url;
       do {
         const escala = Math.min(1, lado / Math.max(img.width, img.height));
         const c = document.createElement("canvas");
@@ -165,7 +166,7 @@ function reduzir(arquivo) {
         url = c.toDataURL("image/jpeg", qualidade);
         c.width = c.height = 0; // libera a memória já (o iPhone tem limite e a próxima foto sairia em branco)
         lado -= 200; qualidade -= 0.05;
-      } while (url.length > 700000 && lado > 500);
+      } while (url.length > 340000 && lado > 600);
       URL.revokeObjectURL(img.src);
       ok(url);
     };

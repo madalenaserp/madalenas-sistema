@@ -15,8 +15,8 @@ export const TAREFAS_BALCAO = [
   { id: "contar_estoque", texto: "Contar o estoque", fotos: null },
   { id: "mercadorias_expostas", texto: "Verificar mercadorias expostas (qualidade, identificação e preço)", fotos: null },
   { id: "maquininhas", texto: "Verificar se as maquininhas estão carregadas", fotos: "uma" },
-  // Daiane, 16/11/2026: alguém do balcão confere o que a produção lançou com o que chegou.
-  { id: "conferir_producao", texto: "Conferir a produção: abrir \"Produção do dia\" e ver se o que chegou no balcão bate com o que a produção lançou (avisar a líder se faltar)", fotos: "uma" },
+  // Daiane, 16/11/2026: quem está na vez lança no sistema a produção que chega ao balcão (e confere as quantidades).
+  { id: "conferir_producao", texto: "Lançar a produção: a cada fornada que chegar no balcão, contar e lançar em \"Produção do dia\" (avisar a líder se vier diferente do combinado)", fotos: "uma" },
   { id: "embalar", texto: "Embalar produtos (com etiqueta de validade e etiqueta da balança)", fotos: "uma" },
   // Limpezas da semana (Daiane, 08/11/2026): um dia fixo para cada.
   { id: "lixeiras", texto: "Lavar todas as lixeiras", fotos: "antes_depois", dias: [1] },

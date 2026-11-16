@@ -68,7 +68,8 @@ export const pode = {
   producao: (u) => ["dona", "gestor"].includes(u?.papel) || ["Produção", "Confeitaria"].includes(u?.setor),
   // Toda a equipe vê a produção do dia (para conferir o que chegou no balcão); só a produção lança (Daiane, 16/11/2026).
   verProducao: (u) => !!u,
-  lancarProducao: (u) => u?.papel === "dona" || (u?.papel !== "gestor" && ["Produção", "Confeitaria"].includes(u?.setor)),
+  // Desde 16/11/2026 toda a equipe lança a produção (Daiane); fica registrado quem lançou. O Fábio só vê.
+  lancarProducao: (u) => !!u && u.papel !== "gestor",
   // Saídas do caixa: caixa, balconistas e líderes registram; Daiane e Fábio acompanham (o Fábio só vê).
   verCaixa: (u) => ["dona", "gestor", "lider"].includes(u?.papel) || ["Caixa", "Balcão"].includes(u?.setor),
   lancarCaixa: (u) => ["dona", "lider"].includes(u?.papel) || (u?.papel !== "gestor" && ["Caixa", "Balcão"].includes(u?.setor)),

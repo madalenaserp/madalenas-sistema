@@ -106,7 +106,7 @@ service cloud.firestore {
     function daProducao() { return ativo() && perfil().setor in ["Produção", "Confeitaria"]; }
     match /producao/{id} {
       allow read: if ativo();
-      allow create: if (papel(["dona"]) || (edita() && daProducao())) && request.resource.data.registradoPorUid == request.auth.uid && (
+      allow create: if edita() && request.resource.data.registradoPorUid == request.auth.uid && (
            request.resource.data.tipo == "producao"
         || (request.resource.data.tipo == "cancelamento" && papel(["dona"])));
       allow update, delete: if false;
