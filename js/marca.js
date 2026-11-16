@@ -60,3 +60,6 @@ addEventListener("beforeunload", () => { saindo = true; });
 const talvezFaixa = (msg) => { if (saindo) return; setTimeout(() => { if (!saindo && document.visibilityState === "visible") faixaDeErro(msg); }, 2500); };
 addEventListener("unhandledrejection", (e) => talvezFaixa(e.reason?.message || e.reason));
 addEventListener("error", (e) => { if (e.message) talvezFaixa(e.message); });
+
+// App no celular: registra o service worker (só para poder instalar; não guarda páginas).
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
