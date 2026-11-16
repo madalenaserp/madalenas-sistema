@@ -112,6 +112,18 @@ async function itens() {
   const canc = Object.fromEntries(regs.filter((r) => r.tipo === "cancelamento").map((r) => [r.refId, r]));
   return regs.filter((r) => r.tipo === "item").map((r) => ({ ...r, cancelamento: canc[r.id] })).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
 }
+// Busca nome, marca e embalagem pelo código de barras na Open Food Facts (grátis e pública). Sem resposta em 6 s, desiste.
+async function buscarCodigo(codigo) {
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(codigo)}.json?fields=product_name_pt,product_name,generic_name_pt,brands,quantity`, { signal: ctl.signal });
+    clearTimeout(t); if (!r.ok) return null;
+    const j = await r.json(); const p = j?.product; if (j?.status !== 1 || !p) return null;
+    const nome = (p.product_name_pt || p.product_name || p.generic_name_pt || "").trim(); if (!nome) return null;
+    const marca = String(p.brands || "").split(",")[0].trim();
+    return { nome: marca && !nome.toLowerCase().includes(marca.toLowerCase()) ? `${nome} ${marca}` : nome, embalagem: String(p.quantity || "").trim() };
+  } catch { return null; }
+}
 const chave = (r) => r.codigo || r.nome.trim().toLowerCase();
 // Sugestão fiscal pelo nome (só para ajudar no cadastro do Guappo; a contabilidade confere antes de valer).
 // st: costuma ter substituição tributária do ICMS (já pago pelo fornecedor). mono: PIS/COFINS monofásico (já pago na indústria).
@@ -216,14 +228,39 @@ function formulario(todos) {
     $(id).onclick = (e) => { const v = e.target.closest("button")?.dataset.v; if (!v) return; sel[k] = v; $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
   const marca = (id, v) => { sel[id.slice(3) === "cat" ? "categoria" : id === "#l-un" ? "unidade" : id.slice(3)] = v; $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
   // Leitor de código funciona como teclado: digita e aperta Enter.
-  const lerCodigo = () => {
-    const v = $("#l-cod").value.trim(); if (!v) return;
-    const r = conhecidos[v];
-    if (r) { $("#l-nome").value = r.nome; $("#l-emb").value = r.embalagem || ""; marca("#l-cat", r.categoria); marca("#l-un", r.unidade); $("#l-cod-msg").textContent = `✓ Já lançado antes: ${r.nome}. Só conte o que tem aqui.`; $("#l-qtd").focus(); }
-    else { $("#l-cod-msg").textContent = "Código novo: escreva o nome do produto."; $("#l-nome").focus(); }
+  // Código novo: procura o nome na base pública Open Food Facts (só o número do código sai daqui).
+  // Cada vez que o MESMO código é lido de novo, soma 1 na quantidade (passa o leitor em cada unidade, sem contar de cabeça).
+  let lido = "", atual = "";
+  const somaUm = () => { const q = $("#l-qtd"); q.value = String((numero(q.value) || 0) + 1); $("#l-cod-msg").textContent = `✓ Quantidade: ${q.value} (cada leitura soma 1; caixa fechada, digite o número)`; };
+  const lerCodigo = async () => {
+    const v = $("#l-cod").value.trim(); if (!v || v === lido) return; lido = v;
+    if (v === atual) return somaUm();
+    atual = v; $("#l-qtd").value = ""; $("#l-emb").value = "";
+    const msg = $("#l-cod-msg"), r = conhecidos[v];
+    if (r) { $("#l-nome").value = r.nome; $("#l-emb").value = r.embalagem || ""; marca("#l-cat", r.categoria); marca("#l-un", r.unidade); $("#l-qtd").value = "1"; msg.textContent = `✓ ${r.nome} (já lançado antes). Quantidade: 1. Passe o leitor nas outras unidades para somar.`; $("#l-cod").focus(); return; }
+    msg.textContent = "Procurando o produto…"; $("#l-nome").value = "";
+    const achado = await buscarCodigo(v);
+    if (lido !== v) return; // leu outro código enquanto procurava
+    if (achado) {
+      $("#l-nome").value = achado.nome; if (achado.embalagem && !$("#l-emb").value) $("#l-emb").value = achado.embalagem;
+      $("#l-qtd").value ||= "1"; msg.textContent = "✓ Encontrei. Confira o nome. Quantidade: 1. Passe o leitor nas outras unidades para somar."; $("#l-cod").focus();
+    } else { $("#l-qtd").value ||= "1"; msg.textContent = "Não achei esse código na internet: escreva o nome do produto. Quantidade: 1 (cada leitura soma 1)."; $("#l-nome").focus(); }
   };
-  $("#l-cod").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); lerCodigo(); } };
+  $("#l-cod").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); lerCodigo(); $("#l-cod").select(); } };
   $("#l-cod").onchange = lerCodigo;
+  // O leitor digita por cima: se o campo já tem o código, a nova leitura vira "códigocódigo". Ajeita isso.
+  $("#l-cod").oninput = () => { lido = ""; const v = $("#l-cod").value.trim(); if (atual && v.length === atual.length * 2 && v === atual + atual) $("#l-cod").value = atual; };
+  $("#l-cod").onfocus = () => { if (atual) $("#l-cod").select(); };
+  // Se o leitor for passado com o cursor no nome, o código vai para o campo certo.
+  // Também quando o leitor escreve o código no fim do nome já digitado.
+  const codigoNoNome = (e) => {
+    const m = $("#l-nome").value.match(/^(.*?)(\d{8,14})$/); if (!m || (m[1].trim() && m[2] !== atual)) return false;
+    e?.preventDefault(); $("#l-nome").value = m[1].trim();
+    if (m[2] === atual) { somaUm(); return true; }
+    $("#l-cod").value = m[2]; lido = ""; lerCodigo(); return true;
+  };
+  $("#l-nome").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); if (!codigoNoNome(e)) $("#l-qtd").focus(); } };
+  $("#l-nome").onchange = () => codigoNoNome();
   $("#l-cam input").onchange = async (e) => {
     const a = e.target.files[0]; if (!a) return;
     try { foto = await reduzir(a); $("#l-cam span").innerHTML = `<img src="${foto}" alt="Foto"> Foto pronta. Toque para trocar.`; } catch { $("#l-erro").textContent = "Não consegui ler a foto."; }
