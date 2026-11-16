@@ -16,7 +16,7 @@ export const TAREFAS_BALCAO = [
   { id: "mercadorias_expostas", texto: "Verificar mercadorias expostas (qualidade, identificação e preço)", fotos: null },
   { id: "maquininhas", texto: "Verificar se as maquininhas estão carregadas", fotos: "uma" },
   // Daiane, 16/11/2026: alguém do balcão confere o que a produção lançou com o que chegou.
-  { id: "conferir_producao", texto: "Conferir a produção: abrir \"Produção do dia\" e ver se o que chegou no balcão bate com o que a produção lançou (avisar a líder se faltar)", fotos: "uma", fora: ["Maurina"] },
+  { id: "conferir_producao", texto: "Conferir a produção: abrir \"Produção do dia\" e ver se o que chegou no balcão bate com o que a produção lançou (avisar a líder se faltar)", fotos: "uma" },
   { id: "embalar", texto: "Embalar produtos (com etiqueta de validade e etiqueta da balança)", fotos: "uma" },
   // Limpezas da semana (Daiane, 08/11/2026): um dia fixo para cada.
   { id: "lixeiras", texto: "Lavar todas as lixeiras", fotos: "antes_depois", dias: [1] },
@@ -32,7 +32,9 @@ export const diasDaTarefa = (t) => (t.dias ? t.dias.map((d) => NOMES_DIAS[d]).jo
 
 // Quem entra no rodízio: balcão, lanches e a Fabrícia (Daiane, 10/11/2026).
 // Na tela "Quem é da equipe" a Daiane marca quem entra no rodízio (campo rodizio); sem marcação, vale a regra acima.
-export const PESSOAS_BALCAO = EQUIPE.filter((p) => p.rodizio ?? (["Balcão", "Lanches"].includes(p.setor) || p.nome === "Fabrícia")).map((p) => p.nome);
+// Supervisoras não entram no rodízio: a Maurina supervisiona e organiza a embalagem (Daiane, 16/11/2026).
+export const SUPERVISORAS = ["Maurina"];
+export const PESSOAS_BALCAO = EQUIPE.filter((p) => !SUPERVISORAS.includes(p.nome) && (p.rodizio ?? (["Balcão", "Lanches"].includes(p.setor) || p.nome === "Fabrícia"))).map((p) => p.nome);
 
 const diasDesde = (dia) => { const [a, m, d] = dia.split("-").map(Number); return Math.round(Date.UTC(a, m - 1, d) / 86400000); };
 

@@ -52,7 +52,7 @@ function desenhar() {
     <input type="text" class="nome" data-f="nome" value="${esc(p.nome)}" placeholder="Nome (como a equipe chama)">
     <select data-f="setor">${SETORES.map((s) => `<option ${s === p.setor ? "selected" : ""}>${s}</option>`).join("")}</select>
     <select data-f="papel"><option value="equipe" ${p.papel !== "lider" ? "selected" : ""}>Equipe</option><option value="lider" ${p.papel === "lider" ? "selected" : ""}>Líder (marca presença)</option></select>
-    <label class="marca"><input type="checkbox" data-f="rodizio" ${p.rodizio ? "checked" : ""}> Entra no rodízio do balcão</label>
+    ${p.nome === "Maurina" ? `<span class="suave">Supervisora: fica fora do rodízio</span>` : `<label class="marca"><input type="checkbox" data-f="rodizio" ${p.rodizio ? "checked" : ""}> Entra no rodízio do balcão</label>`}
     <button class="tira" data-tira="${k}">Tirar da equipe</button></div>`).join("");
   el.querySelectorAll(".pes").forEach((d) => d.querySelectorAll("[data-f]").forEach((i) => (i.oninput = i.onchange = () => {
     lista[d.dataset.k][i.dataset.f] = i.type === "checkbox" ? i.checked : i.value;
