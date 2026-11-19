@@ -333,7 +333,7 @@ async function folhaValor(empresa, arquivo) {
       notaSalva = { ...base, id: await acrescentar("notas", { ...base, tipo: "nota", fotoId, valor: Math.round(valor * 100) / 100, pedidoGuappo: num, itens, ...($("#v-setor").value ? { setor: $("#v-setor").value } : {}) }), valor, semItens: !itens.length };
       salvou = true; fundo.hidden = true;
       // A tela continua no dia em que a Daiane está; só avisa se a nota foi guardada em outro dia.
-      mostrar();
+      mostrar(); if (document.querySelector('#abas [data-aba="mes"]')?.getAttribute("aria-pressed") === "true") mostrarMes();
       if (d !== campoDia.value) avisoTopo(`Nota da ${empresa} salva no dia ${dataBR(d)} (o dia escrito na nota). Para ver, escolha ${dataBR(d)} lá em cima ou abra "Mês" → "Ver o mês dia a dia".`);
     } catch { $("#v-e").textContent = "Não consegui enviar. Verifique a internet e tente de novo."; e.target.disabled = false; }
   };
@@ -549,6 +549,18 @@ async function mostrarMes() {
     <div id="emps" style="display:flex;flex-direction:column;gap:8px"></div>
     <p class="suave" style="font-size:13px">Confira com o relatório a prazo de cada empresa no Guappo antes de cobrar.</p>`
     : `<p class="suave">Nenhuma nota neste mês.</p>`;
+  // Botões de foto também aqui, porque a Daiane abre direto no Mês (18/11/2026).
+  if (podeFoto) {
+    const c = document.createElement("div"); c.className = "cartao"; c.style.marginBottom = "8px";
+    c.innerHTML = `<b>📷 Lançar nota</b> <span class="suave">(toque na empresa e tire a foto)</span><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>`;
+    for (const nome of EMPRESAS) {
+      const rot = document.createElement("label"); rot.className = "foto-btn secundario";
+      rot.innerHTML = `${esc(nome)}<input type="file" accept="image/*">`;
+      rot.querySelector("input").onchange = (e) => e.target.files[0] && folhaValor(nome, e.target.files[0]);
+      c.lastElementChild.append(rot);
+    }
+    box.prepend(c);
+  }
   for (const x of sit) {
     const div = document.createElement("div");
     div.className = `emp-mes ${x.estado === "sem" ? "aberto" : x.estado}`;
