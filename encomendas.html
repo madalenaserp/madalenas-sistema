@@ -110,10 +110,17 @@ function montar(registros) {
   return registros.filter((r) => r.tipo === "encomenda").map((e) => {
     const meus = eventos.filter((r) => r.refId === e.id);
     const ultimoStatus = meus.filter((r) => r.tipo === "status").at(-1);
-    const novaHora = meus.filter((r) => r.tipo === "hora").at(-1); // horário mudado depois (fica o histórico)
+    // Edições (a cliente mudou o pedido): vale a última; as versões anteriores ficam no histórico.
+    const edicoes = meus.filter((r) => r.tipo === "edicao");
+    const ultimaEd = edicoes.at(-1);
+    const atual = { ...e, ...(ultimaEd ? Object.fromEntries(CAMPOS_EDITAVEIS.filter((k) => k in ultimaEd).map((k) => [k, ultimaEd[k]])) : {}) };
+    const versoes = [e, ...edicoes];
+    // Horário mudado depois do último ajuste (fica o histórico).
+    const novaHora = meus.filter((r) => r.tipo === "hora" && (!ultimaEd || r.criadoEm > ultimaEd.criadoEm)).at(-1);
     return {
-      ...e,
-      ...(novaHora ? { horaEntrega: novaHora.horaEntrega, horaAntes: e.horaEntrega, horaPor: novaHora.registradoPor } : {}),
+      ...atual,
+      edicoes, versoes,
+      ...(novaHora ? { horaEntrega: novaHora.horaEntrega, horaAntes: atual.horaEntrega, horaPor: novaHora.registradoPor } : {}),
       status: ultimoStatus?.para || "anotada",
       motivo: ultimoStatus?.motivo,
       statusPor: ultimoStatus?.registradoPor,
@@ -121,6 +128,8 @@ function montar(registros) {
     };
   }).sort((a, b) => (a.dataEntrega + (a.horaEntrega || "")).localeCompare(b.dataEntrega + (b.horaEntrega || "")));
 }
+
+const CAMPOS_EDITAVEIS = ["cliente", "telefone", "pedido", "itens", "horaEntrega", "unidade", "retirada", "valor", "sinal", "obs"];
 
 function periodo() {
   const h = hoje();
@@ -190,7 +199,9 @@ function cartao(e) {
     ${pagamento ? `<div style="font-size:15px">${pagamento}</div>` : ""}
     ${e.obs ? `<div class="suave">${esc(e.obs)}</div>` : ""}
     ${e.motivo ? `<div class="suave">Cancelada: ${esc(e.motivo)}</div>` : ""}
-    <div class="suave" style="font-size:13px">Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}${conf ? ` · Conferida: ${conf}` : ""}</div>
+    <div class="suave" style="font-size:13px">Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}${conf ? ` · Conferida: ${conf}` : ""}${e.editadaDe ? ` · ${esc(e.editadaDe)}` : ""}</div>
+    ${e.edicoes.length ? `<details class="suave" style="font-size:13px"><summary style="cursor:pointer">✏️ Pedido alterado ${e.edicoes.length}x · última por ${esc(e.edicoes.at(-1).registradoPor)} em ${dataBR(e.edicoes.at(-1).criadoEm.slice(0, 10))} às ${esc(e.edicoes.at(-1).hora)} (ver como era)</summary>
+      ${e.versoes.slice(0, -1).map((v, i) => `<div style="border-left:3px solid var(--linha);padding-left:8px;margin:6px 0"><b>${i ? `Versão ${i + 1}` : "Como foi anotada"}</b> (${esc(v.registradoPor || v.anotadoPor)}): ${esc(v.pedido || "")}${v.horaEntrega ? ` · ${esc(v.horaEntrega)}` : ""}${v.valor ? ` · ${reais(v.valor)}` : ""}${v.obs ? ` · ${esc(v.obs)}` : ""}</div>`).join("")}</details>` : ""}
     <div class="acoes"></div>`;
   const acoes = div.querySelector(".acoes");
   if (e.status !== "entregue" && e.status !== "cancelada" && !leitura) {
@@ -198,6 +209,7 @@ function cartao(e) {
     if (m && !jaConferida(e, m)) acoes.append(botao(`Conferi (${m === "vespera" ? "véspera" : "abertura"})`, "conferir", () => registrar(e, { tipo: "conferida", momento: m })));
     acoes.append(botao(PROXIMA[e.status], "avancar", () => registrar(e, { tipo: "status", para: ETAPAS[ETAPAS.indexOf(e.status) + 1] })));
     acoes.append(botao("🖨 Imprimir", "", () => imprimir([e])));
+    acoes.append(botao("✏️ Alterar pedido", "", () => abrirFolha(e)));
     acoes.append(botao("🕘 Mudar horário", "", () => {
       const h = prompt(`Novo horário da encomenda de ${e.cliente} (ex.: 09:00)`, e.horaEntrega || "");
       if (h === null) return;
@@ -237,6 +249,7 @@ function cupom(e) {
     ${e.obs ? `<p>Obs: ${esc(e.obs)}</p>` : ""}<hr>
     ${e.valor ? `<p>Total: ${reais(e.valor)}</p><p>Sinal: ${reais(e.sinal)}</p><p class="grande">${falta > 0 ? `Falta: ${reais(falta)}` : "PAGO"}</p><hr>` : ""}
     <p>Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}</p>
+    ${e.edicoes?.length ? `<p><b>PEDIDO ALTERADO</b> por ${esc(e.edicoes.at(-1).registradoPor)} em ${dataBR(e.edicoes.at(-1).criadoEm.slice(0, 10))}</p>` : e.editadaDe ? `<p><b>PEDIDO ALTERADO</b> (${esc(e.editadaDe)})</p>` : ""}
     <p>Impresso em ${dataBR(hoje())} ${agora()} por ${esc(eu.nome)}</p>
   </div>`;
 }
@@ -259,11 +272,13 @@ const fundo = document.getElementById("fundo");
 const folha = document.getElementById("folha");
 fundo.onclick = (ev) => { if (ev.target === fundo) fundo.hidden = true; };
 
-function abrirFolha() {
-  let unidade = null, retirada = "balcao";
-  const dataPadrao = aba === "amanha" ? somarDias(hoje(), 1) : hoje();
+// Sem "ed": anota uma nova. Com "ed": altera a encomenda (a cliente mudou). A versão anterior fica guardada.
+function abrirFolha(ed) {
+  if (ed instanceof Event) ed = null;
+  let unidade = ed?.unidade || null, retirada = ed?.retirada || "balcao";
+  const dataPadrao = ed ? ed.dataEntrega : aba === "amanha" ? somarDias(hoje(), 1) : hoje();
   folha.innerHTML = `
-    <h2>Anotar encomenda</h2>
+    <h2>${ed ? `Alterar encomenda de ${esc(ed.cliente)}` : "Anotar encomenda"}</h2>
     <label class="rot" for="f-cliente">Cliente</label>
     <input id="f-cliente" placeholder="Nome do cliente" autocomplete="off">
     <label class="rot" for="f-tel">Telefone / WhatsApp</label>
@@ -284,10 +299,18 @@ function abrirFolha() {
     </div>
     <input id="f-obs" placeholder="Observação (endereço, alergia, decoração…)">
     <p class="erro" id="f-erro"></p>
-    <button class="botao principal" id="f-salvar">Salvar encomenda</button>
+    <button class="botao principal" id="f-salvar">${ed ? "Salvar alteração" : "Salvar encomenda"}</button>
     <button class="botao" id="f-cancelar" style="text-align:center;border:none">Cancelar</button>`;
-  const campo = campoItens([], "Ex.: mini salgados fritos");
+  const campo = campoItens(ed ? (ed.itens?.length ? ed.itens : [{ qtd: "", produto: ed.pedido || "" }]) : [], "Ex.: mini salgados fritos");
   folha.querySelector("#f-itens").append(campo.el);
+  if (ed) {
+    const pf = (id, v) => { folha.querySelector(id).value = v ?? ""; };
+    pf("#f-cliente", ed.cliente); pf("#f-tel", ed.telefone); pf("#f-hora", ed.horaEntrega); pf("#f-obs", ed.obs);
+    pf("#f-valor", ed.valor ? String(ed.valor).replace(".", ",") : ""); pf("#f-sinal", ed.sinal ? String(ed.sinal).replace(".", ",") : "");
+    folha.querySelector("#f-data").min = ed.dataEntrega < hoje() ? ed.dataEntrega : hoje();
+    folha.querySelectorAll("#f-unidade button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === unidade));
+    folha.querySelectorAll("#f-retirada button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === retirada));
+  }
   const escolher = (id, set) => folha.querySelector(id).onclick = (ev) => {
     const v = ev.target.closest("button")?.dataset.v; if (!v) return;
     set(v); ev.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
@@ -305,12 +328,34 @@ function abrirFolha() {
     const horaEntrega = folha.querySelector("#f-hora").value;
     if (!cliente) return (erro.textContent = "Escreva o nome do cliente.");
     if (!itensPed.length) return (erro.textContent = "Escreva o que foi encomendado (pelo menos um item).");
-    if (!dataEntrega || dataEntrega < hoje()) return (erro.textContent = "Escolha o dia da entrega (hoje ou depois).");
+    if (!dataEntrega || (dataEntrega < hoje() && dataEntrega !== ed?.dataEntrega)) return (erro.textContent = "Escolha o dia da entrega (hoje ou depois).");
     if (!horaEntrega) return (erro.textContent = "Coloque o horário da entrega.");
     if (!unidade) return (erro.textContent = "Escolha quem faz: Panificadora ou Confeitaria.");
     const valor = numero("#f-valor"), sinal = numero("#f-sinal");
     if (sinal > valor && valor > 0) return (erro.textContent = "O sinal não pode ser maior que o total.");
     ev.target.disabled = true;
+    const campos = { cliente, telefone: folha.querySelector("#f-tel").value.trim(), pedido, itens: itensPed, horaEntrega, unidade, retirada, valor, sinal, obs: folha.querySelector("#f-obs").value.trim() };
+    const quem = { registradoPor: eu.nome, registradoPorUid: eu.uid, criadoEm: new Date().toISOString() };
+    if (ed) {
+      try {
+        if (dataEntrega === ed.dataEntrega) {
+          // Mesmo dia: guarda a alteração como registro novo (a original continua guardada).
+          await acrescentar("encomendas", { tipo: "edicao", refId: ed.id, dataEntrega, hora: agora(), ...campos, ...quem });
+        } else {
+          // Mudou o dia: a encomenda passa para o dia novo e a antiga fica nas canceladas daquele dia, com o motivo.
+          await acrescentar("encomendas", { tipo: "encomenda", ...campos, dataEntrega, anotadoPor: ed.anotadoPor, substitui: ed.id,
+            editadaDe: `alterada por ${eu.nome}: era ${dataBR(ed.dataEntrega)}`, ...quem });
+          await acrescentar("encomendas", { tipo: "status", para: "cancelada", motivo: `Alterada: passou para ${dataBR(dataEntrega)} (${eu.nome})`, refId: ed.id, dataEntrega: ed.dataEntrega, hora: agora(), ...quem });
+        }
+        fundo.hidden = true; mostrar();
+        if (confirm("Alteração salva. Imprimir o cupom novo para a produção?")) {
+          const [de, ate] = [dataEntrega, dataEntrega];
+          const nova = montar(await listarEntre("encomendas", "dataEntrega", de, ate)).find((x) => x.id === ed.id || x.substitui === ed.id);
+          if (nova) imprimir([nova]);
+        }
+      } catch { erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo."; ev.target.disabled = false; }
+      return;
+    }
     try {
       await acrescentar("encomendas", {
         tipo: "encomenda", cliente, telefone: folha.querySelector("#f-tel").value.trim(), pedido, itens: itensPed,
