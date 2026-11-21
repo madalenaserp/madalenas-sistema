@@ -67,7 +67,11 @@
     <button aria-pressed="true" data-aba="hoje">Hoje</button>
     <button aria-pressed="false" data-aba="amanha">Amanhã</button>
     <button aria-pressed="false" data-aba="proximas">Próximos dias</button>
+    <button aria-pressed="false" data-aba="procurar">🔎 Procurar</button>
   </div>
+  <div class="cartao" id="busca" hidden><label class="rot" for="q">Procurar encomenda pelo nome do cliente ou pelo que foi pedido</label>
+    <input id="q" placeholder="Ex.: Guilherme" autocomplete="off" style="font-size:17px">
+    <p class="suave" style="margin:4px 0 0;font-size:13px">Procura em todas as encomendas desde 01/11/2026, inclusive entregues, canceladas e de dias que já passaram.</p></div>
   <div class="cartao" id="resumo"></div>
   <button class="botao principal" id="nova">+ Anotar encomenda</button>
   <div class="barra-impr"><button id="imprimir-lista">🖨 Imprimir todas desta aba</button></div>
@@ -135,7 +139,7 @@ function periodo() {
   const h = hoje();
   if (aba === "hoje") return [h, h];
   if (aba === "amanha") return [somarDias(h, 1), somarDias(h, 1)];
-  return [h, somarDias(h, 15)];
+  return [h, somarDias(h, 60)];
 }
 
 // Conferência: na véspera (para a produção se organizar) e na abertura do dia da entrega.
@@ -147,7 +151,31 @@ function momentoConferencia(e) {
 }
 const jaConferida = (e, momento) => e.conferencias.some((c) => c.momento === momento);
 
+// Procurar: todas as encomendas, de qualquer dia e situação, pelo nome ou pelo pedido.
+async function procurar() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const sem = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const lista = document.getElementById("lista");
+  document.getElementById("resumo").innerHTML = `<h2 style="margin:0">Procurar</h2>`;
+  ultimaLista = [];
+  if (q.length < 2) { lista.innerHTML = `<p class="suave">Escreva pelo menos 2 letras.</p>`; return; }
+  lista.innerHTML = `<p class="suave">Procurando…</p>`;
+  const todas = montar(await listarEntre("encomendas", "dataEntrega", "2026-11-01", somarDias(hoje(), 400)));
+  const achou = todas.filter((e) => sem(e.cliente + " " + e.pedido + " " + (e.telefone || "")).includes(sem(q))).sort((a, b) => b.dataEntrega.localeCompare(a.dataEntrega));
+  document.getElementById("resumo").innerHTML = `<h2 style="margin:0">Procurar</h2><p class="suave" style="margin:6px 0 0">${achou.length} encomenda(s) com "${esc(q)}"</p>`;
+  lista.innerHTML = achou.length ? "" : `<p class="suave">Nenhuma encomenda com esse nome.</p>`;
+  for (const e of achou) {
+    const t = document.createElement("p"); t.className = "dia-titulo"; t.textContent = `${diaSemana(e.dataEntrega)}, ${dataBR(e.dataEntrega)}${e.status === "cancelada" ? " · CANCELADA" : ""}`;
+    lista.append(t, cartao(e));
+  }
+}
+let tempoBusca;
+document.getElementById("q").oninput = () => { clearTimeout(tempoBusca); tempoBusca = setTimeout(procurar, 400); };
+
 async function mostrar() {
+  document.getElementById("busca").hidden = aba !== "procurar";
+  document.querySelector(".barra-impr").hidden = aba === "procurar";
+  if (aba === "procurar") return procurar();
   const [de, ate] = periodo();
   const itens = montar(await listarEntre("encomendas", "dataEntrega", de, ate));
   const ativas = itens.filter((e) => e.status !== "cancelada");
@@ -160,7 +188,7 @@ async function mostrar() {
     (semConferir.length ? ` · <span class="selo alerta">${semConferir.length} sem conferir</span>` : "") + `</p>`;
 
   const lista = document.getElementById("lista");
-  lista.innerHTML = ativas.length ? "" : `<p class="suave">Nenhuma encomenda ${aba === "hoje" ? "para hoje" : aba === "amanha" ? "para amanhã" : "nos próximos 15 dias"}.</p>`;
+  lista.innerHTML = ativas.length ? "" : `<p class="suave">Nenhuma encomenda ${aba === "hoje" ? "para hoje" : aba === "amanha" ? "para amanhã" : "nos próximos 60 dias"}.</p>`;
   let diaAtual = "";
   for (const e of ativas) {
     if (aba === "proximas" && e.dataEntrega !== diaAtual) {
@@ -176,7 +204,7 @@ async function mostrar() {
   const canc = itens.filter((e) => e.status === "cancelada");
   if (canc.length) {
     const d = document.createElement("details");
-    d.innerHTML = `<summary class="suave" style="cursor:pointer;padding:8px 0">Canceladas (${canc.length})</summary>`;
+    d.innerHTML = `<summary style="cursor:pointer;padding:8px 0;font-weight:600">❌ Canceladas (${canc.length}) · toque para ver</summary>`;
     for (const e of canc) d.append(cartao(e));
     lista.append(d);
   }
