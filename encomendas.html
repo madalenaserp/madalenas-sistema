@@ -69,7 +69,7 @@
     <button aria-pressed="false" data-aba="proximas">Próximos dias</button>
     <button aria-pressed="false" data-aba="procurar">🔎 Procurar</button>
   </div>
-  <div class="cartao" id="busca" hidden><label class="rot" for="q">Procurar encomenda pelo nome do cliente ou pelo que foi pedido</label>
+  <div class="cartao" id="busca" hidden><label class="rot" for="q">Procurar encomenda pelo nome do cliente ou pelo que foi pedido (deixe vazio para ver todas)</label>
     <input id="q" placeholder="Ex.: Guilherme" autocomplete="off" style="font-size:17px">
     <p class="suave" style="margin:4px 0 0;font-size:13px">Procura em todas as encomendas desde 01/11/2026, inclusive entregues, canceladas e de dias que já passaram.</p></div>
   <div class="cartao" id="resumo"></div>
@@ -158,11 +158,11 @@ async function procurar() {
   const lista = document.getElementById("lista");
   document.getElementById("resumo").innerHTML = `<h2 style="margin:0">Procurar</h2>`;
   ultimaLista = [];
-  if (q.length < 2) { lista.innerHTML = `<p class="suave">Escreva pelo menos 2 letras.</p>`; return; }
+  // Campo vazio: mostra TODAS (para conferir se falta alguma).
   lista.innerHTML = `<p class="suave">Procurando…</p>`;
   const todas = montar(await listarEntre("encomendas", "dataEntrega", "2026-11-01", somarDias(hoje(), 400)));
   const achou = todas.filter((e) => sem(e.cliente + " " + e.pedido + " " + (e.telefone || "")).includes(sem(q))).sort((a, b) => b.dataEntrega.localeCompare(a.dataEntrega));
-  document.getElementById("resumo").innerHTML = `<h2 style="margin:0">Procurar</h2><p class="suave" style="margin:6px 0 0">${achou.length} encomenda(s) com "${esc(q)}"</p>`;
+  document.getElementById("resumo").innerHTML = `<h2 style="margin:0">Procurar</h2><p class="suave" style="margin:6px 0 0">${achou.length} encomenda(s)${q ? ` com "${esc(q)}"` : " (todas)"}</p>`;
   lista.innerHTML = achou.length ? "" : `<p class="suave">Nenhuma encomenda com esse nome.</p>`;
   for (const e of achou) {
     const t = document.createElement("p"); t.className = "dia-titulo"; t.textContent = `${diaSemana(e.dataEntrega)}, ${dataBR(e.dataEntrega)}${e.status === "cancelada" ? " · CANCELADA" : ""}`;
