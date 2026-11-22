@@ -107,6 +107,7 @@ const SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "s�
 const diaSemana = (iso) => { const [a, m, d] = iso.split("-").map(Number); return SEMANA[new Date(a, m - 1, d).getDay()]; };
 
 let aba = "hoje";
+let ultimasPassadas = [];
 
 // Junta cada encomenda com o que aconteceu depois (registros novos; nada se altera nem se apaga).
 function montar(registros) {
@@ -151,6 +152,10 @@ function momentoConferencia(e) {
 }
 const jaConferida = (e, momento) => e.conferencias.some((c) => c.momento === momento);
 
+function confirmado(t) {
+  const p = document.createElement("p"); p.className = "selo ok"; p.style.cssText = "display:block;white-space:normal;margin:8px 0 0;font-size:16px"; p.textContent = t;
+  document.getElementById("resumo").append(p); document.getElementById("resumo").scrollIntoView({ behavior: "smooth" });
+}
 // Procurar: todas as encomendas, de qualquer dia e situação, pelo nome ou pelo pedido.
 async function procurar() {
   const q = document.getElementById("q").value.trim().toLowerCase();
@@ -161,12 +166,21 @@ async function procurar() {
   // Campo vazio: mostra TODAS (para conferir se falta alguma).
   lista.innerHTML = `<p class="suave">Procurando…</p>`;
   const todas = montar(await listarEntre("encomendas", "dataEntrega", "2026-11-01", somarDias(hoje(), 400)));
-  const achou = todas.filter((e) => sem(e.cliente + " " + e.pedido + " " + (e.telefone || "")).includes(sem(q))).sort((a, b) => b.dataEntrega.localeCompare(a.dataEntrega));
+  // Procura também nas versões antigas (antes de "Alterar pedido"), para nada se perder de vista.
+  const texto = (v) => sem(v.cliente + " " + v.pedido + " " + (v.telefone || "") + " " + (v.obs || ""));
+  const achou = todas.filter((e) => [e, ...(e.versoes || [])].some((v) => texto(v).includes(sem(q)))).sort((a, b) => b.dataEntrega.localeCompare(a.dataEntrega));
   document.getElementById("resumo").innerHTML = `<h2 style="margin:0">Procurar</h2><p class="suave" style="margin:6px 0 0">${achou.length} encomenda(s)${q ? ` com "${esc(q)}"` : " (todas)"}</p>`;
   lista.innerHTML = achou.length ? "" : `<p class="suave">Nenhuma encomenda com esse nome.</p>`;
   for (const e of achou) {
     const t = document.createElement("p"); t.className = "dia-titulo"; t.textContent = `${diaSemana(e.dataEntrega)}, ${dataBR(e.dataEntrega)}${e.status === "cancelada" ? " · CANCELADA" : ""}`;
-    lista.append(t, cartao(e));
+    const c = cartao(e);
+    if (q && !texto(e).includes(sem(q))) {
+      const v = (e.versoes || []).find((x) => texto(x).includes(sem(q)));
+      const aviso = document.createElement("div"); aviso.className = "selo alerta"; aviso.style.cssText = "display:block;white-space:normal;margin:0 0 6px";
+      aviso.textContent = `"${q}" está numa versão ANTERIOR deste pedido (antes de alterar): ${v.cliente} · ${v.pedido}${v.horaEntrega ? " · " + v.horaEntrega : ""}${v.valor ? " · R$ " + v.valor : ""}${v.telefone ? " · tel " + v.telefone : ""}${v.obs ? " · " + v.obs : ""}`;
+      c.prepend(aviso); c.querySelector("details")?.setAttribute("open", "");
+    }
+    lista.append(t, c);
   }
 }
 let tempoBusca;
@@ -187,8 +201,19 @@ async function mostrar() {
     `<h2 style="margin:0">${titulo}</h2><p class="suave" style="margin:6px 0 0">${ativas.length} encomenda(s) · ${abertas.length} ainda não entregue(s)` +
     (semConferir.length ? ` · <span class="selo alerta">${semConferir.length} sem conferir</span>` : "") + `</p>`;
 
+  // Encomendas de dias que já passaram e não foram entregues nem canceladas (dia anotado errado?).
+  // Regra da Daiane (22/11/2026): encomenda não some enquanto não derem baixa (entregue ou cancelada). Aparece no topo de todas as abas.
+  {
+    const passadas = montar(await listarEntre("encomendas", "dataEntrega", "2026-11-01", somarDias(hoje(), -1))).filter((e) => e.status !== "entregue" && e.status !== "cancelada");
+    if (passadas.length) document.getElementById("resumo").innerHTML += `<p class="selo alerta" style="display:block;white-space:normal;margin:8px 0 0">⚠️ ${passadas.length} encomenda(s) SEM BAIXA de dias que já passaram (estão no topo da lista). Se o dia estava errado, toque em "Mudar dia". Se já foi entregue, marque "Entregue". Se não vai mais, "Cancelar".</p>`;
+    ultimasPassadas = passadas;
+  }
   const lista = document.getElementById("lista");
   lista.innerHTML = ativas.length ? "" : `<p class="suave">Nenhuma encomenda ${aba === "hoje" ? "para hoje" : aba === "amanha" ? "para amanhã" : "nos próximos 60 dias"}.</p>`;
+  if (ultimasPassadas.length) {
+    const t = document.createElement("p"); t.className = "dia-titulo"; t.textContent = "⚠️ Sem baixa: dias que já passaram"; lista.append(t);
+    for (const e of ultimasPassadas) { const t2 = document.createElement("p"); t2.className = "suave"; t2.style.margin = "0"; t2.textContent = `${diaSemana(e.dataEntrega)}, ${dataBR(e.dataEntrega)}`; lista.append(t2, cartao(e)); }
+  }
   let diaAtual = "";
   for (const e of ativas) {
     if (aba === "proximas" && e.dataEntrega !== diaAtual) {
@@ -229,22 +254,16 @@ function cartao(e) {
     ${e.motivo ? `<div class="suave">Cancelada: ${esc(e.motivo)}</div>` : ""}
     <div class="suave" style="font-size:13px">Anotada por ${esc(e.anotadoPor)} em ${dataBR(e.criadoEm.slice(0, 10))}${conf ? ` · Conferida: ${conf}` : ""}${e.editadaDe ? ` · ${esc(e.editadaDe)}` : ""}</div>
     ${e.edicoes.length ? `<details class="suave" style="font-size:13px"><summary style="cursor:pointer">✏️ Pedido alterado ${e.edicoes.length}x · última por ${esc(e.edicoes.at(-1).registradoPor)} em ${dataBR(e.edicoes.at(-1).criadoEm.slice(0, 10))} às ${esc(e.edicoes.at(-1).hora)} (ver como era)</summary>
-      ${e.versoes.slice(0, -1).map((v, i) => `<div style="border-left:3px solid var(--linha);padding-left:8px;margin:6px 0"><b>${i ? `Versão ${i + 1}` : "Como foi anotada"}</b> (${esc(v.registradoPor || v.anotadoPor)}): ${esc(v.pedido || "")}${v.horaEntrega ? ` · ${esc(v.horaEntrega)}` : ""}${v.valor ? ` · ${reais(v.valor)}` : ""}${v.obs ? ` · ${esc(v.obs)}` : ""}</div>`).join("")}</details>` : ""}
+      ${e.versoes.slice(0, -1).map((v, i) => `<div style="border-left:3px solid var(--linha);padding-left:8px;margin:6px 0"><b>${i ? `Versão ${i + 1}` : "Como foi anotada"}</b> (${esc(v.registradoPor || v.anotadoPor)}): <b>${esc(v.cliente || "")}</b>${v.telefone ? ` ${esc(v.telefone)}` : ""} · ${esc(v.pedido || "")}${v.horaEntrega ? ` · ${esc(v.horaEntrega)}` : ""}${v.valor ? ` · ${reais(v.valor)}` : ""}${v.obs ? ` · ${esc(v.obs)}` : ""}</div>`).join("")}</details>` : ""}
     <div class="acoes"></div>`;
   const acoes = div.querySelector(".acoes");
   if (e.status !== "entregue" && e.status !== "cancelada" && !leitura) {
     const m = momentoConferencia(e);
     if (m && !jaConferida(e, m)) acoes.append(botao(`Conferi (${m === "vespera" ? "véspera" : "abertura"})`, "conferir", () => registrar(e, { tipo: "conferida", momento: m })));
     acoes.append(botao(PROXIMA[e.status], "avancar", () => registrar(e, { tipo: "status", para: ETAPAS[ETAPAS.indexOf(e.status) + 1] })));
+    if (e.dataEntrega < hoje() && e.status !== "pronta") acoes.append(botao("✓ Já foi entregue", "avancar", () => confirm(`Dar baixa: a encomenda de ${e.cliente} (${dataBR(e.dataEntrega)}) já foi entregue?`) && registrar(e, { tipo: "status", para: "entregue" })));
     acoes.append(botao("🖨 Imprimir", "", () => imprimir([e])));
-    acoes.append(botao("✏️ Alterar pedido", "", () => abrirFolha(e)));
-    acoes.append(botao("🕘 Mudar horário", "", () => {
-      const h = prompt(`Novo horário da encomenda de ${e.cliente} (ex.: 09:00)`, e.horaEntrega || "");
-      if (h === null) return;
-      const m = h.trim().match(/^(\d{1,2})(?:[:h.](\d{2}))?h?$/i);
-      if (!m || +m[1] > 23 || +(m[2] || 0) > 59) return alert("Horário inválido. Escreva assim: 09:00");
-      return registrar(e, { tipo: "hora", horaEntrega: `${m[1].padStart(2, "0")}:${m[2] || "00"}` });
-    }));
+    acoes.append(botao("✏️ Mudar dia, horário ou pedido", "", () => abrirFolha(e)));
     if (podeCancelar) acoes.append(botao("Cancelar", "", () => {
       const motivo = prompt(`Por que cancelar a encomenda de ${e.cliente}?`);
       if (motivo?.trim()) registrar(e, { tipo: "status", para: "cancelada", motivo: motivo.trim() });
@@ -314,7 +333,7 @@ function abrirFolha(ed) {
     <label class="rot">O que foi encomendado (um item por linha)</label>
     <div id="f-itens"></div>
     <div class="duas">
-      <div><label class="rot" for="f-data">Dia da entrega</label><input type="date" id="f-data" min="${hoje()}" value="${dataPadrao}"></div>
+      <div><label class="rot" for="f-data">Dia da entrega <span class="suave">(confira!)</span></label><input type="date" id="f-data" min="${hoje()}" value="${dataPadrao}"></div>
       <div><label class="rot" for="f-hora">Horário</label><input type="time" id="f-hora"></div>
     </div>
     <label class="rot">Quem faz</label>
@@ -375,7 +394,7 @@ function abrirFolha(ed) {
             editadaDe: `alterada por ${eu.nome}: era ${dataBR(ed.dataEntrega)}`, ...quem });
           await acrescentar("encomendas", { tipo: "status", para: "cancelada", motivo: `Alterada: passou para ${dataBR(dataEntrega)} (${eu.nome})`, refId: ed.id, dataEntrega: ed.dataEntrega, hora: agora(), ...quem });
         }
-        fundo.hidden = true; mostrar();
+        fundo.hidden = true; await mostrar(); confirmado(`✓ Alteração salva: ${cliente}, ${diaSemana(dataEntrega).toLowerCase()}, ${dataBR(dataEntrega)} às ${horaEntrega}.`);
         if (confirm("Alteração salva. Imprimir o cupom novo para a produção?")) {
           const [de, ate] = [dataEntrega, dataEntrega];
           const nova = montar(await listarEntre("encomendas", "dataEntrega", de, ate)).find((x) => x.id === ed.id || x.substitui === ed.id);
@@ -394,7 +413,7 @@ function abrirFolha(ed) {
       const h = hoje();
       aba = dataEntrega === h ? "hoje" : dataEntrega === somarDias(h, 1) ? "amanha" : "proximas";
       marcarAba();
-      mostrar();
+      await mostrar(); confirmado(`✓ Encomenda de ${cliente} salva para ${diaSemana(dataEntrega).toLowerCase()}, ${dataBR(dataEntrega)} às ${horaEntrega}.`);
     } catch {
       erro.textContent = "Não consegui salvar. Verifique a internet e tente de novo.";
       ev.target.disabled = false;
