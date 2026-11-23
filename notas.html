@@ -592,7 +592,7 @@ async function mostrarMes() {
 const PADARIA = "DAIANE ABILIO PADARIA E RESTAURANTE LTDA (Madalena's Coffee Shop)\nCNPJ 55.612.496/0001-46 · IE 14.904.12-3\nRua Abílio José de Matos, 2544, Porto da Pedra, São Gonçalo/RJ, 24436-000\nTel. (21) 97209-8291";
 const PADRAO_EMP = {
   ABG: { razao: "ABG SERVICES OFFSHORE GENERAL SOLUTIONS LTDA", cnpj: "42.597.739/0001-72", endereco: "Rua Magalhães Bastos, Boa Vista, 24466-250" },
-  LANDSEAAIR: { razao: "LANDSEAAIR TECHNOLOGY LTDA", cnpj: "39.230.614/0001-03", endereco: "Rua Ponta Grossa, 3806, Boa Vista, São Gonçalo/RJ, 24466-180", corte: 20 },
+  LANDSEAAIR: { razao: "LandSeaAir Technology Ltda", fantasia: "LandSeaAir", cnpj: "39.230.614/0001-03", endereco: "Rua Ponta Grossa, 3806, Boa Vista, São Gonçalo/RJ, 24466-180", corte: 20 },
   TWAS: { razao: "TWAS REPAIR SERVICOS NAVAIS E INDUSTRIAIS LTDA", cnpj: "31.839.501/0001-90", endereco: "Travessa Frederico Marques, 84, Boa Vista, São Gonçalo/RJ, 24466-180 · (21) 99014-7162" },
   Artemis: { razao: "ARTERMIS FORNECIMENTO DE SUPRIMENTOS LTDA", cnpj: "50.424.801/0001-52", endereco: "Rua Magalhães Bastos, 77, Boa Vista, São Gonçalo/RJ, 24466-250 · (21) 99202-1211" },
   TECMAR: { razao: "TECMAR SERVICOS NAVAIS OFFSHORE LTDA", cnpj: "12.795.238/0001-30", endereco: "Rua Professora Maria Joaquina, 340, Boa Vista, São Gonçalo/RJ, 24466-260" },
@@ -615,6 +615,7 @@ function folhaDadosEmpresa(nome) {
   const e = dadosEmp?.[nome] || {};
   folha.innerHTML = `<h2>Dados da empresa · ${esc(nome)}</h2>
     <label class="suave" for="de-r">Razão social</label><input id="de-r" value="${esc(e.razao || "")}">
+    <label class="suave" for="de-f">Nome fantasia (sai no fechamento; ex.: LandSeaAir)</label><input id="de-f" value="${esc(e.fantasia || "")}">
     <label class="suave" for="de-c">CNPJ</label><input id="de-c" inputmode="numeric" value="${esc(e.cnpj || "")}">
     <label class="suave" for="de-e">Endereço</label><input id="de-e" value="${esc(e.endereco || "")}">
     <label class="suave" for="de-s">Setores (separados por vírgula, se a empresa marca na nota; ex.: Mauá, Base)</label><input id="de-s" value="${esc((e.setores || []).join(", "))}">
@@ -626,7 +627,7 @@ function folhaDadosEmpresa(nome) {
   folha.querySelector("#de-x").onclick = () => { fundo.hidden = true; };
   folha.querySelector("#de-ok").onclick = async (ev) => {
     ev.target.disabled = true;
-    const novo = { ...dadosEmp, [nome]: { razao: folha.querySelector("#de-r").value.trim(), cnpj: folha.querySelector("#de-c").value.trim(), endereco: folha.querySelector("#de-e").value.trim(), corte: Math.min(28, Math.max(0, parseInt(folha.querySelector("#de-k").value, 10) || 0)),
+    const novo = { ...dadosEmp, [nome]: { razao: folha.querySelector("#de-r").value.trim(), fantasia: folha.querySelector("#de-f").value.trim(), cnpj: folha.querySelector("#de-c").value.trim(), endereco: folha.querySelector("#de-e").value.trim(), corte: Math.min(28, Math.max(0, parseInt(folha.querySelector("#de-k").value, 10) || 0)),
       setores: folha.querySelector("#de-s").value.split(",").map((x) => x.trim()).filter(Boolean) } };
     try { await salvarComHistorico("config", "empresas", { lista: novo, alteradoPor: eu.nome, alteradoPorUid: eu.uid, em: new Date().toISOString() }); dadosEmp = novo; fundo.hidden = true; mostrarMes(); }
     catch { folha.querySelector("#de-x2").textContent = "Não consegui salvar."; ev.target.disabled = false; }
@@ -639,20 +640,55 @@ function textoCobranca(x, mes, venc, pix) {
       + (n.itens?.length ? "\n" + n.itens.map((i) => `   ${String(i.qtd).replace(".", ",")} ${i.descricao}${i.total ? ` (${reais(i.total)})` : ""}`).join("\n") : "")).join("\n")
     + `\n\nTotal: ${reais(x.total)}\nVencimento: ${dataBR(venc)}${pix ? `\nPIX: ${pix}` : ""}\n\nTodas as notas assinadas estão guardadas com foto. Qualquer dúvida, é só chamar. Obrigada!`;
 }
+// Fechamento em PDF no mesmo modelo do ERP anterior (Daiane, 23/11/2026): cabeçalho da padaria, dados da empresa, cada nota com dia, nº do pedido e itens, total geral.
+function htmlFechamento(x) {
+  const e = dadosEmp?.[x.empresa] || {};
+  const R = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const qtd = (q) => Number.isInteger(Number(q)) ? `${q} UN` : `${Number(q).toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} KG`;
+  const [aa, mm] = x.ate.split("-").map(Number), ultimo = Math.min(Number(x.ate.slice(8)), new Date(aa, mm, 0).getDate());
+  const ate = `${x.ate.slice(0, 8)}${String(ultimo).padStart(2, "0")}`;
+  const periodo = `${dataBR(x.de)} a ${dataBR(ate)}`;
+  const fantasia = e.fantasia || PADRAO_EMP[x.empresa]?.fantasia || x.empresa;
+  const notas = x.ns.map((n) => `<div class=nota><div class=lin><span>${dataBR(n.data)}</span><span>${esc(n.pedidoGuappo || "")}</span><span>${n.valor != null ? R(n.valor) : "(sem valor)"}</span></div>`
+    + (n.itens || []).map((i) => `<div class=it>${esc(qtd(i.qtd))} ${esc(i.descricao)} — ${R(i.total)}</div>`).join("") + `</div>`).join("");
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fechamento ${periodo.replaceAll("/", "-")} - ${esc(fantasia)}</title><style>
+@page{size:A4;margin:18mm 14mm 16mm} body{font-family:Arial,Helvetica,sans-serif;color:#222;font-size:11px;margin:0;background:#fff}
+.barra{height:5px;background:#f05a14;margin-bottom:22px} h2{font-size:15px;margin:0 0 6px} h1{font-size:18px;margin:22px 0 16px}
+.dados p{margin:0 0 7px} .cab,.lin{display:grid;grid-template-columns:43% 41% 16%} .cab{background:#f2f2f2;font-weight:bold;font-size:10px;padding:14px 10px;margin:26px 0 10px}
+.nota{padding:10px 10px 6px;border-bottom:4px solid #e3e3e3;page-break-inside:avoid;break-inside:avoid} .lin{margin-bottom:4px} .it{color:#555;font-size:9.5px;margin:0 0 5px 8px}
+.total{font-size:15px;font-weight:bold;margin-top:26px} .rod{margin-top:30px;font-size:8.5px;font-weight:bold;color:#555}
+.dica{background:#fff4e5;border:1px solid #f0c08a;border-radius:8px;padding:10px;margin-bottom:14px;font-size:14px} @media print{.dica{display:none}}
+@media screen{body{padding:16px;max-width:800px;margin:auto}}</style></head><body>
+<div class=dica>Para salvar em PDF: toque em <b>Imprimir</b> (ou no menu ⋮ → Compartilhar → Imprimir) e escolha <b>Salvar como PDF</b>. <button onclick="print()">Imprimir</button></div>
+<div class=barra></div><h2>Daiane Abílio Padaria e Restaurante Ltda</h2><div>CNPJ 55.612.496/0001-46</div>
+<h1>Fechamento ${periodo} - ${esc(fantasia)}</h1>
+<div class=dados><p>Razão Social: ${esc(e.razao || x.empresa)}</p><p>Nome Fantasia: ${esc(fantasia)}</p>${e.cnpj ? `<p>CNPJ: ${esc(e.cnpj)}</p>` : ""}<p>Período: ${periodo}</p></div>
+<div class=cab><span>DATA DA NOTA</span><span>NÚMERO DO PEDIDO</span><span>VALOR</span></div>${notas}
+<div class=total>TOTAL GERAL: ${R(x.total)}</div>
+<div class=rod>Documento gerado pelo Madalena's ERP. FM-${x.de.replaceAll("-", "")}-${ate.replaceAll("-", "")}</div></body></html>`;
+}
+function abrirFechamento(x) {
+  const w = window.open("", "_blank");
+  if (!w) return alert("O celular bloqueou a nova aba. Permita pop-ups para o sistema e tente de novo.");
+  w.document.open(); w.document.write(htmlFechamento(x)); w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 600);
+}
 function folhaCobranca(x, mes) {
   let pix = ""; try { pix = localStorage.getItem("madalenas.pix") || ""; } catch {}
   folha.innerHTML = `<h2>Cobrança · ${esc(x.empresa)} · ${mesBR(mes)}</h2>
     ${x.semValor ? `<p class="alerta-linha" style="margin:0">Atenção: ${x.semValor} nota(s) sem valor.</p>` : ""}
+    <button class="botao principal" id="c-pdf">📄 Fechamento em PDF (modelo de sempre)</button>
     <label class="suave" for="c-v">Vencimento</label><input type="date" id="c-v" value="${proxDia10(mes)}">
     <label class="suave" for="c-pix">Chave PIX (fica guardada neste celular)</label><input type="text" id="c-pix" value="${esc(pix)}" autocomplete="off">
     <label class="suave">Mensagem</label><textarea id="c-t" rows="12"></textarea>
     <p class="msg-erro" id="c-e"></p>
-    <button class="botao principal" id="c-zap">Abrir no WhatsApp e marcar como cobrado</button>
+    <button class="botao" id="c-zap" style="text-align:center">Abrir no WhatsApp e marcar como cobrado</button>
     <button class="botao" id="c-cop" style="text-align:center">Copiar a mensagem e marcar como cobrado</button>
     <button class="botao" id="c-x" style="text-align:center;border:none">Cancelar</button>`;
   const atualiza = () => { folha.querySelector("#c-t").value = textoCobranca(x, mes, folha.querySelector("#c-v").value, folha.querySelector("#c-pix").value.trim()); };
   folha.querySelector("#c-v").onchange = atualiza; folha.querySelector("#c-pix").oninput = atualiza; atualiza();
   folha.querySelector("#c-x").onclick = () => { fundo.hidden = true; };
+  folha.querySelector("#c-pdf").onclick = () => abrirFechamento(x);
   const salvar = async () => {
     const venc = folha.querySelector("#c-v").value;
     if (!venc) { folha.querySelector("#c-e").textContent = "Escolha o vencimento."; return false; }
